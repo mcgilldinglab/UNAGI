@@ -1,21 +1,13 @@
 from setuptools import setup, find_packages
 
 setup(
-<<<<<<< HEAD
-    name='UNAGI',
-=======
     name='scUNAGI',
->>>>>>> master
     version='0.1',
     
     long_description=open('README.md').read(),
     packages=find_packages(),
     package_data={'UNAGI': ['data/*.npy','data/*.txt']},
     long_description_content_type='text/markdown',
-<<<<<<< HEAD
-
-=======
->>>>>>> master
     install_requires=[
     'h5py>=3.9.0',
     'idna>=3.4',
