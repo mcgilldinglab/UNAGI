@@ -20,8 +20,7 @@ UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug disco
 UNAGI installation
 ```
 git clone https://github.com/mcgilldinglab/UNAGI.git
-cd UNAGI
-python setup.py install 
+pip install scUNAGI
 ```
 
 ### Prerequisites
@@ -31,6 +30,14 @@ python setup.py install
 -   anndata==0.8.0
 -   torch >= 2.0.0
 -   matplotlib>=3.7.1
+
+**Required files**
+
+Preprocessed CMAP database: [One Drive](https://mcgill-my.sharepoint.com/:u:/g/personal/yumin_zheng_mail_mcgill_ca/EazTbqa3vKtJnwd6-DL87GUBaAwEA8AXaHHCdEXtS1bPFg?e=Y5A2WO)
+-    Requried data to run UNAGI, move it to the folder containing UNAGI and idrem.
+
+Preprocessed IPF snRNA-seq dataset: [One Drive](https://mcgill-my.sharepoint.com/:f:/g/personal/yumin_zheng_mail_mcgill_ca/EhUPO3Ip0IhCh0kz-Uply_MBzksNoX9N6HDEgC_dUHbCkg?e=biVLuV)
+-    UNAGI outcomes to reproduce the figures and tables generated for the manuscript. 
 
 **iDREM installation:**
 
@@ -48,7 +55,6 @@ Install the iDREM to the source folder of UNAGI
 -   JavaScript
     To enable the interactive visualization powered by Javascript, please make sure that you have Internet connection.
     (The users are still able to run the software off-line, but Internet access is needed to view the result interactively.)
-
 
 ## Tutorials:
 
