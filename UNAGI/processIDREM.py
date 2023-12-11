@@ -156,13 +156,50 @@ def runIdrem(paths, midpath, idremInput, savedPath,genenames,iteration, idrem_di
         settings_file_path = os.path.join(midpath, str(iteration), 'idremsetting', f'{file_name}.txt')
         with open(settings_file_path, 'w') as f:
             for k, line in enumerate(examplefile.readlines()):
+
                 if trained and k == 4:
                     print(midpath) 
-                    f.write('%s\t%s\n' % ('Saved_Model_File', os.path.join(midpath, str(iteration), 'idremInput', f'{file_name}.txt')))
+                    f.write('%s\t%s\n' % ('Saved_Model_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
+                elif k == 1:
+                    f.write('%s\t%s\n' % ('TF-gene_Interaction_Source', 'human_encode.txt.gz'))
+                    continue
+                elif k == 2:
+                    f.write('%s\t%s\n' % ('TF-gene_Interactions_File', 'TFInput/human_encode.txt.gz'))
+                    continue
+                elif k == 5:
+                    f.write('%s\t%s\n' % ('Gene_Annotation_Source', 'Human (EBI)'))
+                    continue
+                elif k == 6:
+                    f.write('%s\t%s\n' % ('Gene_Annotation_File', 'goa_human.gaf.gz'))
+                    continue 
+                elif k== 17:
+                    f.write('%s\n' % ('miRNA-gene_Interaction_Source'))
+                    continue
+                elif k== 18:
+                    f.write('%s\n' % ('miRNA_Expression_Data_File'))
+                    continue
+                elif k== 26:
+                    f.write('%s\n' % ('Proteomics_File'))
+                    continue
+                elif k == 34:
+                    f.write('%s\n' % ('Epigenomic_File'))
+                    continue
+                elif k == 35:
+                    f.write('%s\n' % ('GTF File'))
+                    continue
+                elif k == 42:
+                    f.write('%s\t%s\n' % ('Minimum_Absolute_Log_Ratio_Expression', '0.05'))
+                    continue
+                elif k ==51 :
+                    f.write('%s\t%s\n' % ('Convergence_Likelihood_%', '0.1'))
+                    continue
+                elif k == 52:
+                    f.write('%s\t%s\n' % ('Minimum_Standard_Deviation', '0.01'))
+                    continue
                 elif k != 3:
                     f.write(line)
                 else:
-                    f.write('%s\t%s\n' % ('Expression_Data_File', os.path.join( midpath, str(iteration), 'idremInput', f'{file_name}.txt')))
+                    f.write('%s\t%s\n' % ('Expression_Data_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
 
         examplefile.close()
         # each0 = str(each[0]).strip('[]')
@@ -198,8 +235,9 @@ def runIdrem(paths, midpath, idremInput, savedPath,genenames,iteration, idrem_di
     for each in settinglist:
         if each[0] != '.':
             
-            indir = os.path.join(midpath,str(iteration)+'/idremsetting/',each)
-            outdir = os.path.join(midpath,str(iteration)+'/idremModel/',each)
+            indir = os.path.abspath(os.path.join(midpath,str(iteration)+'/idremsetting/',each))
+            outdir =os.path.join(os.path.abspath(os.path.join(midpath,str(iteration))+'/idremModel/'),each)
+            
             threads.append(IDREMthread(indir, outdir, each,idrem_dir))
     count = 0
     while True:
@@ -335,3 +373,4 @@ def averageNode(nodes,state):
 #         p = subprocess.Popen(each, stdout=subprocess.PIPE, shell=True)
 #         print(p.stdout.read())
 #     print('idrem Done')
+
