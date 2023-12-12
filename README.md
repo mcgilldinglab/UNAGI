@@ -37,7 +37,9 @@ Preprocessed CMAP database: [One Drive](https://mcgill-my.sharepoint.com/:u:/g/p
 -    Requried data to run UNAGI, move it to the folder containing UNAGI and idrem.
 
 Preprocessed IPF snRNA-seq dataset: [One Drive](https://mcgill-my.sharepoint.com/:f:/g/personal/yumin_zheng_mail_mcgill_ca/EhUPO3Ip0IhCh0kz-Uply_MBzksNoX9N6HDEgC_dUHbCkg?e=biVLuV)
--    UNAGI outcomes to reproduce the figures and tables generated for the manuscript. 
+-    UNAGI outcomes to reproduce the figures and tables generated for the manuscript.
+
+Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example).
 
 **iDREM installation:**
 
@@ -71,4 +73,4 @@ Install the iDREM to the source folder of UNAGI
 [Visualization on an example dataset.](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/visualize_UNAGI_results_example_dataset.ipynb)
 
 ## Contact
-[Yumin Zheng](mailto:yumin.zheng@mail.mcgill.ca)
+[Yumin Zheng](mailto:yumin.zheng@mail.mcgill.ca), [Naftali Kaminski](mailto:naftali.kaminski@yale.edu), [Jun Ding](mailto:jun.ding@mcgill.ca)
