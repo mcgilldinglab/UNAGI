@@ -27,7 +27,7 @@ pip install scUNAGI
 -   Python >=3.9 (Python3.9 is recommanded)
 -   pyro-ppl>=1.8.6
 -   scanpy>=1.9.5
--   anndata==0.8.0
+-   **anndata==0.8.0** 
 -   torch >= 2.0.0
 -   matplotlib>=3.7.1
 
@@ -39,7 +39,7 @@ Preprocessed CMAP database: [One Drive](https://mcgill-my.sharepoint.com/:u:/g/p
 Preprocessed IPF snRNA-seq dataset: [One Drive](https://mcgill-my.sharepoint.com/:f:/g/personal/yumin_zheng_mail_mcgill_ca/EhUPO3Ip0IhCh0kz-Uply_MBzksNoX9N6HDEgC_dUHbCkg?e=biVLuV)
 -    UNAGI outcomes to reproduce the figures and tables generated for the manuscript.
 
-Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example).
+Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example)
 
 **iDREM installation:**
 
