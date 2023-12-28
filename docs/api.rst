@@ -1,5 +1,9 @@
-API
+API Documentations
 ===
 
 .. autosummary::
-   :toctree: generated
+   :toctree: api
+   :template: module.rst
+   :recursive:
+
+   UNAGI
