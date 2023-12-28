@@ -1,5 +1,6 @@
 from pyro import poutine
 import pyro.ops.jit
+import numpy as np
 from torch.nn.parameter import Parameter
 from pyro.infer.util import is_validation_enabled
 from pyro.infer.enum import get_importance_trace
@@ -104,9 +105,7 @@ class myELBO(ELBO):
         super(myELBO, self).__init__()
         self.geneWeight = geneWeight
         self.pushback_Score = pushback_Score
-    def get_importance_trace(self,
-    graph_type, max_plate_nesting, model, guide,discriminator, args, kwargs,detach=False
-):
+    def get_importance_trace(self,graph_type, max_plate_nesting, model, guide,discriminator, args, kwargs,detach=False):
         """
         Returns a single trace from the guide, which can optionally be detached,
         and the model that is run against it.
@@ -244,38 +243,28 @@ class myELBO(ELBO):
         loss = 0.0
         
         # grab a trace from the generator
-        for model_trace, guide_trace in self._get_traces(model, guide,discriminator, args, kwargs):
-            
-#          
+        for model_trace, guide_trace in self._get_traces(model, guide,discriminator, args, kwargs): 
             
             loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(
                 model_trace, guide_trace
             )
-#             print(model_trace.nodes['obs']['value'])
-#             print(model_trace.nodes['recon']['value'].detach())
+
 
             x_true = model_trace.nodes['obs']['value'].to(device)
             y_true = torch.ones(x_true.shape[0],1).float().to(device)
             x_fake = model_trace.nodes['recon']['value'].to(device)
             y_fake = torch.zeros(x_true.shape[0],1).float().to(device)
             loss_discriminator = discriminator(x_true,y_true)
-#             print('discriminator_true', loss_discriminator)
+
             discriminator_fake = discriminator(x_fake,y_fake)
-#             print('discriminator_fake', discriminator_fake)
+
             loss_discriminator += discriminator_fake
             loss_discriminator = (loss_discriminator / self.num_particles)
             vae_add = discriminator(x_fake,y_true)
-#             print('vae_add', vae_add)
+
             
             loss_generator = surrogate_loss_particle + vae_add
-            #surrogate_loss_particle+=vae_add
-#             print(sum(x)/len(x))
-#             print(x)
-#             print(dgdg)
-#             loss_discriminator = loss_discriminator_fn()
-#             print(loss_discriminator)
-#             print(loss_particle)
-#             discriminator(model_trace.nodes['obs'],)
+
             
             if self.pushback_Score is not None:
                 pushback_Score = Parameter(torch.sum(self.pushback_Score))
