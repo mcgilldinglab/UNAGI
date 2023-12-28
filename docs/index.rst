@@ -1,20 +1,23 @@
-.. UNAGI documentation master file, created by
-   sphinx-quickstart on Wed Dec 27 19:55:39 2023.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+UNAGI documentations
+===================================
 
-Welcome to UNAGI's documentation!
-=================================
+**UNAGI** is a Python package for end-to-end deciphering single-cell temporal dynamics and *in-silico* drug perturbations. This tool is developed and maintained by the `Ding Lab <https://junding.lab.mcgill.ca/>`_  at McGill University. 
+
+If you find the tool is useful to your study, please consider citing the `UNAGI manuscript <https://assets.researchsquare.com/files/rs-3676579/v1_covered_2dc4a452-a1f2-47a2-acb1-f816276a9e07.pdf>`_. 
+
+Check out the :doc:`usage` section for further information, including
+how to :ref:`installation` the project.
+
+.. note::
+
+   This project is under active development.
+
+Contents
+--------
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
 
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   usage
+   tutorials
+   api
+   
