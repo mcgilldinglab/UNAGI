@@ -5,7 +5,6 @@
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-import sphinx_autodoc_typehints
 
 project = 'UNAGI'
 copyright = 'Ding Lab at McGill University'
@@ -21,7 +20,6 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx.ext.mathjax',
-    'sphinx_autodoc_typehints',
     'sphinx_copybutton',
     'nbsphinx'
 ]
