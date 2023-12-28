@@ -26,7 +26,8 @@ extensions = [
     'sphinx_copybutton',
     'nbsphinx'
 ]
-
+html_theme = 'sphinx_rtd_theme'
+html_favicon = '_static/icon.png'
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
