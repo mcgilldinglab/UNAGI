@@ -6,7 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "UNAGI"
 authors = [{name = "Yumin Zheng", email = "yumin.zheng@mail.mcgill.ca"}]
 requires-python = ">=3.9"
-license = {file = "LICENSE"}
+license = {file = "LICENSE.txt"}
 readme = "README.md"
 description = "A Python package for UNAGI"
 
