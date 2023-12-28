@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import os
-
+import UNAGI
 
 project = 'UNAGI'
 copyright = 'Ding Lab at McGill University'

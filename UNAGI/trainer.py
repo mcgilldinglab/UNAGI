@@ -91,7 +91,7 @@ class UNAGI_trainer():
         cell = H5ADataSet(adata)
         num_genes=cell.num_genes()
         placeholder = torch.zeros(adata.X.shape,dtype=torch.float32)
-        cell_loader=DataLoader(cell,batch_size=self.batch_size,num_workers=0)
+        cell_loader=DataLoader(cell,batch_size=self.batch_size,num_workers=0,shuffle=False)
         self.model.load_state_dict(torch.load(os.path.join(target_dir,'model_save/'+self.modelName+'_'+str(iteration)+'.pth'),map_location=self.device))
         TZ=[]
         z_locs = []

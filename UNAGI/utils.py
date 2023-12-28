@@ -112,47 +112,6 @@ def clustertype40(adata):
             anootate = 'Mixed'
     return anootate
 
-def getInTrackNode(idrem_path,stage):
-    filenames = os.listdir(idrem_path)
-    nodes = [[] for _ in range(4)]
-    for each in filenames:
-        temp = each.split('.')[0].split('-')
-        for i,item in enumerate(temp):
-            temp1 = item.split('n')
-            nodes[i].append(temp1)
-    return nodes[stage]
-def getInconsistency(adata):
-    T=0
-    for i in range(4):
-    
-        adata = sc.read_h5ad('./stagedata/%d-test.h5ad'%i)
-        adata.obs['ident'] = 'None'
-        for i,each in enumerate(adata.obs['name.simple']):
-            each = each.split('_')
-            adata.obs['ident'][i] = each[0]
-
-        adata.obs['clustertype']='None'
-        sc.pp.neighbors(adata, use_rep="z",n_neighbors=15,method='rapids')
-        sc.tl.leiden(adata,resolution=0.7)
-        reducer=umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2)
-        zr=reducer.fit_transform(adata.obsm['z'])
-        adata.obsm["umap"]=zr
-    
-    
-        #sc.pl.umap(adata,color="lineage.ident")
-        adata.obs['clustertype']=adata.obs['clustertype'].astype('string')
-        for each in set(adata.obs['leiden']):
-        
-            clusteradataid = adata.obs[adata.obs['leiden']==each].index.tolist()
-            clusteradata=adata[clusteradataid]
-            celltype = clustertype(clusteradata)
-            #print(celltype)
-            adata.obs['clustertype'][clusteradataid] = celltype
-        sc.pl.umap(adata,color="ident")
-        sc.pl.umap(adata,color="clustertype")
-        T+=calculateinconsistency(adata)
-    #print('celltype inconsistency: ',calculateinconsistency(adata))
-    print(T)
 def changeCluster(adata, ids, newIds):
     '''
     re-assign cluster id to cells
@@ -315,11 +274,7 @@ def updateAttributes(adata,reps):
     adata.uns['clusterType'] = celltypes
     adata.uns['topGene'] = TDG
     return adata,average_cluster,rep
-def saveRep(rep):
-    '''
-    write rep of all stages to disk
-    '''
-    np.save('./stagedata/rep.npy',np.array(rep,dtype=object))
+
 def saveRep(rep,midpath,iteration):
     '''
     write rep of all stages to disk with midpath in iterative training
@@ -330,123 +285,7 @@ import scipy.sparse as sp
 from scipy.sparse import csr_matrix
 import anndata
 import os
-def getUnsDict(adata0,adata1,adata2,adata3,key):
-    dic = {}
-    dic['0'] = adata0.uns[key]
-    dic['1'] = adata1.uns[key]
-    dic['2'] = adata2.uns[key]
-    dic['3'] = adata3.uns[key]
-    return dic
-def mergeReconstructionAdata(path):
-    '''
-    merge adata file from different stage to a whole one
-    '''
-    #read stage datasets
-    # adata0 = sc.read_h5ad('./'+path+'/stagedata/0.h5ad')
-    # adata1 = sc.read_h5ad('./'+path+'/stagedata/1.h5ad')
-    # adata2 = sc.read_h5ad('./'+path+'/stagedata/2.h5ad')
-    # adata3 = sc.read_h5ad('./'+path+'/stagedata/3.h5ad')
-    adata0 = sc.read_h5ad('./may21_MAY14_8_reconstruction_0.h5ad')
-    adata1 = sc.read_h5ad('./may21_MAY14_8_reconstruction_1.h5ad')
-    adata2 = sc.read_h5ad('./may21_MAY14_8_reconstruction_2.h5ad')
-    adata3 = sc.read_h5ad('./may21_MAY14_8_reconstruction_3.h5ad')
-    #get X
-    X = adata0.X
-    X = sp.vstack((X, adata1.X), format='csr')
-    X = sp.vstack((X, adata2.X), format='csr')
-    X = sp.vstack((X, adata3.X), format='csr')
-    
-    #get geneWeight
-    if 'geneWeight'  in adata0.layers.keys():
-        
-        geneWeight = adata0.layers['geneWeight']
-        geneWeight = sp.vstack((geneWeight, adata1.layers['geneWeight']), format='csr')
-        geneWeight = sp.vstack((geneWeight, adata2.layers['geneWeight']), format='csr')
-        geneWeight = sp.vstack((geneWeight, adata3.layers['geneWeight']), format='csr')
-    else:
-        geneWeight= None
-    #get var
-    variable = adata1.var
 
-    #set adata.obs['stage']    
-    adata0.obs['stage'] = 0
-    adata1.obs['stage'] = 1
-    adata2.obs['stage'] = 2
-    adata3.obs['stage'] = 3
-    
-    #get obs
-    obs = [adata0.obs,adata1.obs,adata2.obs,adata3.obs]
-    
-    obs = pd.concat(obs)
-
-    #get adata.ump['z']
-    if 'z' in adata0.obsm.keys():
-        Z = np.concatenate((adata0.obsm['z'],adata1.obsm['z']),axis=0)
-        Z = np.concatenate((Z,adata2.obsm['z']),axis=0)
-        Z = np.concatenate((Z,adata3.obsm['z']),axis=0)
-    #get adata.ump['umap']
-    else:
-        Z= None
-    hcmarkers = getUnsDict(adata0,adata1,adata2,adata3,'hcmarkers')
-    linkage_matrix = getUnsDict(adata0,adata1,adata2,adata3,'linkage_matrix')
-    linkage_order = getUnsDict(adata0,adata1,adata2,adata3,'linkage_order')
-    annotation_meta = getUnsDict(adata0,adata1,adata2,adata3,'annotation_meta')
-    
-    umap = np.concatenate((adata0.obsm['X_umap'],adata1.obsm['X_umap']),axis=0)
-    umap = np.concatenate((umap,adata2.obsm['X_umap']),axis=0)
-    umap = np.concatenate((umap,adata3.obsm['X_umap']),axis=0)
-    #get top Gene
-    
-    topGene = {}
-    topGene['0']=adata0.uns['topGene']
-    topGene['1']=adata1.uns['topGene']
-    topGene['2']=adata2.uns['topGene']
-    topGene['3']=adata3.uns['topGene']
-    #top gene fold_change 
-    adata0.uns['logfoldchanges'] = []
-    for i in set(adata0.obs['leiden']):
-        adata0.uns['logfoldchanges'].append(adata0.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    adata1.uns['logfoldchanges'] = []
-    for i in set(adata1.obs['leiden']):
-        adata1.uns['logfoldchanges'].append(adata1.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    adata2.uns['logfoldchanges'] = []
-    for i in set(adata2.obs['leiden']):
-        adata2.uns['logfoldchanges'].append(adata2.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    adata3.uns['logfoldchanges'] = []
-    for i in set(adata3.obs['leiden']):
-        adata3.uns['logfoldchanges'].append(adata3.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    top_gene_fold_change = {}
-    top_gene_fold_change['0']=adata0.uns['logfoldchanges']
-    top_gene_fold_change['1']=adata1.uns['logfoldchanges']
-    top_gene_fold_change['2']=adata2.uns['logfoldchanges']
-    top_gene_fold_change['3']=adata3.uns['logfoldchanges']
-    #get uns.edges
-    edges = eval(open('./'+path+'/edges.txt').read())
-    #get clusterType
-
-    clustertype = {}
-    
-    clustertype['0']=adata0.uns['clusterType']
-    clustertype['1']=adata1.uns['clusterType']
-    clustertype['2']=adata2.uns['clusterType']
-    clustertype['3']=adata3.uns['clusterType']
-    clusterType = clustertype
-    #build new anndata and assign attribtues and write dataset
-    adata = anndata.AnnData(X=X,obs=obs,var=variable)
-    #adata.layers['geneWeight'] = csr_matrix(geneWeight)
-    adata.uns['clusterType']=clusterType
-    adata.uns['edges']=edges
-    adata.uns['topGene']=topGene
-    adata.obsm['z']=Z
-    adata.obsm['umap']=umap
-    adata.obsm['X_umap'] = umap
-    adata.obs['leiden'] = adata.obs['leiden'].astype('string')
-    adata.uns['hcmarkers'] = hcmarkers
-    adata.uns['linkage_matrix'] = linkage_matrix
-    adata.uns['linkage_order'] = linkage_order
-    adata.uns['annotation_meta'] = annotation_meta
-    
-    adata.write_h5ad('./may21_MAY14_8_reconstruction.h5ad',compression='gzip',compression_opts=9) 
 def get_all_adj_adata(adatas):
     data_size = []
     obs = []
@@ -511,123 +350,160 @@ def get_all_adj_adata(adatas):
     # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].row).tolist()
     # print(max(row))
     # gcn_data+=adata3.obsp['gcn_connectivities'].data.tolist()
-def mergeAdata(path):
+def mergeAdata(path,total_stages):
     '''
     merge adata file from different stage to a whole one
     '''
     #read stage datasets
+    adatas = []
+    for i in range(total_stages):
+        adata = sc.read_h5ad(os.path.join(path, 'stagedata/%d.h5ad'%i))
+        adata.obs['stage'] = i
+        adatas.append(adata)
+    # adata0 = sc.read_h5ad(os.path.join(path, 'stagedata/0.h5ad'))
+    # adata1 = sc.read_h5ad(os.path.join(path, 'stagedata/1.h5ad'))
+    # adata2 = sc.read_h5ad(os.path.join(path,'stagedata/2.h5ad'))
+    # adata3 = sc.read_h5ad(os.path.join(path,'stagedata/3.h5ad'))
+    for i, each in enumerate(adatas):
+        adatas[i].obsp['gcn_connectivities'] = adatas[i].obsp['gcn_connectivities'].tocoo()
+    # adata0.obsp['gcn_connectivities'] = adata0.obsp['gcn_connectivities'].tocoo()
+    # adata1.obsp['gcn_connectivities'] = adata1.obsp['gcn_connectivities'].tocoo()
+    # adata2.obsp['gcn_connectivities'] = adata2.obsp['gcn_connectivities'].tocoo()
+    # adata3.obsp['gcn_connectivities'] = adata3.obsp['gcn_connectivities'].tocoo()
     
-    adata0 = sc.read_h5ad(os.path.join(path, 'stagedata/0.h5ad'))
-    adata1 = sc.read_h5ad(os.path.join(path, 'stagedata/1.h5ad'))
-    adata2 = sc.read_h5ad(os.path.join(path,'stagedata/2.h5ad'))
-    adata3 = sc.read_h5ad(os.path.join(path,'stagedata/3.h5ad'))
-    adata0.obsp['gcn_connectivities'] = adata0.obsp['gcn_connectivities'].tocoo()
-    adata1.obsp['gcn_connectivities'] = adata1.obsp['gcn_connectivities'].tocoo()
-    adata2.obsp['gcn_connectivities'] = adata2.obsp['gcn_connectivities'].tocoo()
-    adata3.obsp['gcn_connectivities'] = adata3.obsp['gcn_connectivities'].tocoo()
-    gcn_data = adata0.obsp['gcn_connectivities'].data.tolist()
-    col = adata0.obsp['gcn_connectivities'].col.tolist()
-    row = adata0.obsp['gcn_connectivities'].row.tolist()
-    col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].col).tolist()
-    row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].row).tolist()
-    gcn_data+=adata1.obsp['gcn_connectivities'].data.tolist()
-    col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].col).tolist()
-    row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].row).tolist()
-    gcn_data+=adata2.obsp['gcn_connectivities'].data.tolist()
-    col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].col).tolist()
-    row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].row).tolist()
-    print(max(row))
-    gcn_data+=adata3.obsp['gcn_connectivities'].data.tolist()
+    gcn_data = adatas[0].obsp['gcn_connectivities'].data.tolist()
+    col = adatas[0].obsp['gcn_connectivities'].col.tolist()
+    row = adatas[0].obsp['gcn_connectivities'].row.tolist()
+    for i in range(1,total_stages):
+
+        current_shape = sum([adatas[i].obsp['gcn_connectivities'].shape[0] for i in range(i)])
+        col+=(current_shape+ adatas[i].obsp['gcn_connectivities'].col).tolist()
+        row+=(current_shape+ adatas[i].obsp['gcn_connectivities'].row).tolist()
+        gcn_data+=adatas[i].obsp['gcn_connectivities'].data.tolist()
+
+    # gcn_data+=adata1.obsp['gcn_connectivities'].data.tolist()
+    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].col).tolist()
+    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].row).tolist()
+    # gcn_data+=adata2.obsp['gcn_connectivities'].data.tolist()
+    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].col).tolist()
+    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].row).tolist()
+    # gcn_data+=adata3.obsp['gcn_connectivities'].data.tolist()
 
     #get X
-    if sp.isspmatrix(adata0.X):
-        X = adata0.X
+    if sp.isspmatrix(adatas[0].X):
+        X = adatas[0].X
     else:
-        X = csr_matrix(adata0.X)
-    X = sp.vstack((X, adata1.X), format='csr')
-    X = sp.vstack((X, adata2.X), format='csr')
-    X = sp.vstack((X, adata3.X), format='csr')
+        X = csr_matrix(adatas[0].X)
+    for i in range(1,total_stages):
+        X = sp.vstack((X, adatas[i].X), format='csr')
+    # X = sp.vstack((X, adata1.X), format='csr')
+    # X = sp.vstack((X, adata2.X), format='csr')
+    # X = sp.vstack((X, adata3.X), format='csr')
     
     #get geneWeight
-    geneWeight = adata0.layers['geneWeight']
-    geneWeight = sp.vstack((geneWeight, adata1.layers['geneWeight']), format='csr')
-    geneWeight = sp.vstack((geneWeight, adata2.layers['geneWeight']), format='csr')
-    geneWeight = sp.vstack((geneWeight, adata3.layers['geneWeight']), format='csr')
+    geneWeight = adatas[0].layers['geneWeight']
+    for i in range(1,total_stages):
+        geneWeight = sp.vstack((geneWeight, adatas[i].layers['geneWeight']), format='csr')
+    # geneWeight = sp.vstack((geneWeight, adata1.layers['geneWeight']), format='csr')
+    # geneWeight = sp.vstack((geneWeight, adata2.layers['geneWeight']), format='csr')
+    # geneWeight = sp.vstack((geneWeight, adata3.layers['geneWeight']), format='csr')
     #get var
-    if 'concat' in adata0.layers.keys():
-        concat = adata0.layers['concat']
-        concat = sp.vstack((concat, adata1.layers['concat']), format='csr')
-        concat = sp.vstack((concat, adata2.layers['concat']), format='csr')
-        concat = sp.vstack((concat, adata3.layers['concat']), format='csr')
+    if 'concat' in adatas[0].layers.keys():
+        concat = adatas[0].layers['concat']
+        for i in range(1,total_stages):
+            concat = sp.vstack((concat, adatas[i].layers['concat']), format='csr')
+        # concat = sp.vstack((concat, adata1.layers['concat']), format='csr')
+        # concat = sp.vstack((concat, adata2.layers['concat']), format='csr')
+        # concat = sp.vstack((concat, adata3.layers['concat']), format='csr')
     
-    variable = adata1.var 
-    adata0.obs['stage'] = 0
-    adata1.obs['stage'] = 1
-    adata2.obs['stage'] = 2
-    adata3.obs['stage'] = 3
+    variable = adatas[0].var 
+    
+    # adata0.obs['stage'] = 0
+    # adata1.obs['stage'] = 1
+    # adata2.obs['stage'] = 2
+    # adata3.obs['stage'] = 3
     
     #get obs
-    obs = [adata0.obs,adata1.obs,adata2.obs,adata3.obs]
+    obs = [each.obs for each in adatas]
     
     obs = pd.concat(obs)
 
     #get adata.ump['z']
-    Z = np.concatenate((adata0.obsm['z'],adata1.obsm['z']),axis=0)
-    Z = np.concatenate((Z,adata2.obsm['z']),axis=0)
-    Z = np.concatenate((Z,adata3.obsm['z']),axis=0)
+    Z = adatas[0].obsm['z']
+    for i in range(1,total_stages):
+        Z = np.concatenate((Z,adatas[i].obsm['z']),axis=0)
+    # Z = np.concatenate((adata0.obsm['z'],adata1.obsm['z']),axis=0)
+    # Z = np.concatenate((Z,adata2.obsm['z']),axis=0)
+    # Z = np.concatenate((Z,adata3.obsm['z']),axis=0)
     #get adata.ump['umap']
-    
-    umap = np.concatenate((adata0.obsm['X_umap'],adata1.obsm['X_umap']),axis=0)
-    umap = np.concatenate((umap,adata2.obsm['X_umap']),axis=0)
-    umap = np.concatenate((umap,adata3.obsm['X_umap']),axis=0)
+    umap = adatas[0].obsm['X_umap']
+    for i in range(1,total_stages):
+        umap = np.concatenate((umap,adatas[i].obsm['X_umap']),axis=0)
+    # umap = np.concatenate((adata0.obsm['X_umap'],adata1.obsm['X_umap']),axis=0)
+    # umap = np.concatenate((umap,adata2.obsm['X_umap']),axis=0)
+    # umap = np.concatenate((umap,adata3.obsm['X_umap']),axis=0)
     #get top Gene
     topGene = {}
-    topGene['0']=adata0.uns['topGene']
-    topGene['1']=adata1.uns['topGene']
-    topGene['2']=adata2.uns['topGene']
-    topGene['3']=adata3.uns['topGene']
-    #top gene fold_change 
-    adata0.uns['logfoldchanges'] = []
-    adata0.uns['top_gene_pvals_adj'] = []
-    for i in set(adata0.obs['leiden']):
-        adata0.uns['top_gene_pvals_adj'].append(adata0.uns['rank_genes_groups']['pvals_adj'][str(i)])
-        adata0.uns['logfoldchanges'].append(adata0.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    adata1.uns['logfoldchanges'] = []
-    adata1.uns['top_gene_pvals_adj'] = []
-    for i in set(adata1.obs['leiden']):
-        adata1.uns['top_gene_pvals_adj'].append(adata1.uns['rank_genes_groups']['pvals_adj'][str(i)])
-        adata1.uns['logfoldchanges'].append(adata1.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    adata2.uns['logfoldchanges'] = []
-    adata2.uns['top_gene_pvals_adj'] = []
-    for i in set(adata2.obs['leiden']):
-        adata2.uns['top_gene_pvals_adj'].append(adata2.uns['rank_genes_groups']['pvals_adj'][str(i)])
-        adata2.uns['logfoldchanges'].append(adata2.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    adata3.uns['logfoldchanges'] = []
-    adata3.uns['top_gene_pvals_adj'] = []
-    for i in set(adata3.obs['leiden']):
-        adata3.uns['top_gene_pvals_adj'].append(adata3.uns['rank_genes_groups']['pvals_adj'][str(i)])
-        adata3.uns['logfoldchanges'].append(adata3.uns['rank_genes_groups']['logfoldchanges'][str(i)])
     top_gene_fold_change = {}
-    top_gene_fold_change['0']=adata0.uns['logfoldchanges']
-    top_gene_fold_change['1']=adata1.uns['logfoldchanges']
-    top_gene_fold_change['2']=adata2.uns['logfoldchanges']
-    top_gene_fold_change['3']=adata3.uns['logfoldchanges']
-    #top gene pvals_adj
     top_gene_pvals_adj = {}
-    top_gene_pvals_adj['0']=adata0.uns['top_gene_pvals_adj']
-    top_gene_pvals_adj['1']=adata1.uns['top_gene_pvals_adj']
-    top_gene_pvals_adj['2']=adata2.uns['top_gene_pvals_adj']
-    top_gene_pvals_adj['3']=adata3.uns['top_gene_pvals_adj']
+    clustertype = {}
+    for i in range(total_stages):
+        topGene[str(i)] = adatas[i].uns['topGene']
+        # top_gene_fold_change[str(i)]=adatas[i].uns['logfoldchanges']
+        # top_gene_pvals_adj[str(i)]=adatas[i].uns['top_gene_pvals_adj']
+        clustertype[str(i)]=adatas[i].uns['clusterType']
+    # topGene['0']=adata0.uns['topGene']
+    # topGene['1']=adata1.uns['topGene']
+    # topGene['2']=adata2.uns['topGene']
+    # topGene['3']=adata3.uns['topGene']
+    #top gene fold_change 
+        adatas[i].uns['logfoldchanges'] = []
+        adatas[i].uns['top_gene_pvals_adj'] = []
+        for j in set(adatas[i].obs['leiden']):
+            adatas[i].uns['logfoldchanges'].append(adatas[i].uns['rank_genes_groups']['logfoldchanges'][str(j)])
+            adatas[i].uns['top_gene_pvals_adj'].append(adatas[i].uns['rank_genes_groups']['pvals_adj'][str(j)])
+
+    # adata0.uns['logfoldchanges'] = []
+    # adata0.uns['top_gene_pvals_adj'] = []
+    # for i in set(adata0.obs['leiden']):
+    #     adata0.uns['top_gene_pvals_adj'].append(adata0.uns['rank_genes_groups']['pvals_adj'][str(i)])
+    #     adata0.uns['logfoldchanges'].append(adata0.uns['rank_genes_groups']['logfoldchanges'][str(i)])
+    # adata1.uns['logfoldchanges'] = []
+    # adata1.uns['top_gene_pvals_adj'] = []
+    # for i in set(adata1.obs['leiden']):
+    #     adata1.uns['top_gene_pvals_adj'].append(adata1.uns['rank_genes_groups']['pvals_adj'][str(i)])
+    #     adata1.uns['logfoldchanges'].append(adata1.uns['rank_genes_groups']['logfoldchanges'][str(i)])
+    # adata2.uns['logfoldchanges'] = []
+    # adata2.uns['top_gene_pvals_adj'] = []
+    # for i in set(adata2.obs['leiden']):
+    #     adata2.uns['top_gene_pvals_adj'].append(adata2.uns['rank_genes_groups']['pvals_adj'][str(i)])
+    #     adata2.uns['logfoldchanges'].append(adata2.uns['rank_genes_groups']['logfoldchanges'][str(i)])
+    # adata3.uns['logfoldchanges'] = []
+    # adata3.uns['top_gene_pvals_adj'] = []
+    # for i in set(adata3.obs['leiden']):
+    #     adata3.uns['top_gene_pvals_adj'].append(adata3.uns['rank_genes_groups']['pvals_adj'][str(i)])
+    #     adata3.uns['logfoldchanges'].append(adata3.uns['rank_genes_groups']['logfoldchanges'][str(i)])
+    # top_gene_fold_change = {}
+    # top_gene_fold_change['0']=adata0.uns['logfoldchanges']
+    # top_gene_fold_change['1']=adata1.uns['logfoldchanges']
+    # top_gene_fold_change['2']=adata2.uns['logfoldchanges']
+    # top_gene_fold_change['3']=adata3.uns['logfoldchanges']
+    #top gene pvals_adj
+    # top_gene_pvals_adj = {}
+    # top_gene_pvals_adj['0']=adata0.uns['top_gene_pvals_adj']
+    # top_gene_pvals_adj['1']=adata1.uns['top_gene_pvals_adj']
+    # top_gene_pvals_adj['2']=adata2.uns['top_gene_pvals_adj']
+    # top_gene_pvals_adj['3']=adata3.uns['top_gene_pvals_adj']
     #get uns.edges
     edges = eval(open(os.path.join(path,'edges.txt')).read())
     #get clusterType
 
-    clustertype = {}
+    # clustertype = {}
     
-    clustertype['0']=adata0.uns['clusterType']
-    clustertype['1']=adata1.uns['clusterType']
-    clustertype['2']=adata2.uns['clusterType']
-    clustertype['3']=adata3.uns['clusterType']
+    # clustertype['0']=adata0.uns['clusterType']
+    # clustertype['1']=adata1.uns['clusterType']
+    # clustertype['2']=adata2.uns['clusterType']
+    # clustertype['3']=adata3.uns['clusterType']
     clusterType = clustertype
     #build new anndata and assign attribtues and write dataset
     adata = anndata.AnnData(X=X,obs=obs,var=variable)
@@ -651,11 +527,16 @@ def mergeAdata(path):
     with open(os.path.join(path,'stagedata/org_attribute.pkl'),'wb') as f:
         pickle.dump(attribute, f)
     del adata.uns
-    adata.write_h5ad(os.path.join(path,'stagedata/org_dataset.h5ad'),compression='gzip' )
-def getUnsDict(adata0,adata1,adata2,adata3,key):
+    adata.write_h5ad(os.path.join(path,'stagedata/org_dataset.h5ad'),compression='gzip',compression_opts=9)
+
+
+
+def getUnsDict(adatas,key):
     dic = {}
-    dic['0'] = adata0.uns[key]
-    dic['1'] = adata1.uns[key]
-    dic['2'] = adata2.uns[key]
-    dic['3'] = adata3.uns[key]
+    for i in range(len(adatas)):
+        dic[str(i)] = adatas[i].uns[key]
+    # dic['0'] = adata0.uns[key]
+    # dic['1'] = adata1.uns[key]
+    # dic['2'] = adata2.uns[key]
+    # dic['3'] = adata3.uns[key]
     return dic

@@ -133,7 +133,7 @@ def getIdremPaths(json,total_stage):
     for i in stage3IDs:
         paths.append(getidremPath(json, i))
     return paths
-def getPosNegMaxChangesNodes(json,paths):
+def getPosNegMaxChangesNodes(json,paths,total_stage):
     means = []
     for path in paths:
         pathmean = []
@@ -144,8 +144,10 @@ def getPosNegMaxChangesNodes(json,paths):
                     pathmean.append(node['nodeMean'])
         means.append(pathmean)
     means = np.array(means)
-    means[:,2] = means[:,2]-means[:,1]
-    means[:,1] = means[:,1]-means[:,0]
+    indicator = total_stage-1
+    while indicator > 0:
+        means[:,indicator] = means[:,indicator]-means[:,indicator-1]
+        indicator-=1
     poschangenodesid = np.argmax(means,axis=0)
     negchangenodesid = np.argmax(-means,axis=0)
     poschangenodes = []
@@ -157,7 +159,8 @@ def getPosNegMaxChangesNodes(json,paths):
     return poschangenodes, negchangenodes
 def testChanges(path,filename):
     tt = readIdremJson(path, filename)
-    paths = getIdremPaths(tt)
+    paths = getIdremPaths(tt,4)
+
     return getPosNegMaxChangesNodes(tt,paths)
 
 
@@ -168,12 +171,12 @@ def getPosNegDynamicPathGenes(path,filename,topN):
     total_stage = len(filename.split('.')[0].split('-'))
     tt = readIdremJson(path, filename)
     paths = getIdremPaths(tt,total_stage)
-    posdynamicids, negdynamicids = getPosNegMaxChangesNodes(tt,paths)
+    posdynamicids, negdynamicids = getPosNegMaxChangesNodes(tt,paths,total_stage-1)
     posdynamicgenes,posdynamicgeneids = getMaxOrMinNodesGenes(tt,posdynamicids)
     negdynamicgenes,negdynamicgeneids = getMaxOrMinNodesGenes(tt,negdynamicids)
-    posnegdynamicgenes = [posdynamicgenes[i]+negdynamicgenes[i] for i in range(3)]
-    posnegdynamicgeneids = [posdynamicgeneids[i]+negdynamicgeneids[i] for i in range(3)]
-    out = getTopNTargetGenes(tt,posnegdynamicgenes,posnegdynamicgeneids,topN)
+    posnegdynamicgenes = [posdynamicgenes[i]+negdynamicgenes[i] for i in range(total_stage-1)]
+    posnegdynamicgeneids = [posdynamicgeneids[i]+negdynamicgeneids[i] for i in range(total_stage-1)]
+    out = getTopNTargetGenes(tt,posnegdynamicgenes,posnegdynamicgeneids,topN, total_stage-1)
     return out
 
 
@@ -276,24 +279,24 @@ def getMaxMinPathGenes(path,filename,topN):
     
     out = getTopNTargetGenes(tt,maxmingenes,maxmingeneids,topN)
     return out
-def getMaxMinPathGenes0(path,filename,topN):
-    tt = readIdremJson(path, filename)
-    maxid,minid = getMinMaxNodeID0(tt)
-    maxnodes,minnodes = getMinMaxNode(tt[0],maxid,minid)
+# def getMaxMinPathGenes0(path,filename,topN):
+#     tt = readIdremJson(path, filename)
+#     maxid,minid = getMinMaxNodeID0(tt)
+#     maxnodes,minnodes = getMinMaxNode(tt[0],maxid,minid)
     
-    maxgenes,maxgeneids = getMaxOrMinNodesGenes0(tt,maxnodes)
-    mingenes,mingeneids = getMaxOrMinNodesGenes0(tt,minnodes)
-    maxmingenes = maxgenes+mingenes
-    maxmingeneids = maxgeneids+mingeneids
-    maxmingenes = list(set(maxmingenes))
+#     maxgenes,maxgeneids = getMaxOrMinNodesGenes0(tt,maxnodes)
+#     mingenes,mingeneids = getMaxOrMinNodesGenes0(tt,minnodes)
+#     maxmingenes = maxgenes+mingenes
+#     maxmingeneids = maxgeneids+mingeneids
+#     maxmingenes = list(set(maxmingenes))
     
-    maxmingeneids = list(set(maxmingeneids))
-    out = getTopNTargetGenes0(tt,maxmingenes,maxmingeneids,topN)
-    return out
-def getTopNTargetGenes(json,genenames,geneids,topN):
+#     maxmingeneids = list(set(maxmingeneids))
+#     out = getTopNTargetGenes0(tt,maxmingenes,maxmingeneids,topN)
+#     return out
+def getTopNTargetGenes(json,genenames,geneids,topN,total_stage):
 
-    out = [[] for i in range(3)]
-    for i in range(3):
+    out = [[] for i in range(total_stage)]
+    for i in range(total_stage):
         changegene = np.array([json[5][j] for j in geneids[i]])
         change = abs(changegene[:,i+1]-changegene[:,i])
         pddata = pd.DataFrame(change, columns=['change_Value'])
@@ -302,18 +305,17 @@ def getTopNTargetGenes(json,genenames,geneids,topN):
         topNGenes = sortedchange.index.tolist()[:topN]
         out[i] = topNGenes
     return out
-def getTopNTargetGenes0(json,genenames,geneids,topN):
-    out = [[] for i in range(3)]
-    for i in range(3):
-        changegene = np.array([json[5][j] for j in geneids])
-        change = abs(changegene[:,i+1]-changegene[:,i])
-        pddata = pd.DataFrame(change, columns=['change_Value'])
-        pddata.index = genenames
-        sortedchange = pddata.sort_values(by = 'change_Value',ascending=False)
-        topNGenes = sortedchange.index.tolist()[:topN]
-        out[i] = topNGenes
-    return out
-#def getTopNTargetGenesUnion():
+# def getTopNTargetGenes0(json,genenames,geneids,topN):
+#     out = [[] for i in range(3)]
+#     for i in range(3):
+#         changegene = np.array([json[5][j] for j in geneids])
+#         change = abs(changegene[:,i+1]-changegene[:,i])
+#         pddata = pd.DataFrame(change, columns=['change_Value'])
+#         pddata.index = genenames
+#         sortedchange = pddata.sort_values(by = 'change_Value',ascending=False)
+#         topNGenes = sortedchange.index.tolist()[:topN]
+#         out[i] = topNGenes
+#     return out
 def getTargetGenes0(path,N):
     '''
     get top N genes of each path
@@ -338,7 +340,7 @@ def getTargetGenes(path,N):
     path: the file path of IDREM results
     
     return:
-    out: a list of top 20 up or down regulators of each path
+    out: a list of top 100 up or down regulators of each path
     '''
     out = []
  
@@ -391,10 +393,10 @@ def matchTFandTG(TFs,scopes,filename,genenames):
     TFTG = np.array(TFTG)
     return TFTG
 
-def listTracks(mid, iteration):
+def listTracks(mid, iteration,total_stage):
     filenames= os.listdir(os.path.join(mid,str(iteration)+'/idremResults/'))
     #filenames = os.listdir('./reresult/idremVizCluster0.1-nov14/') #defalut path
-    tempTrack = [[] for _ in range(4)]
+    tempTrack = [[] for _ in range(total_stage)]
     for each in filenames:
         temp = each.split('.')[0].split('-')
         for i,item in enumerate(temp):
@@ -427,8 +429,8 @@ def updataGeneTables(mid, iteration, geneFactors):
             #adata = sc.read_h5ad('./stagedata/%d.h5ad'%(i))
             for j, clusterids in enumerate(stage):#in some tracks, the one stage have many clusters
                 for clusterid in clusterids:
-                    print('number of idrem file', j)
-                    print('stage',i)
+                    # print('number of idrem file', j)
+                    # print('stage',i)
                     adata = updateGeneFactors(adata,clusterid,iteration,geneFactors[j][i-1])
                     # difference+=clusterDiff#each update will get the mySigmoid(increment) 
             currentMySigmoidGeneWeight = np.sum(mySigmoid(adata.layers['geneWeight'].toarray()))
@@ -563,8 +565,8 @@ def replaceGeneTables(mid, iteration, geneFactors):
             temppreviousMySigmoidGeneWeight = adata.layers['geneWeight']
             for j, clusterids in enumerate(stage):#in some tracks, the one stage have many clusters
                 for clusterid in clusterids:
-                    print('number of idrem file', j)
-                    print('stage',i)
+                    # print('number of idrem file', j)
+                    # print('stage',i)
                     adata = replaceGeneFactors(adata,clusterid,geneFactors[j][i-1])
             previousMySigmoidGeneWeight = mySigmoid(temppreviousMySigmoidGeneWeight.toarray())
             currentMySigmoidGeneWeight = mySigmoid(adata.layers['geneWeight'].toarray())
@@ -578,8 +580,8 @@ def replaceGeneTables(mid, iteration, geneFactors):
                     adata.layers['geneWeight'] = csr_matrix(np.zeros(adata.X.shape)) 
                     adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
     return difference/3       
-def updataGeneTablesWithDecay(mid, iteration, geneFactors, decayRate = 0.5):
-    tracks = listTracks(mid,iteration)
+def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate = 0.5):
+    tracks = listTracks(mid,iteration,total_stage)
     difference = 0
     for i, stage in enumerate(tracks):
         if i != 0:
@@ -590,8 +592,8 @@ def updataGeneTablesWithDecay(mid, iteration, geneFactors, decayRate = 0.5):
             #adata = sc.read_h5ad('./stagedata/%d.h5ad'%(i))
             for j, clusterids in enumerate(stage):#in some tracks, the one stage have many clusters
                 for clusterid in clusterids:
-                    print('number of idrem file', j)
-                    print('stage',i)
+                    # print('number of idrem file', j)
+                    # print('stage',i)
                     adata = updateGeneFactorsWithDecay(adata,clusterid,iteration,geneFactors[j][i-1])
                     
                     # difference+=clusterDiff#each update will get the mySigmoid(increment) 
@@ -859,3 +861,6 @@ def geneFactor(idrem_path, tfinfo_path, defaultfactor):
                 defaultfactor[j+1][each] = mySigmoid(np.sum(genes[i][j],axis=0))
             #defaultfactor[i].append(mySigmoid(np.sum(genes[i][j],axis=0)))
     return defaultfactor
+    
+if __name__ == '__main__':
+    getPosNegDynamicPathGenes('/mnt/md0/yumin/to_upload/UNAGI/tutorials/example_1/idrem','4-4-5-1.txt_viz',50)

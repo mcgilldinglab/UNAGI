@@ -21,6 +21,9 @@ class UNAGI_runner():
         self.resolutions = None
         self.idrem_dir = idrem_dir
         self.neighbor_parameters = None
+        self.setup_CPO = False
+        self.species = None
+        self.setup_IDREM = False
     def load_stage_data(self):
         stageadata = []
         for i in range(self.total_stage):
@@ -49,7 +52,8 @@ class UNAGI_runner():
         sc.tl.leiden(adata,resolution = self.resolutions[stage])
         sc.tl.paga(adata)
         sc.pl.paga(adata,show=False)
-        sc.tl.umap(adata, min_dist=0.25/self.resolution_coefficient*len(adata),init_pos='paga')
+        # sc.tl.umap(adata, min_dist=0.25/self.resolution_coefficient*len(adata),init_pos='paga')
+        sc.tl.umap(adata, min_dist=0.05,init_pos='paga')
         rep=[z_locs, z_scales]
         adata.obs['ident'] = 'None'
         adata.obs['leiden'] = adata.obs['leiden'].astype(str)
@@ -63,9 +67,16 @@ class UNAGI_runner():
             adata.layers['geneWeight'] = allzeros
         sc.pl.umap(adata,color='ident',show=False)
         adata.write(os.path.join(self.data_path,str(self.iteration)+'/stagedata/%d.h5ad'%stage),compression='gzip',compression_opts=9)
-        print('write stageadata')
         return adata,averageValue,reps
     
+    def set_up_CPO(self, anchor_neighbors, max_neighbors, min_neighbors, resolution_min, resolution_max):
+        self.setup_CPO = True
+        self.anchor_neighbors = anchor_neighbors
+        self.max_neighbors = max_neighbors
+        self.min_neighbors = min_neighbors
+        self.resolution_min = resolution_min
+        self.resolution_max = resolution_max
+
     def run_CPO(self):
         max_adata_cells = 0
         num_cells = []
@@ -76,22 +87,26 @@ class UNAGI_runner():
         self.resolution_coefficient = max_adata_cells
         for i in range(0,len(self.adata_stages)):
             self.adata_stages[i] = self.annotate_stage_data(self.adata_stages[i], i)
-        self.neighbor_parameters, anchor_index = get_neighbors(self.adata_stages, num_cells,anchor_neighbors=15,max_neighbors=35,min_neighbors=10)
-        self.resolutions,_ = auto_resolution(self.adata_stages, anchor_index, self.neighbor_parameters, 0.8, 1.5)
-     
+        if not self.setup_CPO:
+            print('CPO parameters are not set up, using default parameters')
+            print('anchor_neighbors: 15, max_neighbors: 35, min_neighbors: 10, resolution_min: 0.8, resolution_max: 1.5')
+            self.neighbor_parameters, anchor_index = get_neighbors(self.adata_stages, num_cells,anchor_neighbors=15,max_neighbors=35,min_neighbors=10)
+            self.resolutions,_ = auto_resolution(self.adata_stages, anchor_index, self.neighbor_parameters, 0.8, 1.5)
+        else:
+            self.neighbor_parameters, anchor_index = get_neighbors(self.adata_stages, num_cells,anchor_neighbors=self.anchor_neighbors,max_neighbors=self.max_neighbors,min_neighbors=self.min_neighbors)
+            self.resolutions,_ = auto_resolution(self.adata_stages, anchor_index, self.neighbor_parameters, self.resolution_min, self.resolution_max)
+    
     def update_cell_attributes(self):
         self.averageValues = []
         reps = []
         for i in range(0,len(self.adata_stages)):
-            #adata = sc.read_h5ad('../data/mes/'+str(iteration-1)+'/stagedata/gcn_%d.h5ad'%i)
             adata = self.adata_stages[i]
-            print(adata.X.shape)
+            # print(adata.X.shape)
             adata.uns['topGene']={}
             adata.uns['clusterType']={}
             adata.uns['rep']={}
             adata,averageValue,rep = self.annotate_stage_data(adata,i)
             gc.collect()
-            print('update done')
             reps.append(rep)
             averageValue = np.array(averageValue)
             self.averageValues.append(averageValue)
@@ -100,24 +115,45 @@ class UNAGI_runner():
         saveRep(reps,self.data_path,self.iteration)
     def build_temporal_dynamics_graph(self):
         self.edges = getandUpadateEdges(self.total_stage,self.data_path,self.iteration)
-
+    def set_up_IDREM(self,Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood, Minimum_Standard_Deviation):
+        self.setup_IDREM = True
+        self.Minimum_Absolute_Log_Ratio_Expression = Minimum_Absolute_Log_Ratio_Expression
+        self.Convergence_Likelihood = Convergence_Likelihood
+        self.Minimum_Standard_Deviation = Minimum_Standard_Deviation
+    def register_species(self, species):
+        print('Species is registered as %s'%species)
+        self.species = species
     def run_IDREM(self):
         averageValues = np.load(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),allow_pickle=True)
-        paths = getClusterPaths(self.edges)
-        idrem= getClusterIdrem(paths,averageValues)
+        paths = getClusterPaths(self.edges,self.total_stage)
+        idrem= getClusterIdrem(paths,averageValues,self.total_stage)
         paths = [each for each in paths.values() if len(each) == self.total_stage]
-        print(paths)
+        # print(paths) 
         idrem = np.array(idrem)
         self.genenames =np.array(list(self.adata_stages[0].var.index.values))
-        runIdrem(paths,self.data_path,idrem,'idremResults',self.genenames,self.iteration,self.idrem_dir)
-    def update_disease_specific_markers_table(self):
+        if not self.setup_IDREM:
+            print('IDREM parameters are not set up, using default parameters')
+            print('Minimum_Absolute_Log_Ratio_Expression: 0.5, Convergence_Likelihood: 0.001, Minimum_Standard_Deviation: 0.5')
+            if self.species is None:
+                print('Human species is used as default')
+                runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir)
+            else:
+                runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species)
+        else:
+            if self.species is None:
+                print('Human species is used as default')
+                runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
+            else:
+                runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
+            
+    def update_gene_weights_table(self,topN=100):
         TFs = getTFs(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'))
-        scope = getTargetGenes(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),100)
+        scope = getTargetGenes(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),topN)
         p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames)
         #np.save('../data/mes/'+str(iteration)+'/tfinfo.npy',np.array(p))
-        updateLoss = updataGeneTablesWithDecay(self.data_path,str(self.iteration),p)
+        updateLoss = updataGeneTablesWithDecay(self.data_path,str(self.iteration),p,self.total_stage)
     def build_iteration_dataset(self):
-        mergeAdata(os.path.join(self.data_path,str(self.iteration)))
+        mergeAdata(os.path.join(self.data_path,str(self.iteration)),total_stages=self.total_stage)
        
     def run(self):
         self.load_stage_data()
@@ -130,7 +166,7 @@ class UNAGI_runner():
         self.update_cell_attributes()
         self.build_temporal_dynamics_graph()
         self.run_IDREM()
-        self.update_disease_specific_markers_table()
+        self.update_gene_weights_table()
         self.build_iteration_dataset()
 
 
