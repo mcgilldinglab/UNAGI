@@ -213,7 +213,7 @@ class perturbationAnalysis:
                         pathwaydic1[each1][each] = [np.array(k1[each][each1][str(i)]) for i in range(total_len)]
        
         pathwaydic2= {}
-#each 1 is the item name, each is the track name
+    #each 1 is the item name, each is the track name
         for each in list(k2.keys()):
 
             if each not in pathwaydic2.keys():
@@ -277,7 +277,7 @@ class perturbationAnalysis:
                     del out[each]
         return out
     
-#convert distance to scores and some statistics
+    #convert distance to scores and some statistics
 
     def get_cluster_data_size(self,stage,cluster):
 
