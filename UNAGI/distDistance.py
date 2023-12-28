@@ -2,6 +2,7 @@ import multiprocessing
 import numpy as np
 import gc
 import anndata
+import time
 import pandas as pd
 import scanpy as sc
 from sklearn.metrics import silhouette_score, davies_bouldin_score
@@ -367,7 +368,7 @@ def calculateKL(cluster1gaussian, cluster2gaussian):
 
     return kl.detach().numpy()
 
-import time
+
 
 
 

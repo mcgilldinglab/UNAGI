@@ -668,7 +668,7 @@ class perturbationAnalysis:
     def get_online_results(self, score, random_score):
         cdf=norm.cdf(score,np.array(random_score).mean(),np.array(random_score).std())
         return 1.00 - cdf
-#load avg needed
+
 
     def main_analysis(self,track_to_analysis, all,score=None,items=None,custommode=None):
         '''
