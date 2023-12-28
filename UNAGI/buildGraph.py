@@ -43,32 +43,24 @@ def nodesDistance(rep1,rep2,topgene1,topgene2):
     distance = [[] for _ in range(len(rep2))]
     for i in range(len(rep2)):
         for j in range(len(rep1)):
-            gaussiankl = calculateKL(rep2[i],rep1[j])
-            # if i == 11 and j == 36:
-                # print('here')
-                # print(topgene2[11],topgene1[36])
+            gaussiankl_1 = calculateKL(rep2[i],rep1[j])
+            gaussiankl_2 = calculateKL(rep1[j],rep2[i])
+            gaussiankl = (gaussiankl_1 + gaussiankl_2)/2
             similarityDE = getSimilarity(topgene2,topgene1,i,j)
-            #print(gaussiankl,similarityDE)
-            #print('second:',i,'first',j)
             distance[i].append([gaussiankl , similarityDE])
     for i in range(len(distance)):
         distance[i] = normalizeDistance(distance[i])
-#         print(distance[i])
-#         print('---')
-#         print('i=',i)
-#         print('min',min(distance[i]))
-#         print('min idx', distance[i].tolist().index(min(distance[i])))
     return distance
 def connectNodes(distances):
     edges = []
     for i in range(len(distances)):
         leftend = np.argmin(distances[i])
-        temp = distances[i].copy()
+        # temp = distances[i].copy()
         pval = norm.cdf(distances[i][leftend],loc = np.mean(distances),scale = np.std(distances))
         #p*count/(count-idx)
         # q_val = pval * len(temp)/
         
-        if pval < 0.01: #if pval < 0.01 can connect the two clusters across two stages
+        if pval < 0.05: #if pval < 0.01 can connect the two clusters across two stages
             edges.append([leftend,i])
     return edges
 
@@ -122,7 +114,7 @@ def getandUpadateEdges(total_stage,midpath,iteration):
     for i in range(total_stage-1):
         edges.append(buildEdges(i,i+1,midpath,iteration))
     updateEdges(edges,midpath,iteration)
-    print('edges updated')
+    # print('edges updated')
     return edges
 
 def getEdges():

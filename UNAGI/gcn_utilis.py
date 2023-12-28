@@ -52,6 +52,7 @@ def get_gcn_exp(source_directory,total_stage,neighbors,threads= 20):
     '''
 
     for i in range(total_stage):
+        print('Calculating cell graph for stage %d.....'%i)
         read_path = source_directory+'/%d.h5ad'%i
         temp = sc.read_h5ad(read_path)
         

@@ -171,6 +171,39 @@ class ZeroInflatedDistribution(TorchDistribution):
         )
         new._validate_args = self._validate_args
         return new
+class myZeroInflatedGamma(ZeroInflatedDistribution):
+    """
+    A Zero Inflated Normal distribution.
+
+    :param total_count: non-negative number of negative Bernoulli trials.
+    :type total_count: float or torch.Tensor
+    :param torch.Tensor probs: Event probabilities of success in the half open interval [0, 1).
+    :param torch.Tensor logits: Event log-odds for probabilities of success.
+    :param torch.Tensor gate: probability of extra zeros.
+    :param torch.Tensor gate_logits: logits of extra zeros.
+    """
+
+    arg_constraints = {
+        'loc': constraints.real, 'scale': constraints.positive,
+        "gate": constraints.unit_interval,
+        "gate_logits": constraints.real,
+    }
+   
+    support = constraints.positive
+
+    def __init__(
+        self,
+        loc,
+        scale=None,
+        gate=None,
+        gate_logits=None,
+        validate_args=None
+    ):
+        base_dist = Gamma(concentration=loc,rate=scale,validate_args=False)
+        base_dist._validate_args = validate_args
+        super().__init__(
+            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
+        )
 
 class myZeroInflatedLogNormal(ZeroInflatedDistribution):
     """
@@ -200,14 +233,7 @@ class myZeroInflatedLogNormal(ZeroInflatedDistribution):
         gate_logits=None,
         validate_args=None
     ):
-#         print('scale')
-#         print(scale)
-#         base_dist = Normal(loc=loc, scale=scale,validate_args=False)
-#         base_dist = Gamma(concentration=loc,rate=scale,validate_args=False)
-#         base_dist = Chi2(df=loc,validate_args=False)
         base_dist = LogNormal(loc=loc,scale=scale,validate_args=False)
-#         base_dist = Weibull(scale= loc, concentration = scale)
-#         base_dist = Poisson(rate=loc, validate_args=False)
         base_dist._validate_args = validate_args
         super().__init__(
             base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
@@ -266,12 +292,12 @@ class GraphConvolution(Module):
                + str(self.out_features) + ')'
 
 class GraphEncoder(nn.Module):
-    def __init__(self, in_dim, z_dim, hidden_dim, dropout):
+    def __init__(self, in_dim, z_dim, hidden_dim):
         super().__init__()
         
         self.gc1 = GraphConvolution(in_dim, hidden_dim)
         # self.gc1 = GraphConvolution(in_dim, hidden_dim)
-        self.dropout = dropout
+        # self.dropout = dropout
 #         self.fc1 = nn.Linear(nhid, 512)
 #         self.fc2 = nn.Linear(512, hidden_dim)
         #self.fc3 = nn.Linear(256, hidden_dim)
@@ -363,12 +389,13 @@ class NewDecoder(nn.Module):
         return loc, scale, dropout
     
 class VAE(PyroBaseModuleClass):
-    def __init__(self,  n_input, n_latent,n_graph, dropout): 
+    def __init__(self,  n_input, n_latent,n_graph,beta,distribution): 
         super().__init__()
         self.n_latent = n_latent
         self.n_input = n_input
         self.n_graph = n_graph
-        self.dropout = dropout
+        self.beta = beta
+        self.distribution = distribution
        # in the init, we create the parameters of our elementary stochastic computation unit.
        
         # First, we setup the parameters of the generative model
@@ -377,7 +404,7 @@ class VAE(PyroBaseModuleClass):
         self.gate_logits = torch.nn.Parameter(torch.randn(self.n_input))
         self.discriminator = Discriminator(self.n_input, self.n_latent)
         # Second, we setup the parameters of the variational distribution
-        self.encoder = GraphEncoder(self.n_input, self.n_latent,self.n_graph,  self.dropout)
+        self.encoder = GraphEncoder(self.n_input, self.n_latent,self.n_graph)
         # self.gc = GraphConvolution(n_input, nhid)
         # self.softplus = nn.Sigmoid()
         
@@ -393,22 +420,41 @@ class VAE(PyroBaseModuleClass):
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
             # get the "normalized" mean of the negative binomial
+            if self.distribution == 'ziln':
+                dec_loc, dec_mu, dec_dropout  = self.decoder(z)
+                scale = torch.exp(self.log_theta)
+                loc = (dec_mu+1e-5).log()-scale.pow(2)/2
+                x_dist = myZeroInflatedLogNormal(loc=loc, scale=scale, gate=dec_dropout)
+                # score against actual counts
+                rx=pyro.sample("obs", x_dist.to_event(1), obs=x[start:end,:])
+                a = deterministic('recon',x_dist.mean)
+            elif self.distribution == 'zinb':
+                _, mu, dec_dropout  = self.decoder(z)
+                theta = self.log_theta.exp()
+                nb_logits = (mu+1e-4).log() - (theta+1e-4).log()
             
-            dec_loc, dec_mu, dec_dropout  = self.decoder(z)
-            # dec_loc, dec_mu, dec_dropout  = self.decoder(z_p)
-            #(loc+scale.pow(2)/2).exp() = dec_mu
-            #scale = (((dec_mu+1e-4).log()-loc)*2).sqrt()
-            scale = torch.exp(self.log_theta)
-            #loc = dec_mu.log()-scale.pow(2)/2
-            loc = (dec_mu+1e-5).log()-scale.pow(2)/2
-            x_dist = myZeroInflatedLogNormal(loc=loc, scale=scale, gate=dec_dropout)
-#             temp_gate = x_dist.gate_logits.clone()
-            #plt.hist(torch.sigmoid(temp_gate)[:,0].detach().numpy())
-            #plt.show()
-            # score against actual counts
-            rx=pyro.sample("obs", x_dist.to_event(1), obs=x[start:end,:])
-#             pyro.sample("x", x_dist)
-            a = deterministic('recon',x_dist.mean)
+                x_dist = dist.ZeroInflatedNegativeBinomial(total_count=theta, logits=nb_logits,gate= dec_dropout, validate_args=False)
+                # score against actual counts
+                rx=pyro.sample("obs", x_dist.to_event(1), obs=x[start:end,:])
+                a = deterministic('recon',x_dist.mean)
+            elif self.distribution =='nb':
+                _, mu, dec_dropout  = self.decoder(z)
+                theta = self.log_theta.exp()
+                nb_logits = (mu+1e-4).log() - (theta+1e-4).log()
+            
+                x_dist = dist.NegativeBinomial(total_count=theta, logits=nb_logits, validate_args=False)
+                # score against actual counts
+                rx=pyro.sample("obs", x_dist.to_event(1), obs=x[start:end,:])
+                a = deterministic('recon',x_dist.mean)
+
+            elif self.distribution =='zig':
+                _, mu, dec_dropout = self.decode(z)
+                scale = F.softplus(self.log_theta)#self.log_theta.exp()
+                loc = mu*scale
+                rx = myZeroInflatedGamma(loc=loc, scale=scale, gate=dec_dropout, validate_args=False)
+                a = deterministic('recon',rx.mean)
+            else:
+                raise ValueError('distribution not supported')
             return rx
         
     def guide(self, x, adj, batch, start, end):
@@ -424,10 +470,6 @@ class VAE(PyroBaseModuleClass):
             # sample the latent code z
             rz=pyro.sample("latent", dist.Normal(qz_m, qz_v).to_event(1))
             return rz
-#     def discriminate(self, x, recons):
-#         pyro.module("discriminator", self)
-#         logits, label = self.discriminator(x,recons)
-#         return logits, label
         
     def getZ(self, x,adj,batch, start, end,test=True):
         # encode image x
@@ -439,36 +481,44 @@ class VAE(PyroBaseModuleClass):
         return z_loc+z_scale,z_loc, z_scale,gcnout,hidden
 
     
-    def generate(self,x, adj,batch, start, end):
-        z_loc, z_scale,gcnout,hidden = self.encoder(x,adj,batch,  start, end,test=True)
-        #z_loc = torch.zeros([cell,64]).to('cuda:0')+z_loc
-        #z_scale = torch.zeros([cell,64]).to('cuda:0')+z_scale
-        z = dist.Normal(z_loc, z_scale).sample()
-        #z = z.mean(axis=0)
-        dec_loc, dec_scale, dec_dropout = self.decoder(z_loc)
-            
-        # get the mean of the negative binomial
+    # def generate(self,x, adj,batch, start, end):
+    #     z_loc, z_scale,gcnout,hidden = self.encoder(x,adj,batch,  start, end,test=True)
+    #     #z_loc = torch.zeros([cell,64]).to('cuda:0')+z_loc
+    #     #z_scale = torch.zeros([cell,64]).to('cuda:0')+z_scale
+    #     z = dist.Normal(z_loc, z_scale).sample()
+    #     #z = z.mean(axis=0)
+    #     dec_loc, dec_scale, dec_dropout = self.decoder(z_loc)
 
-        # log_library = library_size  
-#         px_rate =px_scale # torch.exp(library_size) * px_scale
-        # get the dispersion parameter
-#         theta = torch.exp(self.log_theta)
-#         glog=self.gate_logits
-        # build count distribution
-#         nb_logits = (px_rate + 1e-4).log() - (theta + 1e-4).log()
-        # nb_logits = (px_rate + 5.0e-2).log() - (theta + 5.0e-2).log()
-#         self.lognorm_mu = torch.nn.Parameter(torch.zeros_like(dec_scale),requires_grad=False)
-        # x_dist = dist.ZeroInflatedNegativeBinomial(total_count=theta, logits=nb_logits, gate_logits=glog)
-#         x_dist = myZeroInflatedNormal(loc=dec_loc, scale=dec_scale, gate_logits=dec_dropout)
-        return  dec_loc, dec_scale
+    #     return  dec_loc, dec_scale
     def generate1(self,x,adj,batch, start, end):
         # x = torch.log(1 + x)
         z_loc, z_scale,gcnout,hidden = self.encoder(x,adj,batch,  start, end,test=True)
         z = dist.Normal(z_loc, z_scale).sample()
-        dec_loc, dec_mu, dec_dropout  = self.decoder(z_loc+z_scale)
-        scale = torch.exp(self.log_theta)
-        loc = (dec_mu+1e-5).log()-scale.pow(2)/2
-        x_dist = myZeroInflatedLogNormal(loc=loc, scale=scale, gate=dec_dropout)
-        rx=x_dist.mean #-> expectation
+        if self.distribution == 'ziln':
+            dec_loc, dec_mu, dec_dropout  = self.decoder(z_loc+z_scale)
+            scale = torch.exp(self.log_theta)
+            loc = (dec_mu+1e-5).log()-scale.pow(2)/2
+            x_dist = myZeroInflatedLogNormal(loc=loc, scale=scale, gate=dec_dropout)
+            rx=x_dist.mean #-> expectation
+        elif self.distribution == 'zinb':
+            _, mu, dec_dropout  = self.decoder(z_loc+z_scale)
+            theta = self.log_theta.exp()
+            nb_logits = (mu+1e-4).log() - (theta+1e-4).log()
+            x_dist = dist.ZeroInflatedNegativeBinomial(total_count=theta, logits=nb_logits,gate= dec_dropout, validate_args=False)
+            rx=x_dist.mean
+        elif self.distribution =='zig':
+            _, mu, dec_dropout = self.decoder(z_loc+z_scale)
+            scale = F.softplus(self.log_theta)
+            loc = mu*scale
+            x_dist = myZeroInflatedGamma(loc=loc, scale=scale, gate=dec_dropout, validate_args=False)
+            rx = x_dist.mean
         # rx=x_dist.sample() #-> sample
+        elif self.distribution =='nb':
+            _, mu, dec_dropout  = self.decoder(z_loc+z_scale)
+            theta = self.log_theta.exp()
+            nb_logits = (mu+1e-4).log() - (theta+1e-4).log()
+            x_dist = dist.NegativeBinomial(total_count=theta, logits=nb_logits, validate_args=False)
+            rx=x_dist.mean
+        else:
+            raise ValueError('distribution not supported')
         return  rx#, None, None,None, None

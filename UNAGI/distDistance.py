@@ -47,7 +47,7 @@ def getN2CSimilarity(adata,stagei):
     
     clusterIds = set(adata.obs['leiden'].values)
     
-    print(clusterIds)
+    # print(clusterIds)
     #maxj = adataj.obs['leiden'].max()
     similarities = {}
     for i,clusterIdi in enumerate(clusterIds):
@@ -175,7 +175,7 @@ class calculateN2CKLDProcess(multiprocessing.Process):
         time1 = time.time()
         temp = calculateN2CKLDistance(self.mu,self.sigma,self.previousRep,self.topGeneD)
         time2 = time.time()
-        print(time2-time1)
+        # print(time2-time1)
         idx = np.argmin(np.array(temp))
         self.out[cellid] = [idx, self.idnumber]
         #self.out[]
@@ -323,18 +323,19 @@ def normalizeDistance(distance):
 
     de = np.array(distance[:,1])
     if gaussiankld.shape[0] != 1:
-
-        gaussian_kl_zscore = stats.zscore(gaussiankld)
-        #gamma_kl_zscore = stats.zscore(gammakld)
-        de_zscore = stats.zscore(de)
+        # de_zscore = stats.zscore(de)
+        #min max normalization
+        de_minmax = (de - de.min()) / (de.max() - de.min())
         ggkld = gaussiankld
-        ggkld_zscore = stats.zscore(ggkld)
+        #min max normalization
+        ggkld_minmax = (ggkld - ggkld.min()) / (ggkld.max() - ggkld.min())
+        # ggkld_zscore = stats.zscore(ggkld)
     else:
-        ggkld_zscore= gaussiankld
-        de_zscore = de
+        ggkld_minmax= gaussiankld
+        de_minmax = de
     
     
-    return ggkld_zscore+de_zscore#gaussian_kl_zscore+gamma_kl_zscore+de_zscore
+    return ggkld_minmax+de_minmax#gaussian_kl_zscore+gamma_kl_zscore+de_zscore
 def calculateKL(cluster1gaussian, cluster2gaussian):
     '''
     calculate KL divergence of multivariate gaussian distributions between two clusters.
@@ -347,8 +348,8 @@ def calculateKL(cluster1gaussian, cluster2gaussian):
     return: kl divergence of multivariate gaussian distributions
     
     '''
-    cluster1 = np.array(cluster1gaussian).reshape(-1,2)
-    cluster2 = np.array(cluster2gaussian).reshape(-1,2)
+    cluster1 = np.array(cluster1gaussian,dtype=np.float64).reshape(-1,2)
+    cluster2 = np.array(cluster2gaussian,dtype=np.float64).reshape(-1,2)
     
     std1 = cluster1[:,1]
     covariance1 = torch.tensor(np.diag(std1**2))

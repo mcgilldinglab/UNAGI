@@ -75,6 +75,7 @@ class perturbationAnalysis:
         #     tracks.append(each)
 
         return list(set(tracks))
+    
     def load_online(self,deltaD=None,sanity=False,track_percentage= None):
         out = {}
         if sanity == True:
@@ -184,6 +185,7 @@ class perturbationAnalysis:
                 out[each] =np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2))
                 # out[each] = (np.abs(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))+np.abs(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)))/2
         return out
+    
     def load(self,data_pathway_overlap_genes,track_percentage,all=True,sanity=False):
         if sanity == True:
             k1 = self.adata.uns['random_background_perturbation_deltaD'][str(self.log2fc)]
@@ -268,13 +270,11 @@ class perturbationAnalysis:
                     temp.append(np.sqrt(((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2) * ((np.abs(np.mean(temp1_copy[:,1]))+np.abs(np.mean(temp2_copy[:,1])))/2)))
                     # temp.append((np.mean(temp1[:,0])-np.mean(temp2[:,0]))/2* ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)) 
                     out[each][item] = np.array(temp)
-
         if sanity == False:
 
             for each in list(out.keys()):
                 if each not in data_pathway_overlap_genes:
                     del out[each]
-
         return out
     
 #convert distance to scores and some statistics
