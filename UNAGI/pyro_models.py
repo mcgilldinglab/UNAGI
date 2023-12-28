@@ -248,17 +248,8 @@ class GraphConvolution(Module):
     def __init__(self, in_features, out_features, bias=True):
         super(GraphConvolution, self).__init__()
         self.in_features = in_features
-#         self.fc = nn.Linear(in_features, out_features)
         self.out_features = out_features
-#         self.weight = torch.nn.Parameter(torch.FloatTensor(in_features, out_features))
-#         self.BN1 = nn.BatchNorm1d(out_features)
-#         self.BN2 = nn.BatchNorm1d(out_features)
-#         if bias:
-#             self.bias = torch.nn.Parameter(torch.FloatTensor(out_features))
-#         else:
-#             self.register_parameter('bias', None)
-        #self.reset_parameters()
-#         self.softplus = nn.Sigmoid()
+
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)
@@ -281,10 +272,6 @@ class GraphConvolution(Module):
         # output = self.fc(support)
         # output = torch.mm(support, self.weight.float())
         return support, support 
-#         if self.bias is not None:
-#             return support, support #+ self.bias
-#         else:
-#             return support,support
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
@@ -298,15 +285,15 @@ class GraphEncoder(nn.Module):
         self.gc1 = GraphConvolution(in_dim, hidden_dim)
         # self.gc1 = GraphConvolution(in_dim, hidden_dim)
         # self.dropout = dropout
-#         self.fc1 = nn.Linear(nhid, 512)
-#         self.fc2 = nn.Linear(512, hidden_dim)
+        #self.fc1 = nn.Linear(nhid, 512)
+        #self.fc2 = nn.Linear(512, hidden_dim)
         #self.fc3 = nn.Linear(256, hidden_dim)
         self.fc21 = nn.Linear(hidden_dim, z_dim)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
-#         self.BN1 = nn.BatchNorm1d(hidden_dim)
+        #self.BN1 = nn.BatchNorm1d(hidden_dim)
         
         self.test = nn.Linear(in_dim, hidden_dim)
-#         self.test1 = nn.Linear(hidden_dim, hidden_dim)
+        #self.test1 = nn.Linear(hidden_dim, hidden_dim)
         self.softplus = nn.Softplus()
 
     def forward(self, x,adj,  start, end, test=False): 
@@ -329,8 +316,8 @@ class GraphEncoder(nn.Module):
         # print(x)
         
         hidden1 = self.softplus(self.test(hidden1))
-#         hidden1 = self.softplus(self.test1(hidden1))
-#         hidden1=  self.softplus(self.test1(hidden1))
+        #hidden1 = self.softplus(self.test1(hidden1))
+        #hidden1=  self.softplus(self.test1(hidden1))
         # hidden = self.softplus(x)
         # hidden1 = self.softplus(self.fc1(x))
         # hidden1 = self.softplus(self.fc2(hidden1))
@@ -338,14 +325,16 @@ class GraphEncoder(nn.Module):
         # print(hidden)
         z_loc = self.fc21(hidden1)
         z_scale = torch.exp(torch.clamp(self.fc22(hidden1), -5, 5))
-#         print(z_loc)
+        #print(z_loc)
         return z_loc, z_scale,y,z_scale
+    
 class Discriminator(nn.Module):
+
     def __init__(self,input_dim,hidden_dim):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, 1)
-#         self.fc3 = nn.Linear(64, 1)
+        #self.fc3 = nn.Linear(64, 1)
         self.ReLU6 = nn.Softplus()
         self.BN1 = nn.BatchNorm1d(hidden_dim)
         
@@ -355,24 +344,25 @@ class Discriminator(nn.Module):
         xs = x
         xs = self.ReLU6(self.fc1(xs))#+1e-6
 
-#         print(xs)
-#         xs = self.ReLU6(self.fc2(xs))+1e-6
+        #print(xs)
+        #xs = self.ReLU6(self.fc2(xs))+1e-6
         xs = self.fc2(xs)
 
-#         ys = torch.LongTensor(ys)
+        #ys = torch.LongTensor(ys)
         return self.bce(xs,ys)
+    
 class NewDecoder(nn.Module):
     def __init__(self, in_dim, z_dim, hidden_dim):
         super().__init__()
 
         self.fc1 = nn.Linear(z_dim, hidden_dim)
-#         self.fc2 = nn.Linear(512, hidden_dim)
-#         self.test = nn.Linear(hidden_dim,hidden_dim)
-#         self.fc3 = nn.Linear(512, hidden_dim)
+        #self.fc2 = nn.Linear(512, hidden_dim)
+        #self.test = nn.Linear(hidden_dim,hidden_dim)
+        #self.fc3 = nn.Linear(512, hidden_dim)
         self.fc21 = nn.Linear(hidden_dim, in_dim)
         self.fc22 = nn.Linear(hidden_dim, in_dim)
         self.fc23 = nn.Linear(hidden_dim, in_dim)
-#         self.fc24 = nn.Linear(hidden_dim, in_dim)
+        #self.fc24 = nn.Linear(hidden_dim, in_dim)
         self.softplus = nn.Softplus()
         self.ReLU6 = nn.ReLU6()
         self.ReLU = nn.ReLU()
@@ -381,9 +371,9 @@ class NewDecoder(nn.Module):
 
         hidden =self.softplus(self.fc1(z))#+1e-7
         
-#         loc =  torch.exp(torch.clamp(self.fc21(hidden), -5, 5))#+1e-6
+
         loc =  self.fc21(hidden) #mu
-#         scale = torch.exp(torch.clamp(self.fc22(hidden), -5, 5))#+1e-6
+
         scale = self.softplus(self.fc22(hidden))
         dropout = self.sigmoid(torch.clamp(self.fc23(hidden),-3,3))
         return loc, scale, dropout
@@ -463,7 +453,7 @@ class VAE(PyroBaseModuleClass):
         
         with pyro.plate("data", x[start:end,:].shape[0]):
             # use the encoder to get the parameters used to define q(z|x)
-#             x_ = torch.log(1 + x)
+            #x_ = torch.log(1 + x)
             [qz_m,qz_v,_,_] = self.encoder(x, adj,  start, end)
           
             #qz_v = self.var_encoder(x_)
