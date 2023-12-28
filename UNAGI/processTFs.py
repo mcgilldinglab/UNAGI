@@ -122,7 +122,24 @@ def testChanges(path,filename):
     paths = getIdremPaths(tt,4)
 
     return getPosNegMaxChangesNodes(tt,paths)
+def getTargetGenes(path,N):
+    '''
+    get top N genes of each path
+    args:
+    path: the file path of IDREM results
+    
+    return:
+    out: a list of top N up or down regulators of each path
+    '''
+    out = []
 
+    filenames = os.listdir(path)
+    
+    for each in filenames:
+        if each[0] != '.':
+            #out.append(getMaxMinPathGenes(path,each,N)) #get the genes from nodes that have highest and lowest nodemean
+            out.append(getPosNegDynamicPathGenes(path,each,N)) #get the genes from nodes increase and descrease most between stages
+    return out
 
 def getPosNegDynamicPathGenes(path,filename,topN):
     '''
