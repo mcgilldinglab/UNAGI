@@ -16,6 +16,19 @@ from .ganmyelbo import *
 from torch.autograd import Variable
 from pyro.optim import Adam
 class UNAGI_trainer():
+    '''
+    The trainer class is the class to train the UNAGI model. The trainer class will train the model for a given number of epochs. 
+    parameters:
+    model: the model to be trained.
+    modelName: the name of the model.
+    batch_size: the batch size for training.
+    epoch_initial: the initial epoch for training.
+    epoch_iter: the total number of epochs for training.
+    device: the device to train the model.
+    lr: the learning rate for the variational autoencoder (VAE) model.
+    lr_dis: the learning rate for the discriminator.
+    cuda: whether to use GPU for the model training. Default is True.
+    '''
     def __init__(self,model, modelName,batch_size,epoch_initial,epoch_iter,device,lr, lr_dis,cuda=True):
         super(UNAGI_trainer, self).__init__()
         self.model = model
@@ -28,6 +41,16 @@ class UNAGI_trainer():
         self.lr = lr
         self.lr_dis = lr_dis
     def train_model(self,adata, vae, train_loader,adj, geneWeights=None, use_cuda=True):
+        '''
+        The function to train the model.
+        parameters:
+        adata: the single-cell data.
+        vae: the model to be trained.
+        train_loader: the data loader for the model training.
+        adj: the adjacency matrix of cell graphs.
+        geneWeights: the gene weights for the model training. Default is None.
+        use_cuda: whether to use GPU for the model training. Default is True.
+        '''
         # initialize loss accumulator
         epoch_loss = 0.
         
@@ -80,7 +103,11 @@ class UNAGI_trainer():
         return total_epoch_loss_train
     def get_latent_representation(self,adata,iteration,target_dir):
         '''
-        find out the best groups of resolution for clustering
+        Retrieve the latent representation of the single-cell data.
+        parameters:
+        adata: the single-cell data.
+        iteration: the iteration used for analysis.
+        target_dir: the directory of the task.
         '''
         if 'X_pca' not in adata.obsm.keys():
             sc.pp.pca(adata)
@@ -124,6 +151,14 @@ class UNAGI_trainer():
         return z_locs, z_scales, TZ
 
     def train(self, adata, iteration, target_dir, is_iterative=False):
+        '''
+        The function to train the model.
+        parameters:
+        adata: the single-cell data.
+        iteration: the iteration used for analysis.
+        target_dir: the directory of the task.
+        is_iterative: whether to use the iterative training strategy. Default is False.
+        '''
         
         assert 'X_pca' in adata.obsm.keys(), 'PCA is not performed'
         if 'X_pca' not in adata.obsm.keys():

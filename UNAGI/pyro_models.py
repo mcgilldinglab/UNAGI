@@ -1,4 +1,6 @@
-#re-write step
+'''
+The module contains the VAE model and the discriminator model.
+'''
 import numpy as np
 import gc
 import anndata
@@ -279,6 +281,19 @@ class GraphConvolution(Module):
                + str(self.out_features) + ')'
 
 class GraphEncoder(nn.Module):
+    '''
+    The GCN encoder of VAE, which encodes the single-cell data into the latent space.
+
+    parameters:
+    in_dim: the input dimension of the encoder.
+    z_dim: the latent dimension of the encoder.
+    hidden_dim: the GCN dimension of the encoder.
+
+    return:
+    z_loc: the mean of the latent space.
+    z_scale: the variance of the latent space.
+    
+    '''
     def __init__(self, in_dim, z_dim, hidden_dim):
         super().__init__()
         
@@ -326,7 +341,7 @@ class GraphEncoder(nn.Module):
         z_loc = self.fc21(hidden1)
         z_scale = torch.exp(torch.clamp(self.fc22(hidden1), -5, 5))
         #print(z_loc)
-        return z_loc, z_scale,y,z_scale
+        return z_loc, z_scale
     
 class Discriminator(nn.Module):
 
@@ -399,6 +414,17 @@ class VAE(PyroBaseModuleClass):
         # self.softplus = nn.Sigmoid()
         
     def model(self, x,adj,batch,  start, end):
+        '''
+        define the model p(x|z)p(z) using the generative network p(x|z) and prior p(z) = N(0,1). The distribution of x is chosen from the `dist` parameter in the `setup_training` function. The default is `ziln` (zero-inflated log normal).
+
+        parameters:
+        x: the single-cell data.
+        adj: the cell graph.
+        batch: the batch information of the single-cell data.
+        start: the start index of the single-cell data.
+        end: the end index of the single-cell data.
+
+        '''
         # register PyTorch module `decoder` with Pyro p(z) p(x|z)
         pyro.module("decoder", self)
         with pyro.plate("data", x[start:end,:].shape[0]):
@@ -448,13 +474,16 @@ class VAE(PyroBaseModuleClass):
             return rx
         
     def guide(self, x, adj, batch, start, end):
-        # define the guide (i.e. variational distribution) q(z|x)
+        '''
+        define the guide (i.e. variational distribution) q(z|x)
+        '''
+        # register PyTorch module `encoder` with Pyro
         pyro.module("encoder", self)
         
         with pyro.plate("data", x[start:end,:].shape[0]):
             # use the encoder to get the parameters used to define q(z|x)
             #x_ = torch.log(1 + x)
-            [qz_m,qz_v,_,_] = self.encoder(x, adj,  start, end)
+            [qz_m,qz_v] = self.encoder(x, adj,  start, end)
           
             #qz_v = self.var_encoder(x_)
             # sample the latent code z
@@ -462,27 +491,40 @@ class VAE(PyroBaseModuleClass):
             return rz
         
     def getZ(self, x,adj,batch, start, end,test=True):
-        # encode image x
+        '''
+        Get the latent space of the single-cell data.
+
+        parameters:
+        x: the single-cell data.
+        adj: the cell graph.
+        batch: the batch information of the single-cell data.
+        start: the start index of the single-cell data.
+        end: the end index of the single-cell data.
+        test: whether to use the test mode. Default is True.
+        '''
         # x = torch.log(1+x)
-        z_loc, z_scale,gcnout,hidden = self.encoder(x,adj,  start, end,test=test)
+        z_loc, z_scale = self.encoder(x,adj,  start, end,test=test)
         # sample in latent space
         # z = dist.Normal(z_loc, z_scale).sample()
         
-        return z_loc+z_scale,z_loc, z_scale,gcnout,hidden
+        return z_loc+z_scale,z_loc, z_scale
 
-    
-    # def generate(self,x, adj,batch, start, end):
-    #     z_loc, z_scale,gcnout,hidden = self.encoder(x,adj,batch,  start, end,test=True)
-    #     #z_loc = torch.zeros([cell,64]).to('cuda:0')+z_loc
-    #     #z_scale = torch.zeros([cell,64]).to('cuda:0')+z_scale
-    #     z = dist.Normal(z_loc, z_scale).sample()
-    #     #z = z.mean(axis=0)
-    #     dec_loc, dec_scale, dec_dropout = self.decoder(z_loc)
-
-    #     return  dec_loc, dec_scale
     def generate1(self,x,adj,batch, start, end):
+        '''
+        Reconstruct the single-cell data from the latent space given inputs.
+
+        parameters:
+        x: the single-cell data.
+        adj: the cell graph.
+        batch: the batch information of the single-cell data.
+        start: the start index of the single-cell data.
+        end: the end index of the single-cell data.
+
+        return:
+        rx: the reconstructed single-cell data.
+        '''
         # x = torch.log(1 + x)
-        z_loc, z_scale,gcnout,hidden = self.encoder(x,adj,batch,  start, end,test=True)
+        z_loc, z_scale = self.encoder(x,adj,batch,  start, end,test=True)
         z = dist.Normal(z_loc, z_scale).sample()
         if self.distribution == 'ziln':
             dec_loc, dec_mu, dec_dropout  = self.decoder(z_loc+z_scale)

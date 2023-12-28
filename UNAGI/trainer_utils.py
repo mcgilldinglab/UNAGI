@@ -3,7 +3,7 @@ from scipy.stats import rankdata
 
 def transfer_to_ranking_score(gw):
     '''
-    ranking score
+    transfer the gene weight to ranking
     '''
     # gw = adata.layers['geneWeight'].toarray()
     od = gw.shape[1]-rankdata(gw,axis=1)+1

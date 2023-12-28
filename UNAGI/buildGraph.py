@@ -51,7 +51,10 @@ def nodesDistance(rep1,rep2,topgene1,topgene2):
     for i in range(len(distance)):
         distance[i] = normalizeDistance(distance[i])
     return distance
-def connectNodes(distances):
+def connectNodes(distances,cutoff = 0.05):
+    '''
+    Connect the clusters in two stages with smallest distance and p-value < cut-off
+    '''
     edges = []
     for i in range(len(distances)):
         leftend = np.argmin(distances[i])
@@ -60,16 +63,17 @@ def connectNodes(distances):
         #p*count/(count-idx)
         # q_val = pval * len(temp)/
         
-        if pval < 0.05: #if pval < 0.01 can connect the two clusters across two stages
+        if pval < cutoff: #if pval < 0.01 can connect the two clusters across two stages
             edges.append([leftend,i])
     return edges
 
-def buildEdges(stage1,stage2):
+def buildEdges(stage1,stage2,cutoff = 0.05):
     '''
     calculate the distance between two stages and connect the clusters in two stages with smallest distance
     args: 
-    stage1,
-    stage2
+    stage1: the anndata of the first selected stage
+    stage2: the anndata of the second selected stage
+    cutoff: the cutoff of p-value
     return:
     edges: the edges between two stages
     '''
@@ -82,14 +86,18 @@ def buildEdges(stage1,stage2):
     topgene1 = adata1.uns['topGene']
     topgene2 = adata2.uns['topGene']
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
-    edges = connectNodes(distance)
+    edges = connectNodes(distance,cutoff)
     return edges
-def buildEdges(stage1,stage2,midpath,iteration):
+def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     '''
     calculate the distance between two stages and connect the clusters in two stages with smallest distance with midpath in iterative training
     args: 
-    stage1,
-    stage2
+    midpath: the path of the midpath
+    iteration: the iteration of the training
+    stage1: the anndata of the first selected stage
+    stage2: the anndata of the second selected stage
+    cutoff: the cutoff of p-value
+
     return:
     edges: the edges between two stages
     '''
@@ -104,7 +112,7 @@ def buildEdges(stage1,stage2,midpath,iteration):
 
     topgene2 = adata2.uns['topGene']
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
-    edges = connectNodes(distance)
+    edges = connectNodes(distance,cutoff)
     return edges
 def getandUpadateEdges(total_stage,midpath,iteration):
     '''
@@ -117,14 +125,6 @@ def getandUpadateEdges(total_stage,midpath,iteration):
     # print('edges updated')
     return edges
 
-def getEdges():
-    '''
-    get edges
-    '''
-    edges = []
-    for i in range(3):
-        edges.append(buildEdges(i,i+1))
-    return edges
 def updateEdges(edges,midpath,iteration):
     '''
     updata edges to the anndata database, calculate edges changes
@@ -160,38 +160,3 @@ def reupdateAttributes(adata, stage, results):
     adata.uns['topGene'][str(stage)] = results[1]
     adata.uns['clusterType'][str(stage)] = results[2]
     return adata
-def averageNode(nodes,state):
-    '''
-    calculate the average gene expression of sibling nodes
-    args: 
-    nodes: number of sibling nodes
-    state: the gene expression of each cluster in a certain stage
-    
-    return: 
-    out: the average gene expression of sibling nodes
-    '''
-    out = 0
-    for each in nodes:
-        out+=state[each]
-    return out/len(nodes)
-def getClusterIdrem(paths,state):
-    '''
-    concatenate the average gene expression in a cluster tree. shape: [number of stages, number of gene]
-    args: 
-    paths: the collection of paths
-    state: a list of average gene expression of each state
-    
-    return: 
-    out: a list of gene expression of each cluster tree
-    '''
-    out = []
-    for i,each in enumerate(paths.keys()):
-        if len(paths[each]) == 4:
-            stages = []
-            for j, item in enumerate(paths[each]):
-                stages.append(averageNode(item,state[j]))
-            
-
-            joint_matrix = np.concatenate((stages[0].reshape(-1,1), stages[1].reshape(-1,1), stages[2].reshape(-1,1), stages[3].reshape(-1,1)),axis =1)
-            out.append(joint_matrix)
-    return out

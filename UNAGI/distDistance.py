@@ -29,34 +29,35 @@ from sklearn.decomposition import TruncatedSVD
 import threading
 from scipy.stats import multivariate_normal
 import gc
-def runGetSimilarity(adata):
-    ids = []
-    for i in range(4):
-
-        ids.append(adata.obs[adata.obs['stage'] == i].index.tolist())
-    out = [[] for _ in range(4)]
-    for i in range(4):
-        temp = adata[ids[i]]
-        #temp2 = adata[ids[i+1]]
-        out[i]= getN2CSimilarity(temp, i)
-
-    return out
-def getN2CSimilarity(adata,stagei):
-    '''
-    calculate top differential gene similarity between two clusters in a stage
-    '''
+# def runGetSimilarity(adata):
     
-    clusterIds = set(adata.obs['leiden'].values)
-    
-    # print(clusterIds)
-    #maxj = adataj.obs['leiden'].max()
-    similarities = {}
-    for i,clusterIdi in enumerate(clusterIds):
-        similarities[str(clusterIdi)] = []
-        for j,clusterIdj in enumerate(clusterIds):
-            similarities[str(clusterIdi)].append(getSimilarity(adata.uns['topGene'][str(stagei)],adata.uns['topGene'][str(stagei)],i,j))
+#     ids = []
+#     for i in range(4):
 
-    return similarities
+#         ids.append(adata.obs[adata.obs['stage'] == i].index.tolist())
+#     out = [[] for _ in range(4)]
+#     for i in range(4):
+#         temp = adata[ids[i]]
+#         #temp2 = adata[ids[i+1]]
+#         out[i]= getN2CSimilarity(temp, i)
+
+#     return out
+# def getN2CSimilarity(adata,stagei):
+#     '''
+#     calculate top differential gene similarity between two clusters in a stage
+#     '''
+    
+#     clusterIds = set(adata.obs['leiden'].values)
+    
+#     # print(clusterIds)
+#     #maxj = adataj.obs['leiden'].max()
+#     similarities = {}
+#     for i,clusterIdi in enumerate(clusterIds):
+#         similarities[str(clusterIdi)] = []
+#         for j,clusterIdj in enumerate(clusterIds):
+#             similarities[str(clusterIdi)].append(getSimilarity(adata.uns['topGene'][str(stagei)],adata.uns['topGene'][str(stagei)],i,j))
+
+#     return similarities
 def getSimilarity(adatai,adataj, i, j):
     '''
     calculate the differential gene similarity between two clusters. Differentail gene similarity = (1-Jaccard index)* gene ranking difference factor
@@ -103,82 +104,82 @@ def getSimilarity(adatai,adataj, i, j):
     # print(orderdistance)
 
     return (1-JaccardIndex)*orderdistance
-def normalizeDistanceRE(distance):#good
-    '''
-    Normalize the kl divergence distance and top differential gene distances. (Use the z-score method.)
+# def normalizeDistanceRE(distance):#good
+#     '''
+#     Normalize the kl divergence distance and top differential gene distances. (Use the z-score method.)
     
-    args: 
-    distance: a list of distance metrics. ([gaussian kl divergence, top differential gene difference])
+#     args: 
+#     distance: a list of distance metrics. ([gaussian kl divergence, top differential gene difference])
     
-    return:
-    normalizedDistance: sum of normalized kl divergence and top differential gene difference distance
-    '''
+#     return:
+#     normalizedDistance: sum of normalized kl divergence and top differential gene difference distance
+#     '''
     
-    distance = np.array(distance)
+#     distance = np.array(distance)
     
-    gaussiankld = np.array(distance[:,0].tolist()).reshape(-1,)
+#     gaussiankld = np.array(distance[:,0].tolist()).reshape(-1,)
     
-    #gammakld = np.array(distance[:,1].tolist()).reshape(-1,)
+#     #gammakld = np.array(distance[:,1].tolist()).reshape(-1,)
 
-    de = np.array(distance[:,1].tolist())
+#     de = np.array(distance[:,1].tolist())
 
     
-    gaussian_kl_zscore = gaussiankld#stats.zscore(gaussiankld)
-    #gamma_kl_zscore = stats.zscore(gammakld)
-    de_zscore = stats.zscore(de)
-    #ggkld = np.array(gaussiankld)+np.array(gammakld)
-    #kld_zscore = stats.zscore(ggkld)
-    return gaussian_kl_zscore+de_zscore#gaussian_kl_zscore+gamma_kl_zscore+de_zscore
+#     gaussian_kl_zscore = gaussiankld#stats.zscore(gaussiankld)
+#     #gamma_kl_zscore = stats.zscore(gammakld)
+#     de_zscore = stats.zscore(de)
+#     #ggkld = np.array(gaussiankld)+np.array(gammakld)
+#     #kld_zscore = stats.zscore(ggkld)
+#     return gaussian_kl_zscore+de_zscore#gaussian_kl_zscore+gamma_kl_zscore+de_zscore
 
-def calculateN2CKLDistance(mu,sigma,previousRep,topGeneD):
-    '''
-    calculate the distance between a cell and all clusters in the same stage
-    args: mu, sigma is the attribute of one cell
-    previousRep: previous representation of clusters in one stage [#cluster,[gaussian(3 parameters)*#hidden]
-    topGeneD: top gene distances between two clusters of one stage
-    '''
-    mean1 = mu
-    std1 = sigma
-    #mean1 = cluster1[:,0]
-    covariance1 = torch.tensor(np.diag(std1**2))
-    p = MultivariateNormal(torch.tensor(mean1), covariance1)
-    d = []
+# def calculateN2CKLDistance(mu,sigma,previousRep,topGeneD):
+#     '''
+#     calculate the distance between a cell and all clusters in the same stage
+#     args: mu, sigma is the attribute of one cell
+#     previousRep: previous representation of clusters in one stage [#cluster,[gaussian(3 parameters)*#hidden]
+#     topGeneD: top gene distances between two clusters of one stage
+#     '''
+#     mean1 = mu
+#     std1 = sigma
+#     #mean1 = cluster1[:,0]
+#     covariance1 = torch.tensor(np.diag(std1**2))
+#     p = MultivariateNormal(torch.tensor(mean1), covariance1)
+#     d = []
 
-    for no, each in enumerate(previousRep):
+#     for no, each in enumerate(previousRep):
         
-        cluster2 = np.array(each[0])
-        mean2 = cluster2[:,0]
-        std2 = cluster2[:,1]
-        covariance2 = torch.tensor(np.diag(std2**2))
-        q = MultivariateNormal(torch.tensor(mean2), covariance2)
-        kl = torch.distributions.kl.kl_divergence(p, q)
+#         cluster2 = np.array(each[0])
+#         mean2 = cluster2[:,0]
+#         std2 = cluster2[:,1]
+#         covariance2 = torch.tensor(np.diag(std2**2))
+#         q = MultivariateNormal(torch.tensor(mean2), covariance2)
+#         kl = torch.distributions.kl.kl_divergence(p, q)
 
 
 
-        d.append([kl.detach().numpy(),topGeneD[no]])
-    out = normalizeDistanceRE(d)
-    return out
+#         d.append([kl.detach().numpy(),topGeneD[no]])
+#     out = normalizeDistanceRE(d)
+#     return out
 
-class calculateN2CKLDProcess(multiprocessing.Process):
-    def __init__(self, mu,sigma,previousRep,topGeneD,ddd,tempids,idnumber,currentCluster,out,cellid):
-        multiprocessing.Process.__init__(self)
-        self.mu = mu
-        self.sigma = sigma
-        self.previousRep = previousRep
-        self.topGeneD = topGeneD
-        self.ddd = ddd
-        self.tempids = tempids
-        self.idnumber = idnumber
-        self.currentCluster = currentCluster
-        self.out = out
-    def run(self):
-        #time.sleep(10)
-        time1 = time.time()
-        temp = calculateN2CKLDistance(self.mu,self.sigma,self.previousRep,self.topGeneD)
-        time2 = time.time()
-        # print(time2-time1)
-        idx = np.argmin(np.array(temp))
-        self.out[cellid] = [idx, self.idnumber]
+# class calculateN2CKLDProcess(multiprocessing.Process):
+#     def __init__(self, mu,sigma,previousRep,topGeneD,ddd,tempids,idnumber,currentCluster,out,cellid):
+#         multiprocessing.Process.__init__(self)
+#         self.mu = mu
+#         self.sigma = sigma
+#         self.previousRep = previousRep
+#         self.topGeneD = topGeneD
+#         self.ddd = ddd
+#         self.tempids = tempids
+#         self.idnumber = idnumber
+#         self.currentCluster = currentCluster
+#         self.out = out
+#     def run(self):
+#         #time.sleep(10)
+#         time1 = time.time()
+#         temp = calculateN2CKLDistance(self.mu,self.sigma,self.previousRep,self.topGeneD)
+#         time2 = time.time()
+#         # print(time2-time1)
+#         idx = np.argmin(np.array(temp))
+#         self.out[cellid] = [idx, self.idnumber]
         #self.out[]
         #if idx != int(self.currentCluster):
         #    self.ddd.append(idx)
@@ -194,7 +195,7 @@ def mcSampling(mus, sigmas):
     return:
     samplegaussian: a list of sampled gaussian datapoints
     '''
-    samplegaussian= [[] for _ in range(64)]
+    samplegaussian= [[] for _ in range(64)] #hyperparameter needed to be changed by users
     hiddensize=64#len(mus[0])
     mus = np.vstack(mus)
     sigmas=np.vstack(sigmas)
@@ -222,6 +223,15 @@ def mcSampling(mus, sigmas):
     return samplegaussian
 
 class GaussianRepThread(threading.Thread):
+    '''
+    The class to fit gaussian distributions for each hidden node
+
+    parameters
+    ----------
+    output: the output list of the thread
+    data: the data of the thread
+    i: the index of the thread
+    '''
     def __init__(self, output, data,i):
         threading.Thread.__init__(self)
         self.i = i
@@ -247,34 +257,34 @@ def fitClusterGaussianRepresentation(data):
     for each in threads:
         each.join()
     return out
-class GammaRepThread(threading.Thread):
-    def __init__(self, output, data,i):
-        threading.Thread.__init__(self)
-        self.i = i
-        self.data = data
-        self.output = output
-    def run(self):
-        #time.sleep(10)
-        self.output[self.i] = gamma.fit(self.data)
-def fitClusterGammaRepresentation(data):
-    '''
-    Fit gamma distributions for each hidden node
-    args: 
-    data: samples of the gamma distribution of each hidden node
-    return:
-    out: list of alpha, beta of each hidden node
-    '''
-    threads = []
-    out = [[] for _ in range(len(data))]
-    for i in range(len(data)):
+# class GammaRepThread(threading.Thread):
+#     def __init__(self, output, data,i):
+#         threading.Thread.__init__(self)
+#         self.i = i
+#         self.data = data
+#         self.output = output
+#     def run(self):
+#         #time.sleep(10)
+#         self.output[self.i] = gamma.fit(self.data)
+# def fitClusterGammaRepresentation(data):
+#     '''
+#     Fit gamma distributions for each hidden node
+#     args: 
+#     data: samples of the gamma distribution of each hidden node
+#     return:
+#     out: list of alpha, beta of each hidden node
+#     '''
+#     threads = []
+#     out = [[] for _ in range(len(data))]
+#     for i in range(len(data)):
 
         
-        threads.append(GammaRepThread(out,data[i][0],i))
-    for each in threads:
-        each.start()
-    for each in threads:
-        each.join()
-    return out
+#         threads.append(GammaRepThread(out,data[i][0],i))
+#     for each in threads:
+#         each.start()
+#     for each in threads:
+#         each.join()
+#     return out
 
 def getClusterRepresentation(mus, sigmas):
     '''
@@ -283,7 +293,7 @@ def getClusterRepresentation(mus, sigmas):
     mus, sigmas: mu and sigma vectors of input cells (shape: [number of cell, number of hidden nodes])
    
     return: 
-    fitClusterGaussianRepresentation(sampling[0]):
+    fitClusterGaussianRepresentation(sampling):
     a list of fitted gaussian distributions
     '''
     T1 = time.time()
@@ -291,21 +301,7 @@ def getClusterRepresentation(mus, sigmas):
     T2 = time.time()
     #print('time is %s ' %((T2-T1)))
     return fitClusterGaussianRepresentation(sampling)
-def clustertype(adata):
-    '''
-    find the most common cell types to represent the cluster
-    args:
-    adata: anndata of one cluster
-    
-    return: the most common cell types in the cluster
-    '''
-    dic = {}
-    for each in adata.obs['cell.type.ident.fine']:
-        if each not in dic.keys():
-            dic[each]=1
-        else:
-            dic[each]+=1
-    return max(dic, key=dic.get)
+
 def normalizeDistance(distance):
     '''
     Normalize the kl divergence distance and top differential gene distances. (Use the z-score method.)
