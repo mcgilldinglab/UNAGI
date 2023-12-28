@@ -12,7 +12,13 @@ build:
     python: "3.9"
     # You can also specify other tool versions:
 
-
+python:
+  install:
+  - method: pip
+    path: .
+    extra_requirements:
+    - doc
+    
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
    configuration: docs/conf.py
