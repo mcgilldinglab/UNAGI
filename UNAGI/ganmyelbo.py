@@ -21,7 +21,29 @@ from pyro.util import check_if_enumerated, warn_if_nan
 
 def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,device='cuda:0',second_optimizer=None,two=False):
     '''
-    new gcn updater, try to tackle big batch size issue
+    updater of Graph VAE-GAN.
+
+    parameters
+    ---------
+    loss: loss function
+    model: VAE model
+    guide: guide function of the model
+    discriminator: adversarial discriminator model
+    optim: optimizer
+    x: gene expression data
+    adj: cell graph
+    i: index of the batch
+    start: start index of the batch
+    end: end index of the batch
+    device: device to run the model
+    second_optimizer: optimizer for the discriminator
+    two: whether to return the loss of the VAE and the discriminator separately
+
+    return
+    ------
+    loss: loss of the VAE
+    loss_discriminator: loss of the discriminator
+
     '''
     
     with poutine.trace(param_only=True) as param_capture:
@@ -53,40 +75,6 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
         return type(loss)(map(torch_item, loss))
     else:
         return torch_item(loss)
-def tuneGraphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,device='cuda:1',second_optimizer=None,two=False):
-    '''
-    tune with pushback scores
-    '''
-    
-    with poutine.trace(param_only=True) as param_capture:
-        loss_vae,surrogate_loss_particle,loss_discriminator = loss.loss_and_grads(model, guide,discriminator, device, x, adj,i, start,end)
-        surrogate_loss_particle.backward()
-    params = set(site["value"].unconstrained() for site in param_capture.trace.nodes.values()  if 'discriminator' not in site['name']  and 'recon' not in site['name'])
-    optim(params)
-    
-    # zero gradients
-    pyro.infer.util.zero_grads(params)
-   
-    if second_optimizer is not None:
-        optim = second_optimizer
-    with poutine.trace(param_only=True) as param_capture:
-        loss_vae,surrogate_loss_particle,loss_discriminator = loss.loss_and_grads(model, guide,discriminator, device, x, adj,i, start,end)
-    params = set(site["value"].unconstrained() for site in param_capture.trace.nodes.values() if 'discriminator' in site['name'] and 'recon' not in site['name'])
-    loss_discriminator.backward()
-    optim(params)
-    # zero gradients
-    pyro.infer.util.zero_grads(params)
-    loss = surrogate_loss_particle
-    loss+=loss_discriminator
-    #print(loss_discriminator)
-#     loss = loss_vae
-    if two == True:
-        return torch_item(loss_vae), torch_item(loss_discriminator)
-    if isinstance(loss, tuple):
-        # Support losses that return a tuple, e.g. ReweightedWakeSleep.
-        return type(loss)(map(torch_item, loss))
-    else:
-        return torch_item(loss)
     
 def mySigmoid(z):
     '''
@@ -100,6 +88,15 @@ def mySigmoid(z):
     out = 2*1/(1+np.exp(-z))
     return out
 class myELBO(ELBO):
+    '''
+    The customized ELBO function for the VAE-GAN model. The ELBO function is modified to include the discriminator loss.
+
+    parameters
+    ----------
+    geneWeight: the weight of the gene expression data. Default is None.
+    pushback_Score: the pushback score for the discriminator. Default is None.
+
+    '''
     def __init__(self, geneWeight=None, pushback_Score = None):
     
         super(myELBO, self).__init__()
@@ -174,21 +171,7 @@ class myELBO(ELBO):
         warn_if_nan(surrogate_loss, "loss")
         return loss + (surrogate_loss - torch_item(surrogate_loss))
 
-    def loss(self, model, guide, *args, **kwargs):
-        """
-        :returns: returns an estimate of the ELBO
-        :rtype: float
 
-        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
-        """
-        elbo = 0.0
-        
-        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            elbo_particle = torch_item(my_log_sum(model_trace)) - torch_item(my_log_sum(guide_trace))
-            elbo += elbo_particle / self.num_particles
-        loss = -elbo
-        warn_if_nan(loss, "loss")
-        return loss
     def _differentiable_loss_particle(self, model_trace, guide_trace):
         elbo_particle = 0
         surrogate_elbo_particle = 0

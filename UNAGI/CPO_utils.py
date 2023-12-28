@@ -4,6 +4,27 @@ from sklearn.neighbors import kneighbors_graph
 def get_neighbors(stagedata,num_cells,anchor_neighbors,max_neighbors,min_neighbors):
     '''
     get neighbor parameters for each satge
+
+    parameters
+    ----------
+    stagedata: list 
+        list of adata for each stage
+    num_cells: list
+        list of number of cells for each stage
+    anchor_neighbors: int
+        number of neighbors for anchor stage
+    max_neighbors: int
+        maximum number of neighbors for each stage
+    min_neighbors: int
+        minimum number of neighbors for each stage
+
+    return  
+    ----------
+    neighbors: list
+        list of number of neighbors for each stage
+    anchor_index: int
+        index of anchor stage in stagedata
+
     '''
     temp_num_cells = num_cells.copy()
     temp_num_cells.sort()
@@ -43,6 +64,21 @@ def get_neighbors(stagedata,num_cells,anchor_neighbors,max_neighbors,min_neighbo
     return neighbors, anchor_index
 
 def get_mean_median_cell_population(adata):
+    '''
+    get the mean and median number of cells in each cluster
+
+    parameters
+    ----------
+    adata: anndata
+        anndata of the stage
+
+    return
+    ----------
+    mean: float
+        mean number of cells of each cluster
+    median: float
+        median number of cells of each cluster
+    '''
     num_cells = []
     for i in list(adata.obs['leiden'].unique()):
         temp = adata.obs[adata.obs['leiden'] == i].index.tolist()
@@ -50,6 +86,29 @@ def get_mean_median_cell_population(adata):
         num_cells.append(len(temp))
     return np.mean(num_cells)/len(adata), np.median(num_cells)/len(adata)
 def auto_resolution(stagedata, anchor_index,neighbors, min_res, max_res):
+    '''
+    get the optimal resolution for each stage
+
+    parameters
+    ----------
+    stagedata: list
+        list of adata for each stage
+    anchor_index: int
+        index of anchor stage in stagedata
+    neighbors: list
+        list of number of neighbors for each stage
+    min_res: float
+        minimum resolution for leiden clustering
+    max_res: float
+        maximum resolution for leiden clustering
+
+    return
+    ----------
+    out_res: list
+        list of optimal resolution for each stage
+    all_means: list
+        list of mean number of cells in each cluster for each stage
+    '''
     anchor_adata = stagedata[anchor_index]
     anchor_adata.obsp['connectivities'] = kneighbors_graph(anchor_adata.obsm['z'], neighbors[anchor_index], mode='connectivity', include_self=True,n_jobs=20)
     anchor_adata.obsp['distances'] = kneighbors_graph(anchor_adata.obsm['z'], neighbors[anchor_index], mode='distance', include_self=True,n_jobs=20)

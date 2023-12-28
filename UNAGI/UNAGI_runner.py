@@ -12,6 +12,14 @@ from .processTFs import getTFs, getTargetGenes, matchTFandTGWithFoldChange, upda
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import csr_matrix
 class UNAGI_runner():
+    '''
+    The UNAGI_runner class is used to set up the hyperparameters to run iDREM, find clustering optimal parameters and run the UNAGI model . It takes the following parameters:
+    data_path: the path to the data
+    total_stage: the total number of time-series stages
+    iteration: the total iteration to run the UNAGI model
+    trainer: the trainer class to train the UNAGI model
+    idrem_dir: the directory of the idrem software
+    '''
     def __init__(self,data_path,total_stage,iteration,trainer,idrem_dir):
         super(UNAGI_runner, self).__init__()
         self.data_path = data_path
@@ -147,9 +155,9 @@ class UNAGI_runner():
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
             
     def update_gene_weights_table(self,topN=100):
-        TFs = getTFs(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'))
+        TFs = getTFs(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),total_stage=self.total_stage)
         scope = getTargetGenes(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),topN)
-        p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames)
+        p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames,self.total_stage)
         #np.save('../data/mes/'+str(iteration)+'/tfinfo.npy',np.array(p))
         updateLoss = updataGeneTablesWithDecay(self.data_path,str(self.iteration),p,self.total_stage)
     def build_iteration_dataset(self):

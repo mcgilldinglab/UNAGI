@@ -11,8 +11,18 @@ from .distDistance import fitClusterGaussianRepresentation
 
 def getclusterreps(data):
     '''
-    input: pandas dataframe, index is cluster id. rows are cells, columns are hidden representation 
-    outs: dictionary {leiden: sampled Norm distribution (64 mu and sigmas)}
+    Get the sampled Norm distribution of Z space for each cluster
+
+    Parameters
+    ----------
+    data: pandas dataframe
+        The hidden representation of Z space. The index of the dataframe is the cluster id. The columns of the dataframe are the hidden representation of Z space.
+
+    Returns
+    -------
+    outs: dictionary
+        The sampled Norm distribution of Z space. The keys of the dictionary are the cluster id. The values of the dictionary are the sampled Norm distribution of Z space.
+
     '''
     clusterid = data.index.unique().tolist()
     out = {}
@@ -20,6 +30,19 @@ def getclusterreps(data):
         out[each] = fitClusterGaussianRepresentation(data.loc[each].T.values)
     return out
 def calculateDistance(reps):
+    '''
+    Calculate the distance between the sampled Norm distribution of Z space
+
+    Parameters
+    ----------
+    reps: dictionary
+        The sampled Norm distribution of Z space. The keys of the dictionary are the cluster id. The values of the dictionary are the sampled Norm distribution of Z space.
+
+    Returns
+    -------
+    df: pandas dataframe
+        The distance between the sampled Norm distribution of Z space. The index of the dataframe is the cluster id. The columns of the dataframe are the cluster id.
+    '''
     outs = {}
     for i, each1 in enumerate(list(reps.keys())):
         outs[each1] = []
@@ -33,6 +56,19 @@ def calculateDistance(reps):
     df = df.sort_index(axis=1)
     return df
 def calculateDistanceUMAP(umaps):
+    '''
+    Calculate the distance between umap coordinates of Z space
+
+    Parameters
+    ----------
+    umaps: pandas dataframe
+        The umap coordinates of Z space. The index of the dataframe is the cluster id. The columns of the dataframe are the umap coordinates of Z space.
+
+    Returns 
+    -------
+    df: pandas dataframe
+        The distance between umap coordinates of Z space. The index of the dataframe is the cluster id. The columns of the dataframe are the cluster id.
+    '''
     outs = {}
 
     for i, each1 in enumerate(list(umaps.index)):
@@ -61,6 +97,7 @@ def mydendrogram(
     inplace: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """\
+    Modified from scanpy.tl.dendrogram. 
     Computes a hierarchical clustering for the given `groupby` categories.
 
     By default, the PCA representation is used unless `.X`
@@ -209,6 +246,8 @@ def mydendrogramUMAP(
     inplace: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """\
+    Modify from scanpy.tl.dendrogram but the distance is between umap coordinates of Z space
+    
     Computes a hierarchical clustering for the given `groupby` categories.
 
     By default, the PCA representation is used unless `.X`
@@ -345,6 +384,21 @@ def mydendrogramUMAP(
     else:
         return dat
 def get_siblings_at_each_level(leaf_id, Z):
+    """
+    Get the sibling clusters for the given leaf at each level of the hierarchical clustering.
+
+    Parameters
+    ----------  
+    leaf_id: int
+        The leaf id of the given leaf.
+    Z: numpy.ndarray
+        The linkage matrix of the hierarchical clustering.
+
+    Returns
+    -------
+    siblings: list
+        The sibling clusters for the given leaf at each level of the hierarchical clustering.
+    """
     n = Z.shape[0] + 1  # The total number of initial leaves
     clusters = {i: [i] for i in range(n)}  # Initialize clusters with single leaves
     siblings = []
@@ -379,6 +433,26 @@ def map_leaves_to_label(categories_idx_ordered, categories_ordered):
         table[each] = int(categories_ordered[i])
     return table
 def my_logfold_change(adata1, adata2,log_fold_change_cutoff=None,abs = False):
+    '''
+    Define the log fold change between two datasets. (data is already log transformed) LogFoldChange = Log(mean2) - Log(mean1)
+
+    Parameters
+    ----------
+    adata1: AnnData
+        The annotated data matrix.
+    adata2: AnnData
+        The annotated data matrix.
+    log_fold_change_cutoff: float   
+        The cutoff of the log fold change to select the genes. Default is None.
+    abs: bool
+        If True, the absolute value of the log fold change will be used. Default is False.
+
+    Returns
+    -------
+    df: pandas dataframe
+        The log fold change between two datasets. The columns of the dataframe are the log fold change, the names of the genes, the mean of the genes in the first dataset and the mean of the genes in the second dataset.
+
+    '''
     genenames = adata1.var_names.tolist()
     mean1 = np.mean(adata1.X.toarray(),axis=0)
     mean2 = np.mean(adata2.X.toarray(),axis=0)
@@ -404,6 +478,19 @@ def my_logfold_change(adata1, adata2,log_fold_change_cutoff=None,abs = False):
     df['Mean_selected_clusters'] = mean2
     return df
 def build_reference_siblings(dendrogram):
+    '''
+    Find the sibling clusters for each cluster at each level of the hierarchical clustering.
+
+    Parameters
+    ----------
+    dendrogram: dict
+        The data structure to store the hierarchical clustering information. The data structure is the output of the function mydendrogram.
+    
+    Returns
+    -------
+    out: dict
+        The data structure to store the sibling clusters for each cluster at each level of the hierarchical clustering. The keys of the dictionary are the cluster ids. The values of the dictionary are the sibling clusters at each level of the hierarchical clustering. 
+    '''
     total_leaves = len(dendrogram['dendrogram_info']['ivl'])
     table = map_leaves_to_label(dendrogram['categories_idx_ordered'], dendrogram['categories_ordered'])
     out = {}
@@ -420,7 +507,28 @@ def build_reference_siblings(dendrogram):
         for level, sibs in enumerate(siblings):
             out[str(leaf_node_id)][str(level)] = level_table[level]
     return out
-def gethcmarkers(adata, selected,groups):
+def gethcmarkers(adata, selected,groups,cutoff=0.05):
+    '''
+    Get the hierarchical clustering markers for the selected cluster and the background clusters.
+
+    Parameters
+    ----------
+    adata: AnnData
+        The annotated data matrix.
+    selected: int
+        The cluster id of the selected cluster.
+    groups: list    
+        The cluster ids of the background clusters.
+    cutoff: float
+        The cutoff of the adjusted p-value to select the hierarchical clustering markers.
+
+    Returns 
+    -------
+    positive_marker: pandas dataframe
+        The positive hierarchical clustering markers for the selected cluster. 
+    negative_marker: pandas dataframe
+        The negative hierarchical clustering markers for the selected cluster.
+    '''
     ref = [[selected],[selected]+groups]
     ids = []
     ids = adata[adata.obs['leiden'] == str(selected)].obs.index.tolist()
@@ -443,12 +551,34 @@ def gethcmarkers(adata, selected,groups):
     df = df.join(df1)
     positive_marker = df[df['log_fold_changes']>0]
     negative_marker = df[df['log_fold_changes']>0]
-    positive_marker= positive_marker[positive_marker['pvals_adj'] <0.05]
-    negative_marker= negative_marker[negative_marker['pvals_adj'] <0.05]
+    positive_marker= positive_marker[positive_marker['pvals_adj'] <cutoff]
+    negative_marker= negative_marker[negative_marker['pvals_adj'] <cutoff]
     
     return positive_marker, negative_marker,ref
-def get_stage_hcmarkers(adata,key,use_rep,stage):
-    
+def get_stage_hcmarkers(adata,key,use_rep,cutoff=0.05):
+    '''
+    Perform hierarchical clustering on the stage and get the hierarchical clustering markers for each cluster.
+
+    Parameters
+    ----------
+    adata: AnnData
+        The annotated data matrix.
+    key: str
+        The key of the cluster information in adata.obs.
+    use_rep: str
+        The key of the representation in adata.obsm.
+    cutoff: float
+        The cutoff of the adjusted p-value to select the hierarchical clustering markers.
+
+    Returns
+    -------
+    Z: numpy.ndarray
+        The linkage matrix of the hierarchical clustering.
+    order: list
+        The order of the clusters in the hierarchical clustering.
+    out_table: dict
+        The data structure to store the hierarchical clustering markers for each cluster.
+    '''
     if use_rep == 'z':
         mydendrogram(adata,use_rep='z',groupby=key)
     elif use_rep == 'umaps':
@@ -464,17 +594,38 @@ def get_stage_hcmarkers(adata,key,use_rep,stage):
         for level in test[each]:
             out_table[each][level] = {}
             out_table[each][level]['chosen'] = {}
-            pos_markers, neg_markers, ref = gethcmarkers(adata,int(each),test[each][level])
+            pos_markers, neg_markers, ref = gethcmarkers(adata,int(each),test[each][level],cutoff=cutoff)
             out_table[each][level]['chosen']['pos'] = pos_markers
             out_table[each][level]['chosen']['neg'] = neg_markers
             out_table[each][level]['ref'] = ref
     return Z,order,out_table
-def get_dataset_hcmarkers(adata,stage_key,cluster_key,use_rep):
+def get_dataset_hcmarkers(adata,stage_key,cluster_key,use_rep,cutoff=0.05):
+    '''
+    Perform hierarchical clustering on the dataset and get the hierarchical clustering markers for each stage.
+
+    Parameters
+    ----------
+    adata: AnnData
+        The annotated data matrix.
+    stage_key: str
+        The key of the stage information in adata.obs.
+    cluster_key: str
+        The key of the cluster information in adata.obs.
+    use_rep: str
+        The key of the representation in adata.obsm.
+    cutoff: float
+        The cutoff of the adjusted p-value to select the hierarchical clustering markers. Default is 0.05.
+
+    Returns 
+    -------
+    hcmarkers: dict
+        The hierarchical clustering markers for each stage. The keys of the dictionary are the cluster information in adata.obs. The values of the dictionary are the positive and negative hierarchical clustering markers for each cluster. The positive and negative hierarchical clustering markers are pandas dataframe with the columns of the names of the genes, the log fold change and the adjusted p-value.
+    '''
     hcmarkers = {}
     for each in list(adata.obs[stage_key].unique()):
         hcmarkers[str(each)] = {}
         stage_adata = adata[adata.obs[stage_key] == each]
-        Z,order,markers = get_stage_hcmarkers(stage_adata,cluster_key,use_rep=use_rep,stage=each)
+        Z,order,markers = get_stage_hcmarkers(stage_adata,cluster_key,use_rep=use_rep,cutoff=cutoff)
         hcmarkers[str(each)]['Z'] = Z
         hcmarkers[str(each)]['order'] = order
         hcmarkers[str(each)]['markers'] = markers

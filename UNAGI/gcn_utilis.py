@@ -65,10 +65,7 @@ def get_gcn_exp(source_directory,total_stage,neighbors,threads= 20):
         temp.obsp['gcn_connectivities'] = adj
         write_path = os.path.join(source_directory,'%d.h5ad'%i)
         temp.write(write_path, compression='gzip', compression_opts=9)
-def graph_coo(adj):
-    adj.setdiag(1)
-    adj = adj.asformat('coo')
-    return adj
+
 def get_neighbours(batch_size, adj, cell_loader):
     '''
     return a list of neighbors to speed up training

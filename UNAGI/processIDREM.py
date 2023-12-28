@@ -95,11 +95,6 @@ def getClusterIdrem(paths, state, total_stages):
 
     return out
 
-def averageNode(nodes, state):
-    # Dummy implementation of averageNode function. Replace with actual logic.
-    # Assuming 'state' is a list of numpy arrays representing gene expression.
-    return np.mean([state[node] for node in nodes], axis=0)
-
 def getIdrem(paths,state):
     '''
     concatenate the average gene expression of clusters in each path. shape: [number of stages, number of gene]
@@ -117,6 +112,9 @@ def getIdrem(paths,state):
     return out
 
 class IDREMthread(threading.Thread):
+    '''
+    the thread for running IDREM. Support multiple threads.
+    '''
     def __init__(self, indir, outdir, each,idrem_dir):
         threading.Thread.__init__(self)
         self.indir = indir
@@ -218,33 +216,7 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
                     f.write('%s\t%s\n' % ('Expression_Data_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
 
         examplefile.close()
-        # each0 = str(each[0]).strip('[]')
-        # each1 = str(each[1]).strip('[]')
-        # each2 = str(each[2]).strip('[]')
-        # each3 = str(each[3]).strip('[]')
-        
-        # each0 = each0.replace(', ','n')
-        # each1 = each1.replace(', ','n')
-        # each2 = each2.replace(', ','n')
-        # each3 = each3.replace(', ','n')
-        
-        # with open(os.path.join(midpath,str(iteration)+'/idremInput/%s-%s-%s-%s.txt'%(each0,each1,each2,each3)), 'w') as f:
-        #     f.write("%s\t%s\t%s\t%s\t%s\n"%('gene','control','IPF1','IPF2','IPF3'))
-        #     for j,row in enumerate(idremInput[i]):
-        #         f.write("%s\t%s\t%s\t%s\t%s\n" % (genenames[j],str(row[0]),str(row[1]), str(row[2]),str(row[3])))   
-        # examplefile = open('./idrem-master/example_settings.txt','r')
-    
-        # with open(os.path.join(midpath,str(iteration)+'/idremsetting/%s-%s-%s-%s.txt'%(each0,each1,each2,each3)), 'w') as f:
-        #     for k,line in enumerate(examplefile.readlines()):
-        #         if trained == True:
-        #             if k == 4:
-        #                 print(os.path.join(midpath,str(iteration)+'/idremInput/%s-%s-%s-%s.txt'%(each0,each1,each2,each3)))
-        #                 f.write('%s\t%s\n'%('Saved_Model_File',os.path.join('../'+midpath,str(iteration)+'/idremInput/%s-%s-%s-%s.txt'%(each0,each1,each2,each3))))
-        #         if k!= 3:
-        #             f.write(line)
-        #         else:
-        #             f.write('%s\t%s\n'%('Expression_Data_File', os.path.join('../'+midpath,str(iteration)+'/idremInput/%s-%s-%s-%s.txt'%(each0,each1,each2,each3))))
-    settinglist = os.listdir(os.path.join(midpath,str(iteration)+'/idremsetting/'))
+        settinglist = os.listdir(os.path.join(midpath,str(iteration)+'/idremsetting/'))
     
     print(settinglist)
     threads = []
@@ -293,36 +265,6 @@ def averageNode(nodes,state):
     for each in nodes:
         out+=state[each]
     return out/len(nodes)
-# def runIDREMSettings(midpath,iteration):
-#     settinglist = os.listdir('./'+midpath+'/'+str(iteration)+'/idremsetting/')
-    
-#     print(settinglist)
-#     threads = []
-#     for each in settinglist:
-#         if each[0] != '.':
-#             indir = os.path.join('../'+midpath+'/'+str(iteration)+'/idremsetting/',each)
-#             outdir = os.path.join('../'+midpath+'/'+str(iteration)+'/idremModel/',each)
-#             threads.append(IDREMthread(indir, outdir, each))
-#     count = 0
-#     while True:
-#         if count<len(threads) and count +2 > len(threads):
-#             threads[count].start()
-#             threads[count].join()
-#             break
-#         elif count == len(threads):
-#             break
-#         else:
-#             threads[count].start()
-#             threads[count+1].start()
-#             threads[count].join()
-#             threads[count+1].join()
-#             count+=2
-
-#     command = [['rm -r ./'+midpath+'/'+str(iteration)+'/idremResults'],[ 'mkdir ./'+midpath+'/'+str(iteration)+'/idremResults/'], ['mv ./'+midpath+'/'+str(iteration)+'/idremInput/*.txt_viz ./'+midpath+'/'+str(iteration)+'/idremResults/']]
-#     for each in command:
-#         p = subprocess.Popen(each, stdout=subprocess.PIPE, shell=True)
-#         print(p.stdout.read())
-#     print('idrem Done')
 
 if __name__ == '__main__':
     import numpy as np

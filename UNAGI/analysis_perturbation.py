@@ -679,14 +679,10 @@ class perturbationAnalysis:
         track_percentage = self.get_track_percentage(tracks)
         if self.mode == 'pathway':
             items = self.adata.uns['data_pathway_overlap_genes']
-            #  items=dict(np.load('./iterativeTrainingNOV26/4/data_pathway_overlap_genes.npy',allow_pickle=True).tolist())#together up and down
+            
         else:
             items = self.adata.uns['data_drug_overlap_genes']
-            #=dict(np.load('./iterativeTrainingNOV26/4/dec23_drug_target_with_direction.npy',allow_pickle=True).tolist())
-        # if items is None:
-        #     items=dict(np.load('./iterativeTrainingNOV26/4/dec23_drug_target_with_direction.npy',allow_pickle=True).tolist())#together up and down
-        # else:
-        #     items=dict(np.load(items,allow_pickle=True).tolist())
+
         direction_dict = self.getTendencyDict(track_percentage)
         pathwaydic = self.load(items,track_percentage,all=all)
         
