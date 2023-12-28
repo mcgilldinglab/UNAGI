@@ -100,8 +100,7 @@ def mydendrogram(
     Modified from scanpy.tl.dendrogram. 
     Computes a hierarchical clustering for the given `groupby` categories.
 
-    By default, the PCA representation is used unless `.X`
-    has less than 50 variables.
+    By default, the latent representation 'Z' is used.
 
     Alternatively, a list of `var_names` (e.g. genes) can be given.
 
@@ -153,16 +152,6 @@ def mydendrogram(
     -------
     If `inplace=False`, returns dendrogram information,
     else `adata.uns[key_added]` is updated with it.
-
-    Examples
-    --------
-    >>> import scanpy as sc
-    >>> adata = sc.datasets.pbmc68k_reduced()
-    >>> sc.tl.dendrogram(adata, groupby='bulk_labels')
-    >>> sc.pl.dendrogram(adata, groupby='bulk_labels')
-    <Axes: >
-    >>> markers = ['C1QA', 'PSAP', 'CD79A', 'CD79B', 'CST3', 'LYZ']
-    >>> sc.pl.dotplot(adata, markers, groupby='bulk_labels', dendrogram=True)
     """
     if isinstance(groupby, str):
         # if not a list, turn into a list
@@ -246,12 +235,10 @@ def mydendrogramUMAP(
     inplace: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """\
-    Modify from scanpy.tl.dendrogram but the distance is between umap coordinates of Z space
+    Modify from scanpy.tl.dendrogram but the distance is between umap coordinates of latent representation 'Z' space
     
     Computes a hierarchical clustering for the given `groupby` categories.
 
-    By default, the PCA representation is used unless `.X`
-    has less than 50 variables.
 
     Alternatively, a list of `var_names` (e.g. genes) can be given.
 
@@ -303,16 +290,6 @@ def mydendrogramUMAP(
     -------
     If `inplace=False`, returns dendrogram information,
     else `adata.uns[key_added]` is updated with it.
-
-    Examples
-    --------
-    >>> import scanpy as sc
-    >>> adata = sc.datasets.pbmc68k_reduced()
-    >>> sc.tl.dendrogram(adata, groupby='bulk_labels')
-    >>> sc.pl.dendrogram(adata, groupby='bulk_labels')
-    <Axes: >
-    >>> markers = ['C1QA', 'PSAP', 'CD79A', 'CD79B', 'CST3', 'LYZ']
-    >>> sc.pl.dotplot(adata, markers, groupby='bulk_labels', dendrogram=True)
     """
     if isinstance(groupby, str):
         # if not a list, turn into a list

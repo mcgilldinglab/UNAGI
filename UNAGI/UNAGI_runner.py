@@ -21,7 +21,6 @@ class UNAGI_runner():
     idrem_dir: the directory of the idrem software
     '''
     def __init__(self,data_path,total_stage,iteration,trainer,idrem_dir):
-        super(UNAGI_runner, self).__init__()
         self.data_path = data_path
         self.total_stage = total_stage
         self.iteration = iteration
