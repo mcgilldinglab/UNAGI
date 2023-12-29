@@ -66,6 +66,7 @@ dependencies = [
     'pyro-ppl>=1.8.6',
     'scvi-tools>=1.0.3',
     'leidenalg>=0.10.1'
+
 ]
 
 [project.optional-dependencies]
@@ -77,5 +78,7 @@ doc = [
     "sphinx-rtd-theme",
     "ipython",
     "jinja2<3.1",
-    "prompt-toolkit<3.0.0"
+    "prompt-toolkit<3.0.0",
+    'myst-nb',
+    'myst-parser'
 ]
