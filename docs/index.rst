@@ -18,6 +18,6 @@ how to :ref:`installation` the project.
    :caption: Contents:
 
    usage.md
-   tutorials
+   notebooks
    api
    
