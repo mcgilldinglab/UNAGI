@@ -5,7 +5,7 @@ import pickle
 import scanpy as sc
 import subprocess
 import numpy as np
-from .afterall_utils import find_overlap_and_assign_direction,calculateDataObjectOverlapGene,calculateTopObjectGeneRanking
+from .afterall_utils import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking
 from .get_hcmarkers import get_dataset_hcmarkers
 from .speedup_perturbation import perturbation
 from .shuffle_progressionMarker_background import get_progressionmarker_background
@@ -43,7 +43,7 @@ class analyst:
         print('calculate hierarchical markers.....')
         hcmarkers= get_dataset_hcmarkers(self.adata,stage_key='stage',cluster_key='leiden',use_rep='umaps')
         print('hierarchical static markers done')
-        self.adata = calculateDataObjectOverlapGene(self.adata)
+        self.adata = calculateDataPathwayOverlapGene(self.adata)
         print('calculateDataPathwayOverlapGene done')
         self.adata = calculateTopPathwayGeneRanking(self.adata)
         print('calculateTopPathwayGeneRanking done')
