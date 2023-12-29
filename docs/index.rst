@@ -17,7 +17,7 @@ how to :ref:`installation` the project.
    :maxdepth: 2
    :caption: Contents:
 
-   usage
+   usage.md
    tutorials
    api
    
