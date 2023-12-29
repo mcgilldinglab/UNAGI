@@ -10,7 +10,7 @@ from .get_hcmarkers import get_dataset_hcmarkers
 from .speedup_perturbation import perturbation
 from .shuffle_progressionMarker_background import get_progressionmarker_background
 from .getProgressionTopMarkers import runGetProgressionMarker_one_dist
-class analyst():
+class analyst:
     '''
     The analyst class is the class to perform downstream analysis. The analyst class will calculate the hierarchical markers, dynamic markers and perform the pathway and drug perturbations. 
     parameters:

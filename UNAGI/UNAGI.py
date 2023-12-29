@@ -1,7 +1,6 @@
 '''
 This is the main module of UNAGI. It contains the UNAGI class, which is the main class of UNAGI. It also contains the functions to prepare the data, start the model training and start analysing the perturbation results. Initially, `setup_data` function should be used to prepare the data. Then, `setup_training`` function should be used to setup the training parameters. Finally, `run_UNAGI` function should be used to start the model training. After the model training is done, `analyse_UNAGI` function should be used to start the perturbation analysis.
 '''
-
 import subprocess
 import numpy as np
 from .utils import split_dataset_into_stage, get_all_adj_adata
@@ -14,7 +13,7 @@ import torch
 from .pyro_models import VAE,Discriminator
 from .UNAGI_analyst import analyst
 from .trainer import UNAGI_trainer
-class UNAGI():
+class UNAGI:
     '''
     The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
     '''

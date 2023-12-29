@@ -11,7 +11,7 @@ from .processIDREM import getClusterPaths, getClusterIdrem, runIdrem
 from .processTFs import getTFs, getTargetGenes, matchTFandTGWithFoldChange, updataGeneTablesWithDecay
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import csr_matrix
-class UNAGI_runner():
+class UNAGI_runner:
     '''
     The UNAGI_runner class is used to set up the hyperparameters to run iDREM, find clustering optimal parameters and run the UNAGI model . It takes the following parameters:
     data_path: the path to the data

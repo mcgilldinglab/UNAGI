@@ -1,5 +1,6 @@
-#drug analysis
-#load results csv which are distants.
+'''
+This module analyses the perturbation results. It contains the main function to calculate the perturbation score and calculate the p-values.
+'''
 import csv
 import json
 import os
@@ -8,7 +9,26 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 class perturbationAnalysis:
-    def __init__(self,adata,target_directory,stage = None, log2fc=None,mode=None,allTracks=None):
+    '''
+    The perturbationAnalysis class takes the adata object and the directory of the task as the input. 
+
+    parameters:
+    -----------
+    adata: AnnData object
+        The adata object contains the single-cell data.
+    target_directory: str
+        The directory of the task.
+    log2fc: float
+        The log2 fold change of the perturbation. 
+    stage: int
+        The stage of the time-series single-cell data to analyze the perturbation results. If the stage is None, the perturbation analysis will be performed on all stages.
+    mode: str
+        The mode of the perturbation. The mode can be either 'pathway', 'online', or 'compound'. 
+    allTracks: bool
+        If allTracks is True, the perturbation analysis will be performed on all tracks. Otherwise, the perturbation analysis will be performed on a single track.
+
+    '''
+    def __init__(self,adata,target_directory,log2fc,stage=None,mode=None,allTracks=None):
         self.adata = adata
         self.log2fc = log2fc
         self.mode = mode
@@ -17,7 +37,20 @@ class perturbationAnalysis:
         self.allTracks = allTracks
         self.idrem_path = self.target_directory#os.path.join(self.target_directory,'idremVizCluster/')#'./'+ self.target_directory +'/idremVizCluster/'
     def readIdremJson(self, filename):
-        # print('getting Target genes from ', filename)
+        '''
+        Parse the IDREM json file.
+
+        parameters:
+        -----------
+        filename: str
+            The name of the IDREM json file.
+
+        returns:
+        --------
+        tt: list
+            The parsed the IDREM results.
+        '''
+
         path = os.path.join(self.idrem_path,filename ,'DREM.json')
         f=open(path,"r")
         lf=f.readlines()
@@ -29,28 +62,37 @@ class perturbationAnalysis:
     def getTendency(self,filename):
         '''
         get the tendency of each path
-        args:
-        path: the file path of IDREM results
+        parameters:
+        -----------
+        filename: str
+            the file path of IDREM results
         
-        return:
-        out: a list of tendency of each path
+        returns:
+        --------
+        out: list
+            A list of tendency of each path
         '''
         out = []
         tt = self.readIdremJson(filename)
+        total_stages = len(filename.split('.')[0].split('-'))
         temp = np.array(tt[8])
         idrem_genes = temp[1:,0].tolist()
-        tendency = (temp[1:,-1].astype(float)- temp[1:,1].astype(float))/3
+        tendency = (temp[1:,-1].astype(float)- temp[1:,1].astype(float))/(total_stages-1)
         # stage_expression = temp[1:,1:5].astype(float)
         return tendency
 
     def getTendencyFromIDREM(self):
         '''
-        get the tendency of each path
-        args:
-        path: the file path of IDREM results
+        get the tendency of each path from iDREM results
         
-        return:
-        out: a list of tendency of each path
+        parameters:
+        ------------
+        None
+
+        returns:
+        ---------
+        out: list
+            a list of tendency of each path
         '''
         out = {}
         filenames = os.listdir(self.idrem_path)
@@ -63,20 +105,43 @@ class perturbationAnalysis:
                 
         return out
     def get_tracks(self):
-        # dirctory = dirctory+'_0.5.csv'
-        # k = open(dirctory)#open('./iterativeTrainingNOV26/4/perturbation0.5ImportantTrack.csv')
-        # kk = csv.reader(k,delimiter=',')
+        '''
+        Get all the tracks from the dataset
+
+        parameters:
+        -----------
+        None
+
+        returns:
+        -----------
+        tracks: list
+            A list of tracks.
+        '''
         if 'online_random_background_perturbation_deltaD' in list(self.adata.uns.keys()):
             tracks = self.adata.uns['online_random_background_perturbation_deltaD']['A'].keys()
         else:
             tracks = self.adata.uns['%s_perturbation_deltaD'%self.mode][str(self.log2fc)].keys()
-        # tracks = []
-        # for each in list(deltaD.keys()):
-        #     tracks.append(each)
 
         return list(set(tracks))
     
     def load_online(self,deltaD=None,sanity=False,track_percentage= None):
+        '''
+        Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset.
+
+        parameters:
+        -----------
+        deltaD: dict
+            The perturbation results.
+        sanity: bool
+            If sanity is True, the perturbation results are from the random background perturbation. Otherwise, the perturbation results are from the in-silico perturbation.
+        track_percentage: dict
+            The percentage of cells in each track. If track_percentage is None, the perturbation scores will be calculated for each track. Otherwise, the perturbation scores will be calculated for the whole dataset.
+
+        returns:
+        --------
+        out: dict
+            The perturbation scores.
+        '''
         out = {}
         if sanity == True:
             k1 = self.adata.uns['online_random_background_perturbation_deltaD']['A'] #track name, times, i
@@ -187,6 +252,26 @@ class perturbationAnalysis:
         return out
     
     def load(self,data_pathway_overlap_genes,track_percentage,all=True,sanity=False):
+        '''
+        Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset. 
+
+        parameters:
+        -----------
+        data_pathway_overlap_genes: dict
+            The pathway overlap genes.
+        track_percentage: dict
+            The percentage of cells in each track. If track_percentage is None, the perturbation scores will be calculated for each track. Otherwise, the perturbation scores will be calculated for the whole dataset.
+        all: bool
+            If all is True, the perturbation scores will be calculated for the whole dataset. Otherwise, the perturbation scores will be calculated for each track.
+        sanity: bool
+            If sanity is True, the perturbation results are from the random background perturbation. Otherwise, the perturbation results are from the in-silico perturbation.
+
+        returns:
+        ----------
+        out: dict
+            The perturbation scores.
+
+        '''
         if sanity == True:
             k1 = self.adata.uns['random_background_perturbation_deltaD'][str(self.log2fc)]
             k2 = self.adata.uns['random_background_perturbation_deltaD'][str(1/self.log2fc)]
@@ -280,14 +365,42 @@ class perturbationAnalysis:
     #convert distance to scores and some statistics
 
     def get_cluster_data_size(self,stage,cluster):
+        '''
+        Get the number of cells in a cluster.
 
+        parameters:
+        -----------
+        stage: int
+            The stage of the time-series single-cell data.
+        cluster: str
+            The cluster id of the selected cluster.
+
+        returns:
+        --------
+        cells: int
+            The number of cells in the selected cluster.
+        '''
         stagedata = self.adata[self.adata.obs['stage'] == str(stage)]#.index.tolist()
         # stagedata = self.adata[stageids]
        
         clusterids = stagedata.obs[stagedata.obs['leiden'] == str(cluster)].index.tolist()
         clusterdata = stagedata[clusterids]
-        return len(clusterdata)
+        cells = len(clusterdata)
+        return cells
     def get_track_percentage(self, tracks):
+        '''
+        Get the percentage of the number of cells for each track in the whole dataset.
+
+        parameters:
+        -----------
+        tracks: list
+            A list of tracks.
+
+        returns:
+        ----------
+        percentage: dict
+            The percentage of the number of cells for each track in the whole dataset.
+        '''
         percentage = {}
         import time
         stageadatas = [self.adata[self.adata.obs[self.adata.obs['stage'] == stage].index.tolist()] for stage in self.adata.obs['stage'].unique()]
@@ -308,9 +421,21 @@ class perturbationAnalysis:
         return percentage
     def calculateScore(self,delta,flag,weight=100):
         '''
-        flag: the stage of selected clsuter
-        delta: perturbation distance - simulation distance (in z space)
-        
+        Calculate the perturbation score.
+
+        parameters:
+        -----------
+        delta: float
+            The perturbation distance.(D(Perturbed cluster, others stages)  - D(Original cluster, others stages)  (in z space))
+        flag: int
+            The stage of the time-series single-cell data.
+        weight: float
+            The weight to control the perturbation score.
+
+        returns:
+        --------
+        out: float
+            The perturbation score.
         '''
         out = 0
         out1 = 0
@@ -329,6 +454,23 @@ class perturbationAnalysis:
         return out/(len(delta)-1), out1/(len(delta)-1)
 
     def calculateAvg(self,pathwaydic,tracklist='all',sanity=False):
+        '''
+        Calculate the average perturbation score for each track or for the whole dataset.
+
+        parameters:
+        -----------
+        pathwaydic: dict
+            The perturbation results.
+        tracklist: list
+            A list of tracks. If tracklist is 'all', the perturbation scores will be calculated for the whole dataset. Otherwise, the perturbation scores will be calculated for each track.
+        sanity: bool
+            If sanity is True, the perturbation results are from the random background perturbation. Otherwise, the perturbation results are from the in-silico perturbation.
+
+        returns:
+        --------
+        perturbationresultdic: dict
+            The perturbation scores.
+        '''
         
         perturbationresultdic = {}
         perturbationresultdic['backScore'] = []
@@ -343,10 +485,6 @@ class perturbationAnalysis:
                     target = []
                     for t in tracklist:
                         target.append(str(t))
-                    #target = str(track)#['3','16']
-                #target = ['3','16','4','28','23','19','9','13']
-    #             if clusterType[0] not in target:
-    #                 continue
                 perturbationresultdic[each][track] = {}
                 perturbationresultdic[each][track]['backScore'] = []
                 for flag, each_perturbation in enumerate(pathwaydic[each][track]):
@@ -360,6 +498,25 @@ class perturbationAnalysis:
 
 
     def getStatistics(self,perturbationresultdic):
+        '''
+        Get the statistics of the perturbation scores.
+
+        parameters:
+        -----------
+        perturbationresultdic: dict
+            The perturbation scores.
+
+        returns:
+        --------
+        avg_backScore: list
+            The average perturbation scores.
+        backScore: list
+            The perturbation scores.
+        track_name: list
+            A list of tracks.
+        name_order: list
+            The list of objects (compounds or pathways).
+        '''
         avg_backScore = []
         backScore = []
 
@@ -372,33 +529,43 @@ class perturbationAnalysis:
         for each in track_name:
             avg_backScore.append([])
             backScore.append([])
-        pathway_name_order = []
+        name_order = []
         key.remove('backScore')
-        pathway_name_order = []
+        name_order = []
         for i in range(len(backScore)):
             for each in key:
-                pathway_name_order.append(each)
+                name_order.append(each)
                 backScore[i].append(perturbationresultdic[each][track_name[0]]['backScore'])
                 avg_backScore[i].append(perturbationresultdic[each][track_name[0]]['avg_backScore'])
                 
 
-        return  avg_backScore,  backScore,track_name,pathway_name_order
+        return  avg_backScore,  backScore,track_name,name_order
 
-    def fitlerOutNarrowPathway(self, scores, sanity_scores, pathway_names, pathway_name_order):
+    def fitlerOutNarrowPathway(self, scores, sanity_scores, names, name_order):
         '''
-        for this function, only get pathway cdf in a specific path
+        Calculate the p-values of the perturbation scores and filter out the ineffective pertubrations..
         
-        args:
-        scores: the score of all pathways in a track
-        pathway_names: name of the pathway
-        pathway_name_order: the pathway name order
-        
-        perturbationresultdic: perturbation statistic results
-        pathdic: scores of pathways in every path
-        sanity_pathdic: sanity (random) scores of pathways in every path
-        scoreindex: name of score to print
-        flag:0: pushback, 1: pushforward
+        parameters:
+        ------------
+        scores: list
+            the score of all perturbations in a track
+        sanity_scores: list
+            the sanity score of all perturbations in a track
+
+
+        names: list
+            name of perturbation objects (pathways or compounds)
+        name_order: list
+            the name order of perturbation objects (pathways or compounds)
+
+        returns:    
+        ------------
+        top_compounds: list
+            the names of top compounds
+        down_compounds: list
+            the names of down compounds
         '''
+   
         
         sanity_scores = np.array(sanity_scores)
         # print('sanity mean: ', sanity_scores.mean())
@@ -412,11 +579,11 @@ class perturbationAnalysis:
         for i,each in enumerate(scores):
 
             if float(each) >= sanity_scores.mean()+sanity_scores.std():
-                top_compounds.append(pathway_names[i])
+                top_compounds.append(names[i])
                 record_top.append(i)
             elif  float(each) <= sanity_scores.mean()-sanity_scores.std():
                 
-                down_compounds.append(pathway_names[i])
+                down_compounds.append(names[i])
                 record_down.append(i)
         scores = np.array(scores)
         # print(down_compounds)
@@ -447,9 +614,27 @@ class perturbationAnalysis:
                 # print('down compound:',down_compounds[i])
                 final_down_compounds.append(down_compounds[i])
         return top_compounds,down_compounds
-    def getTopDownPathways(self,pathwaydic,track_percentage,track,all=all, flag=0):
+    def getTopDownObjects(self,pathwaydic,track_percentage,track,all=all, flag=0):
         '''
-        flag: 0:both pushback score and pushforward score; 1 only pushback score, -1 only pushforward score
+        get top and down objects in a track
+
+        parameters:
+        ------------
+        pathwaydic: list 
+            perturbation statistic results
+        track_percentage: list
+            percentage of cells in each track
+        track: list
+            track to analyze
+        all: bool
+            if all is True, analyze all tracks
+        flag: int
+            0:both pushback score and pushforward score; 1 only pushback score, -1 only pushforward score
+
+        returns:
+        ------------
+        results: dict
+            top and down objects in a track
         
         '''
 
@@ -461,7 +646,7 @@ class perturbationAnalysis:
         pathways = list(perturbationresultdic.keys())
         pathways.remove('backScore')
 
-        # pathdic,sanity_pathdic = conver_pathway_track_score_to_track_pathway_score(pathways,perturbationresultdic,sanity_perturbationresultdic,scoreindex)
+        # pathdic,sanity_pathdic = conver_object_track_score_to_track_object_score(pathways,perturbationresultdic,sanity_perturbationresultdic,scoreindex)
         sanity_avg_backScore, sanity_backScore,sanity_track_name,_ = self.getStatistics(sanity_perturbationresultdic)
 
         avg_backScore, backScore,track_name,pathway_name_order = self.getStatistics(perturbationresultdic)
@@ -493,18 +678,37 @@ class perturbationAnalysis:
     
         return results
 
-    def conver_pathway_track_score_to_track_pathway_score(self,pathway,perturbationresultdic,sanity_perturbationresultdic,score,track):
+    def conver_object_track_score_to_track_object_score(self,objects,perturbationresultdic,sanity_perturbationresultdic,score,track):
         '''
-        previously the dict is pathway-track-scores, convert it to track-scores
+        Reorder the dictionary structure of the perturbation scores. The original dictionary structure is object-track-scores. The new dictionary structure is track-object-scores.
+       
         
-        args:
-        pathway: a list of names of pathways
-        perturbationresultdic: perturbation statistic results
+        parameters:
+        ------------
+
+        objects: list
+            A list of names of objects
+        perturbationresultdic: list
+            A list of perturbation statistic results
+        sanity_perturbationresultdic: list
+            A list of sanity perturbation statistic results
+        score: str
+            The type of the perturbation score.
+        track: list
+            A list of tracks.
+
+        returns:
+        ------------
+        pathdic: dict
+            The perturbation scores of each track for each object.
+        sanity_pathdic: dict
+            The sanity perturbation scores of each track for each object.
+
         '''
         
         pathdic = {}
         sanity_pathdic = {}
-        for path in list(perturbationresultdic[pathway[0]].keys()):
+        for path in list(perturbationresultdic[objects[0]].keys()):
 
             if path == 'statistic':
                 continue
@@ -533,52 +737,85 @@ class perturbationAnalysis:
         return pathdic,sanity_pathdic
 
 
-    def getTrackPathwayCDF(self,pathway,perturbationresultdic,path,pathdic,sanity_pathdic,gene_in_pathway,scoreindex,flag=0):
+    def getTrackObjectCDF(self,object,perturbationresultdic,path,pathdic,sanity_pathdic,gene_in_object,scoreindex):
         '''
-        for this function, only get pathway cdf in a specific path
-        
-        args:
-        pathway: the pathway to get cdf
-        path: path to get pathway cdf 
-        perturbationresultdic: perturbation statistic results
-        pathdic: scores of pathways in every path
-        sanity_pathdic: sanity (random) scores of pathways in every path
-        scoreindex: name of score to print
-        flag:0: pushback, 1: pushforward
+        Calculate the p-values of the perturbation scores of a track for a perturbation object (pathway or compound).
+
+        parameters:
+        ------------
+        object: str
+            The name of the perturbation object (pathway or compound).
+        perturbationresultdic: dict
+            The perturbation scores.
+        path: str
+            The name of the track.
+        pathdic: dict
+            The perturbation scores of each track for each object.
+        sanity_pathdic: dict
+            The sanity perturbation scores of each track for each object.
+        gene_in_object: list
+            The genes in the perturbation object (pathway or compound).
+        scoreindex: str
+            The type of the perturbation score.
+
+        returns:
+        ------------
+        score: float
+            The perturbation score.
+        pval: float
+            The p-value of the perturbation score.
         '''
     
         pathdic[path] = np.array(pathdic[path])
         sanity_pathdic[path]= np.array(sanity_pathdic[path])
     
-        score = perturbationresultdic[pathway][path][scoreindex]
+        score = perturbationresultdic[object][path][scoreindex]
 
         
-        cdf=norm.cdf(perturbationresultdic[pathway][path][scoreindex],sanity_pathdic[path].mean(),sanity_pathdic[path].std())    
-        return score, 1.0000000-cdf
-    def getSummarizedResults(self,track_to_analysis,pathwayranking, pathwaydic,track_percentage,gene_in_pathway,scoreindex,direction_dict,all):#(pathwayranking,perturbationresultdic,pathdic,sanity_pathdic,gene_in_pathway,score):
+        cdf=norm.cdf(perturbationresultdic[object][path][scoreindex],sanity_pathdic[path].mean(),sanity_pathdic[path].std())    
+        pval = 1.0000000-cdf
+        return score, pval
+    def getSummarizedResults(self,track_to_analysis,objectranking, objectdic,track_percentage,gene_in_object,scoreindex,direction_dict,all):#(pathwayranking,perturbationresultdic,pathdic,sanity_pathdic,gene_in_object,score):
         '''
-        args:
-        pathwayranking: ordered pathway based on scores (both top and down)
-        pathwaydic: pathway dictionary, distance info
-        gene_len_dict: number of gene in each pathway
-        sanity_directory: directory to sanity results
-        gene_in_pathway:  genes in each pathway overlapping with adatagene
-        scoreindex: perturbation score
-        
+        Get the perturbation score.
+
+        parameters:
+        -----------
+        track_to_analysis: list
+            A list of tracks to calculate the perturbation scores.
+        pathwayranking: list
+            The ranked perturbation objects (pathways or compounds).
+        objectdic: dict
+            The dictionary of the perturbed distance
+        track_percentage: dict
+            The percentage of number cells of tracks in the whole dataset.
+        gene_in_object: dict
+            The regulated genes in the perturbation object (pathway or compound).
+        scoreindex: str
+            The type of the perturbation score.
+        direction_dict: dict
+            The direction of the gene expression change.
+        all: bool
+            If all is True, the perturbation scores will be calculated for the whole dataset. Otherwise, the perturbation scores will be calculated for each track.
+
+        returns:
+        -----------
+        infodict: dict
+            The perturbation scores.
         '''
 
-        sanity_pathwaydic = self.load(gene_in_pathway,track_percentage,all=all,sanity=True)
+        sanity_objectdic = self.load(gene_in_object,track_percentage,all=all,sanity=True)
         # np.save('sanity_pathwaydic.npy',sanity_pathwaydic)
         # np.save('pathwaydic.npy',pathwaydic)
         # print('saved')
         # print(gdsg)
-        sanity_perturbationresultdic = self.calculateAvg(sanity_pathwaydic,sanity=True,tracklist=track_to_analysis)
-        perturbationresultdic = self.calculateAvg(pathwaydic,tracklist=track_to_analysis)
-        pathways = list(pathwaydic.keys())
+        sanity_perturbationresultdic = self.calculateAvg(sanity_objectdic,sanity=True,tracklist=track_to_analysis)
+        perturbationresultdic = self.calculateAvg(objectdic,tracklist=track_to_analysis)
+        pathways = list(objectdic.keys())
         if all:
-            pathdic,sanity_pathdic = self.conver_pathway_track_score_to_track_pathway_score(pathways,perturbationresultdic,sanity_perturbationresultdic,scoreindex,'total')
+            pathdic,sanity_pathdic = self.conver_object_track_score_to_track_object_score(pathways,perturbationresultdic,sanity_perturbationresultdic,scoreindex,'total')
         else:
-            pathdic,sanity_pathdic = self.conver_pathway_track_score_to_track_pathway_score(pathways,perturbationresultdic,sanity_perturbationresultdic,scoreindex,track_to_analysis)
+            pathdic,sanity_pathdic = self.conver_object_track_score_to_track_object_score(pathways,perturbationresultdic,sanity_perturbationresultdic,scoreindex,track_to_analysis)
         tendency_dict = self.getTendencyFromIDREM()
 
         tendency = []
@@ -589,13 +826,13 @@ class perturbationAnalysis:
             else:
                 tendency = tendency + np.array(tendency_dict[each1])*track_percentage[each]
         infodict = {}
-        pathwayranking = dict(pathwayranking)
-        for outer, inner in pathwayranking.keys():
+        objectranking = dict(objectranking)
+        for outer, inner in objectranking.keys():
             if outer not in infodict.keys():
                 infodict[outer] = {}
             infodict[outer][inner] = {}
             infodict[outer][inner]['compound'] = {}
-            for idx,each in enumerate(list(pathwayranking[(outer,inner)])):
+            for idx,each in enumerate(list(objectranking[(outer,inner)])):
                 infodict[outer][inner]['compound'][str(idx)]=each
 
         for track in list(infodict.keys()):
@@ -626,15 +863,15 @@ class perturbationAnalysis:
                     if updown == 'down_compounds':
                         flag = 1
                 
-                    score, p=self.getTrackPathwayCDF(eachpathway,perturbationresultdic,track,pathdic, sanity_pathdic, gene_in_pathway, scoreindex,flag=flag)
+                    score, p=self.getTrackObjectCDF(eachpathway,perturbationresultdic,track,pathdic, sanity_pathdic, gene_in_object, scoreindex)
                     p=p*count/(count-idx)
                     if p >1:
                         p = 1
                     infodict[track][updown]['perturbation score'][str(idx)] =score
                     infodict[track][updown]['pval_adjusted'][str(idx)] = p
-                    infodict[track][updown]['drug_regulation'][str(idx)] = gene_in_pathway[eachpathway]
+                    infodict[track][updown]['drug_regulation'][str(idx)] = gene_in_object[eachpathway]
                     written_gene = []
-                    for eachgene in gene_in_pathway[eachpathway]:
+                    for eachgene in gene_in_object[eachpathway]:
                         eachgene = eachgene.split(':')[0]
                         temp = direction_dict[eachgene]
                         if temp > 0: #increasing tendency decrease gene expression
@@ -642,15 +879,21 @@ class perturbationAnalysis:
                         else: #decreasing tendency increase gene expression
                             written_gene.append(eachgene+':+')
                     infodict[track][updown]['idrem_suggestion'][str(idx)] = written_gene
-        # infodict = pd.json_normalize(infodict)
-        # infodict.columns = infodict.columns.str.split(".").map(tuple)
-        # infodict = infodict.stack([0, 1, 2]).reset_index(0, drop=True)
-        # infodict = infodict.transpose()
-        # infodict = infodict.reset_index()
-        # infodict['index'] = infodict['index'].astype('int32')
-        # infodict = infodict.set_index(['index']).sort_index()
         return infodict
     def getTendencyDict(self,track_percentage):
+        '''
+        Get the tendency of the gene expression change.
+
+        parameters:
+        -----------
+        track_percentage: dict
+            The percentage of the number of cells of each track in the whole dataset.
+
+        returns:
+        -----------
+        output: dict
+            The tendency of the gene expression change.
+        '''
         genenames = self.adata.var.index.tolist()
         tendency_dict = self.getTendencyFromIDREM()
         tendency = None
@@ -666,13 +909,47 @@ class perturbationAnalysis:
                 output[each] = tendency[i]
         return output
     def get_online_results(self, score, random_score):
+        '''
+        Calculate the p-value of the perturbation score for an online perturbation.
+
+        parameters:
+        -----------
+        score: float
+            The perturbation score.
+        random_score: float
+            The perturbation score of the random background perturbation.
+
+        returns:
+        -----------
+        pval: float
+            The p-value of the perturbation score.
+
+        ''' 
+
         cdf=norm.cdf(score,np.array(random_score).mean(),np.array(random_score).std())
         return 1.00 - cdf
 
 
-    def main_analysis(self,track_to_analysis, all,score=None,items=None,custommode=None):
+    def main_analysis(self,track_to_analysis, all,score=None,items=None):
+
         '''
-        all: whether to put all tracks together
+        The main function to analyse the perturbation results.
+
+        parameters:
+        -----------
+        track_to_analysis: list
+            A list of tracks to calculate the perturbation scores.
+        all: bool
+            If all is True, the perturbation scores will be calculated for the whole dataset. Otherwise, the perturbation scores will be calculated for each track.
+        score: str
+            The type of the perturbation score.
+        items: list
+            A list of perturbation objects (pathways or compounds).
+
+        returns:
+        -----------
+        results: dict
+            The perturbation scores.
         '''
 
         tracks = self.get_tracks()
@@ -684,11 +961,27 @@ class perturbationAnalysis:
             items = self.adata.uns['data_drug_overlap_genes']
 
         direction_dict = self.getTendencyDict(track_percentage)
-        pathwaydic = self.load(items,track_percentage,all=all)
+        objectdic = self.load(items,track_percentage,all=all)
         
-        topdownpathways = self.getTopDownPathways(pathwaydic,track_percentage,track_to_analysis,all=all)
-        return self.getSummarizedResults(track_to_analysis,topdownpathways,pathwaydic,track_percentage,items,score,direction_dict,all=all)
+        topdownpathways = self.getTopDownObjects(objectdic,track_percentage,track_to_analysis,all=all)
+        results = self.getSummarizedResults(track_to_analysis,topdownpathways,objectdic,track_percentage,items,score,direction_dict,all=all)
+        return 
     def online_analysis(self,deltaD):
+        '''
+        Analyse the online perturbation results.
+
+        parameters:
+        -----------
+        deltaD: list
+            The online perturbation results.
+
+        returns:
+        -----------
+        perturbation_score: float
+            The perturbation score.
+        pval: float
+            The p-value of the perturbation score.
+        '''
         import time
 
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
