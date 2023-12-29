@@ -219,6 +219,8 @@ dependencies:
       - annotated-types==0.5.0
       - anyio==3.7.1
       - arrow==1.2.3
+      - myst-nb==1.1.0,
+      - myst-parser==2.0.0,
       - async-timeout==4.0.3
       - attrs==23.1.0
       - backoff==2.2.1

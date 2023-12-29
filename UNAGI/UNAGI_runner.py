@@ -32,6 +32,9 @@ class UNAGI_runner:
         self.species = None
         self.setup_IDREM = False
     def load_stage_data(self):
+        '''
+        Load the stage data from the data_path. The stage data will be stored in the adata_stages list. The all_in_one adata will be used for the UNAGI model training.
+        '''
         stageadata = []
         for i in range(self.total_stage):
             if self.iteration != 0:
@@ -45,6 +48,25 @@ class UNAGI_runner:
         self.adata_stages = stageadata
         
     def annotate_stage_data(self, adata,stage):
+        '''
+        Retreive the latent representations of given single cell data. Performing clusterings, generating the UMAPs, annotating the cell types and adding the top genes and cell types attributes.
+
+        parameters:
+        ------------
+        adata: anndata
+            the single cell data.
+        stage: int
+            the stage of the single cell data.
+
+        returns:
+        ------------
+        adata: anndata
+            the annotated single cell data.
+        averageValue: list
+            the average value of each cluster.
+        reps: list
+            the latent representations of the single cell data.
+        '''
         z_locs, z_scales, cell_embeddings = self.trainer.get_latent_representation(adata,self.iteration,self.data_path)
         adata.obsm['z'] = cell_embeddings
         if self.neighbor_parameters is None:

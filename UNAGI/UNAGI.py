@@ -17,7 +17,7 @@ class UNAGI:
     '''
     The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
     '''
-    def __init__(self):
+    def __init__(self,):
         pass
     def setup_data(self, data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
         '''
