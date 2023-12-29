@@ -24,7 +24,7 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx_autodoc_typehints',
     'sphinx_copybutton',
-    'nbsphinx'
+    'nbsphinx','myst_nb'
 ]
 html_theme = 'sphinx_rtd_theme'
 html_favicon = '_static/icon.png'
@@ -32,11 +32,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
 }
-templates_path = ['_templates']
-html_static_path = ['_static']
-source_suffix = '.rst'
-master_doc = 'index'
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+
 
 html_show_sourcelink = True
 set_type_checking_flag = True
@@ -76,6 +72,7 @@ html_css_files = ["readthedocs-custom.css"] # Override some CSS settings
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
 myst_enable_extensions = [
     "amsmath",
     "colon_fence",
@@ -84,8 +81,10 @@ myst_enable_extensions = [
     "html_image",
     "html_admonition",
 ]
-source_suffix = {
-    ".rst": "restructuredtext",
-    ".ipynb": "myst-nb"
-    
-}
+
+myst_commonmark_only = False  # or True, depending on your preference
+templates_path = ['_templates']
+html_static_path = ['_static']
+source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
+master_doc = 'index'
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
