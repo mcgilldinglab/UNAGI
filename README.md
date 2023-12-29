@@ -2,7 +2,7 @@
 
 UNAGI: Deep Generative Model for Deciphering Cellular Dynamics and In-Silico Drug Discovery in Complex Diseases
 
-Full documentations and tutorials can be accessed at https://unagi-docs.readthedocs.io/en/latest/api/UNAGI.html.
+Full documentations and tutorials can be accessed at (UNAGI-docs)[https://unagi-docs.readthedocs.io/en/latest/index.html].
 
 ## Overview 
 <img title="UNAGI Overview" alt="Alt text" src="UNAGI_overview.png">
