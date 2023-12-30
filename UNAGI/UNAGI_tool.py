@@ -23,7 +23,19 @@ class UNAGI:
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
         parameters:
-        data_path: the directory of the h5ad file or the folder contains data.
+        --------------
+        data_path: str 
+            the directory of the h5ad file or the folder contains data.
+        stage_key: str
+            the attribute name of the stage information.
+        total_stage: int
+            the total number of time stages of the time-series single-cell data.
+        gcn_connectivities: bool
+            whether the cell graphs are already calculated. Default is False.
+        neighbors: int
+            the number of neighbors for each cell used to construct the cell neighbors graph, default is 25.
+        threads: int
+            the number of threads for the cell graph construction, default is 20.
         '''
         if total_stage <= 2:
             raise ValueError('The total number of stages should be larger than 2')
@@ -67,8 +79,11 @@ class UNAGI:
         '''
         The function to calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
         parameters:
-        neighbors: the number of neighbors for each cell, default is 25.
-        threads: the number of threads for the cell graph construction, default is 20.
+        --------------
+        neighbors: int
+            the number of neighbors for each cell, default is 25.
+        threads: int
+            the number of threads for the cell graph construction, default is 20.
         '''
         get_gcn_exp(self.data_folder, self.ns ,neighbors,threads= threads)
     def setup_training(self,
@@ -80,7 +95,7 @@ class UNAGI:
                  lr=1e-4,
                  lr_dis = 5e-4,
                  beta=1,
-                 hiddem_dim=256,
+                 hidden_dim=256,
                  latent_dim=64,
                  graph_dim=1024,
                  BATCHSIZE=512,
@@ -89,20 +104,35 @@ class UNAGI:
         '''
         Set up the training parameters and the model parameters.
         parameters:
-        task: the name of this task. It is used to name the output folder.
-        dist: the distribution of the single-cell data. Chosen from 'ziln' (zero-inflated log normal), 'zinb' (zero-inflated negative binomial), 'zig' (zero-inflated gamma), and 'nb' (negative binomial).
-        device: the device to run the model. If GPU is enabled, the device should be specified. Default is None.
-        epoch_iter: the number of epochs for the iterative training process. Default is 10.
-        epoch_initial: the number of epochs for the inital iteration. Default is 20.
-        lr: the learning rate of the VAE model. Default is 1e-4.
-        lr_dis: the learning rate of the discriminator. Default is 5e-4.
-        beta: the beta parameter of the beta-VAE. Default is 1.
-        hiddem_dim: the hidden dimension of the VAE model. Default is 256.
-        latent_dim: the latent dimension of the VAE model. Default is 64.
-        graph_dim: the dimension of the GCN layer. Default is 1024.
-        BATCHSIZE: the batch size for the model training. Default is 512.
-        max_iter: the maximum number of iterations for the model training. Default is 10.
-        GPU: whether to use GPU for the model training. Default is False.
+        --------------
+        task: str
+            the name of this task. It is used to name the output folder.
+        dist: str
+            the distribution of the single-cell data. Chosen from 'ziln' (zero-inflated log normal), 'zinb' (zero-inflated negative binomial), 'zig' (zero-inflated gamma), and 'nb' (negative binomial).
+        device: str
+            the device to run the model. If GPU is enabled, the device should be specified. Default is None.
+        epoch_iter: int
+            the number of epochs for the iterative training process. Default is 10.
+        epoch_initial: int
+            the number of epochs for the inital iteration. Default is 20.
+        lr: float
+            the learning rate of the VAE model. Default is 1e-4.
+        lr_dis: float
+            the learning rate of the discriminator. Default is 5e-4.
+        beta: float
+            the beta parameter of the beta-VAE. Default is 1.
+        hiddem_dim: int
+            the hidden dimension of the VAE model. Default is 256.
+        latent_dim: int
+            the latent dimension of the VAE model. Default is 64.
+        graph_dim: int
+            the dimension of the GCN layer. Default is 1024.
+        BATCHSIZE: int
+            the batch size for the model training. Default is 512.
+        max_iter: int
+            the maximum number of iterations for the model training. Default is 10.
+        GPU: bool
+            whether to use GPU for the model training. Default is False.
         '''
         self.dist = dist
         self.device = device
@@ -114,7 +144,7 @@ class UNAGI:
         self.task = task
         self.latent_dim = latent_dim
         self.graph_dim = graph_dim
-        self.hidden_dim = hiddem_dim
+        self.hidden_dim = hidden_dim
         self.BATCHSIZE = BATCHSIZE
         self.max_iter = max_iter
         self.GPU = GPU
@@ -131,7 +161,9 @@ class UNAGI:
         '''
         The function to launch the model training. The model will be trained iteratively. The number of iterations is specified by the `max_iter` parameter in the `setup_training` function.
         parameters:
-        idrem_dir: the directory to the iDREM tool which is used to reconstruct the temporal dynamics.
+        --------------
+        idrem_dir: str
+            the directory to the iDREM tool which is used to reconstruct the temporal dynamics.
         '''
         for iteration in range(0,self.max_iter):
             
@@ -149,12 +181,19 @@ class UNAGI:
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         parameters:
-        data_path: the directory of the data (h5ad format, e.g. org_dataset.h5ad).
-        iteration: the iteration used for analysis.
-        progressionmarker_background_sampling_times: the number of times to sample the background cells for dynamic markers discoveries.
-        target_dir: the directory to save the results. Default is None.
-        customized_drug: the customized drug perturbation list. Default is None.
-        cmap_dir: the directory to the cmap database. Default is None.
+        ---------------
+        data_path: str
+            the directory of the data (h5ad format, e.g. org_dataset.h5ad).
+        iteration: int
+            the iteration used for analysis.
+        progressionmarker_background_sampling_times: int
+            the number of times to sample the background cells for dynamic markers discoveries.
+        target_dir: str
+            the directory to save the results. Default is None.
+        customized_drug: str
+            the customized drug perturbation list. Default is None.
+        cmap_dir: str
+            the directory to the cmap database. Default is None.
         '''
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir)
         analysts.start_analyse(progressionmarker_background_sampling_times)
