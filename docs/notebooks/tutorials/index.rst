@@ -8,6 +8,6 @@ Modules
 
 .. toctree::
 
-    dataset_preparation
-    register_the_training_data
-    configure_the_model_architecture_and_training_parameters
+    dataset_preparation.ipynb
+    register_the_training_data.ipynb
+    configure_the_model_architecture_and_training_parameters.ipynb
