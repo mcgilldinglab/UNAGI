@@ -48,6 +48,7 @@ autodoc_default_options = {
 
 nb_output_stderr = "remove"
 nb_execution_mode = "off"
+nbsphinx_execute = 'never'
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
