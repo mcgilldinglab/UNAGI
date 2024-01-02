@@ -5,8 +5,13 @@ This section provides the scripts to reproduce the supplementary figures and tab
 
 Supplementary Figures
 ---------------------
+.. toctree::
+
+supplementary_figures.ipynb
 
 
 
 Supplementary Tables
 --------------------
+.. toctree::
+    supplementary_tables.ipynb
