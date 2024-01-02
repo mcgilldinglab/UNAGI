@@ -7,7 +7,7 @@ Supplementary Figures
 ---------------------
 .. toctree::
 
-supplementary_figure.ipynb
+    supplementary_figure.ipynb
 
 
 

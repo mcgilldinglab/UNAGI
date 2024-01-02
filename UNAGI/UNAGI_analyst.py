@@ -15,6 +15,7 @@ class analyst:
     The analyst class is the class to perform downstream analysis. The analyst class will calculate the hierarchical markers, dynamic markers and perform the pathway and drug perturbations. 
     parameters:
     ----------------
+
     data_path: str
         the directory of the data (h5ad format, e.g. org_dataset.h5ad).
     iteration: int
@@ -43,8 +44,10 @@ class analyst:
     def start_analyse(self,progressionmarker_background_sampling):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
+        
         parameters:
         ----------------
+
         progressionmarker_background_sampling: int
             the number of times to sample the background cells for dynamic markers discoveries.
         '''

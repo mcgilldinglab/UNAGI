@@ -62,6 +62,7 @@ class perturbationAnalysis:
     def getTendency(self,filename):
         '''
         get the tendency of each path
+        
         parameters:
         -----------
         filename: str
