@@ -39,11 +39,13 @@ import gc
 def getLastStageIDs(json,total_stage):
     '''
     get the list of node ids in last stage 
-    args:
+    parameters
+    -----------
     json: idrem meta
     total_stage: total number of stages
 
-    return:
+    return
+    -----------
     out: a list of node ids in last stage
     '''
     out = []
@@ -55,11 +57,13 @@ def getidremPath(json,cid):
     '''
     given the last node id in idrem, get the whole paths
     
-    args:
+    parameters
+    -----------
     json: idrem meta file
     cid: the last node id in idrem
 
-    return:
+    return
+    -----------
     nodes: a list of node ids in the path
     '''
     nodes = []
@@ -78,10 +82,12 @@ def getIdremPaths(json,total_stage):
     '''
     get all paths in idrem
     
-    args:
+    parameters
+    -----------
     json: idrem meta files
 
-    return:
+    return
+    -----------
     paths: a list of all paths
     '''
     
@@ -125,10 +131,12 @@ def testChanges(path,filename):
 def getTargetGenes(path,N):
     '''
     get top N genes of each path
-    args:
+    parameters
+    -----------
     path: the file path of IDREM results
     
-    return:
+    return
+    -----------
     out: a list of top N up or down regulators of each path
     '''
     out = []
@@ -144,12 +152,15 @@ def getTargetGenes(path,N):
 def getPosNegDynamicPathGenes(path,filename,topN):
     '''
     get the genes from nodes that increase and decrease most between stages
-    args:
+    
+    parameters
+    -----------
     path: the file path of IDREM results
     filename: the file name of IDREM results
     topN: the number of genes to accumulate gene weights
 
-    return:
+    return
+    -----------
     out: a list of top N up or down regulators of each path
     '''
     total_stage = len(filename.split('.')[0].split('-'))
@@ -166,11 +177,13 @@ def getPosNegDynamicPathGenes(path,filename,topN):
 def getMaxOrMinNodesGenes(json,nodes):
     '''
     get the genes from dynamic nodes
-    args:
+    parameters
+    -----------
     json: idrem meta
     nodes: the list of dynamic nodes
 
-    return:
+    return
+    -----------
     genes: a list of genes in the nodes
     '''
     boolgenes = []
@@ -210,11 +223,13 @@ def getMaxOrMinNodesGenes(json,nodes):
 def readIdremJson(path, filename):
     '''
     Parse the IDREM json file
-    args:
+    parameters
+    -----------
     path: the file path of IDREM results
     filename: the file name of IDREM results
 
-    return:
+    return
+    -----------
     tt: the parsed IDREM json file
     '''
     print('getting Target genes from ', filename)
@@ -231,14 +246,16 @@ def getTopNTargetGenes(json,genenames,geneids,topN,total_stage):
     '''
     get top N genes of each path sorted by the change of gene expression between stages
 
-    args:
+    parameters
+    -----------
     json: the parsed IDREM json file
     genenames: a list of genes in the nodes
     geneids: a list of gene ids in the nodes
     topN: the number of genes to accumulate gene weights
     total_stage: the total number of stages
 
-    return:
+    return
+    -----------
     out: a list of top N up or down regulators of each path
     '''
 
@@ -253,58 +270,17 @@ def getTopNTargetGenes(json,genenames,geneids,topN,total_stage):
         out[i] = topNGenes
     return out
 
-
-# def matchTFandTG(TFs,scopes,filename,genenames):
-#     '''
-#     use target genes from IDREM as scopes to count tf and tgs with human-encode
-#     '''
-#     f = open('./'+filename,'r')
-#     rl = f.readlines()
-#     f.close()
-#     TG = {}
-#     for line in rl[1:]:
-#         item = line.split('\t')
-#         if item[0] not in TG.keys():
-#             TG[item[0]] = []
-#         genename = item[1].split(';')[0]
-#         #if genename in genenames:
-#         TG[item[0]].append(genename)
-#     genedict = {}
-#     for i, each in enumerate(genenames):
-#         genedict[each.upper()] = i
-#     TFTG = [[] for _ in range(len(TFs))]
-#     for i, track in enumerate(TFs):
-#         temp = [[] for _ in range(3)]
-#         TFTG[i] = temp
-        
-#         for j, stage in enumerate(track):
-#             for tf in stage:
-                
-#                 targetGenes = TG[tf[0].split(' ')[0]]
-                
-#                 temp2 = np.zeros(shape=len(genenames))
-#                 for each in enumerate(targetGenes):
-#                     if each[1] in genedict.keys() and each[1] in scopes[i][j]:
-#                         temp2[genedict[each[1]]] = 1
-
-#                 if tf[0].split(' ')[0] in genenames:
-#                     index = genedict[tf[0].split(' ')[0]]
-#                     temp2[index] = 2
-#                 TFTG[i][j].append(temp2)
-#             TFTG[i][j] = np.array(TFTG[i][j])
-#             TFTG[i][j] = np.sum(TFTG[i][j],axis = 0)
-#     TFTG = np.array(TFTG)
-#     return TFTG
-
 def listTracks(mid, iteration,total_stage):
     '''
     list all tracks in the selected iteration
-    args:
+    parameters
+    -----------
     mid: directory to the task
     iteration: the selected iteration
     total_stage: the total number of stages
 
-    return:
+    return
+    -----------
     tempTrack: a list of tracks
     '''
     filenames= os.listdir(os.path.join(mid,str(iteration)+'/idremResults/'))
@@ -317,53 +293,27 @@ def listTracks(mid, iteration,total_stage):
             tempTrack[i].append(temp1)
     return tempTrack
 
-#a = listTracks('./reresult/idremVizCluster0.1-nov14')
-
-# def updateGeneFactors(adata, clusterid,iteration,geneWeight):
-#     geneWeight = geneWeight.reshape(1,-1)
-#     adata.obs['leiden']=adata.obs['leiden'].astype('int64')
-#     cells = adata.obs.reset_index()
-#     celllist = cells[cells['leiden']==int(clusterid)].index.tolist()
-#     if 'geneWeight' not in adata.layers.keys():
-#         adata.layers['geneWeight'] = lil_matrix(np.zeros(adata.X.shape)) 
-#     else:
-#         adata.layers['geneWeight'] = adata.layers['geneWeight'].tolil()
-#     adata.layers['geneWeight'][celllist] += geneWeight
-   
-#     return adata
-
-# def updataGeneTables(mid, iteration, geneFactors):
-#     tracks = listTracks(mid,iteration)
-#     difference = 0
-#     for i, stage in enumerate(tracks):
-#         if i != 0:
-#             adata = sc.read_h5ad(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%(i)))
-#             previousMySigmoidGeneWeight = np.sum(mySigmoid(adata.layers['geneWeight'].toarray()))
-#             #adata = sc.read_h5ad('./stagedata/%d.h5ad'%(i))
-#             for j, clusterids in enumerate(stage):#in some tracks, the one stage have many clusters
-#                 for clusterid in clusterids:
-#                     # print('number of idrem file', j)
-#                     # print('stage',i)
-#                     adata = updateGeneFactors(adata,clusterid,iteration,geneFactors[j][i-1])
-#                     # difference+=clusterDiff#each update will get the mySigmoid(increment) 
-#             currentMySigmoidGeneWeight = np.sum(mySigmoid(adata.layers['geneWeight'].toarray()))
-#             difference += currentMySigmoidGeneWeight - previousMySigmoidGeneWeight
-#             adata.layers['geneWeight'] = adata.layers['geneWeight'].tocsr()
-#             adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
-#         else:
-#             if int(iteration) == 0:
-#                 adata = sc.read_h5ad(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%(i)))
-#                 if 'geneWeight' not in adata.layers.keys():
-#                     adata.layers['geneWeight'] = csr_matrix(np.zeros(adata.X.shape)) 
-#                     adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
-#     return difference
 def matchTFandTGWithFoldChange(TFs,scopes,avgCluster,filename,genenames,total_stage):
     '''
     use target genes from IDREM as scopes to count tf and tgs with human-encode
-    tf factor 2
-    target of tf in top dynamic genes 1
-    target of tf not in top dynamic genes 0.5
-    other genes 0
+    parameters
+    -----------
+    TFs: list
+        A list of top N up or down regulators of each path
+    scopes: list
+        A list of target genes of each path
+    avgCluster: list
+        A list of average gene expression of each cluster
+    filename: str
+        The name of IDREM results
+    genenames: list
+        A list of gene names
+    total_stage: int
+        The total number of stages
+
+    return
+    -----------
+    TFTG: a list of gene weights of each path
     '''
     f = open(filename,'r')
     rl = f.readlines()
@@ -429,34 +379,27 @@ def matchTFandTGWithFoldChange(TFs,scopes,avgCluster,filename,genenames,total_st
     TFTG = np.array(TFTG)
     return TFTG
 
-# def replaceGeneFactors(adata, clusterid,geneWeight):
-#     '''
-#     replace genefacotrs instead of accumulating and decaying
-#     '''
-#     geneWeight = geneWeight.reshape(1,-1)
-#     adata.obs['leiden']=adata.obs['leiden'].astype('int64')
-#     cells = adata.obs.reset_index()
-#     celllist = cells[cells['leiden']==int(clusterid)].index.tolist()
-#     if 'geneWeight' not in adata.layers.keys():
-#         adata.layers['geneWeight'] = lil_matrix(np.zeros(adata.X.shape)) 
-#     else:
-#         adata.layers['geneWeight'] = adata.layers['geneWeight'].tolil()
-#     adata.layers['geneWeight'][celllist] = geneWeight
-#     adata.layers['geneWeight'] = adata.layers['geneWeight'].tocsr()
-#     return adata
 def updateGeneFactorsWithDecay(adata, clusterid,iteration,geneWeight, decayRate = 0.5):
     '''
     update gene weights and decay the weight of genes that are not important in this iteration of a cluster
 
-    args:
-    adata: the cluster of single cell data
-    clusterid: the cluster id
-    iteration: the selected iteration
-    geneWeight: the gene weights
-    decayRate: the decay rate
+    parameters
+    ----------------------
+    adata: anndata
+        the cluster of single cell data
+    clusterid: int
+        the cluster id
+    iteration: int
+        the selected iteration
+    geneWeight: np.array
+        the gene weights
+    decayRate: float
+        the decay rate
 
-    return:
-    adata: the updated single-cell data
+    return
+    ----------------------
+    adata: anndata
+        the updated single-cell data
     '''
     geneWeight = geneWeight.reshape(1,-1)
     adata.obs['leiden']=adata.obs['leiden'].astype('int64')
@@ -470,47 +413,28 @@ def updateGeneFactorsWithDecay(adata, clusterid,iteration,geneWeight, decayRate 
     # adata.layers['geneWeight'][celllist] += geneWeight
     adata.layers['geneWeight'] = adata.layers['geneWeight'].tocsr()
     return adata
-# def replaceGeneTables(mid, iteration, geneFactors):
-#     '''
-#     oct23, use gene table replacing instead of accumulating and decaying
-#     '''
-#     tracks = listTracks(mid,iteration)
-#     difference = 0
-#     for i, stage in enumerate(tracks):
-#         if i != 0:
-#             gc.collect()
-#             adata = sc.read_h5ad(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%(i)))
-#             temppreviousMySigmoidGeneWeight = adata.layers['geneWeight']
-#             for j, clusterids in enumerate(stage):#in some tracks, the one stage have many clusters
-#                 for clusterid in clusterids:
-#                     # print('number of idrem file', j)
-#                     # print('stage',i)
-#                     adata = replaceGeneFactors(adata,clusterid,geneFactors[j][i-1])
-#             previousMySigmoidGeneWeight = mySigmoid(temppreviousMySigmoidGeneWeight.toarray())
-#             currentMySigmoidGeneWeight = mySigmoid(adata.layers['geneWeight'].toarray())
-#             difference += np.mean(np.absolute(currentMySigmoidGeneWeight - previousMySigmoidGeneWeight))
-#             adata.layers['geneWeight'] = adata.layers['geneWeight'].tocsr()
-#             adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
-#         else:
-#             if int(iteration) == 0:
-#                 adata = sc.read_h5ad(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%(i)))
-#                 if 'geneWeight' not in adata.layers.keys():
-#                     adata.layers['geneWeight'] = csr_matrix(np.zeros(adata.X.shape)) 
-#                     adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
-#     return difference/3       
+    
 def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate = 0.5):
     '''
     update gene weights and decay the weight of genes that are not important in this iteration
 
-    args:
-    mid: directory to the task
-    iteration: the selected iteration
-    geneFactors: the gene weights
-    total_stage: the total number of stages
-    decayRate: the decay rate
+    parameters
+    ----------------------
+    mid: str
+        The task name
+    iteration: int
+        the selected iteration
+    geneFactors: np.array
+        the gene weights of each cell
+    total_stage: int
+        the total number of stages
+    decayRate: float
+        the decay rate
 
-    return:
-    difference: the average difference of gene weights between stages
+    return
+    ----------------------
+    difference: np.float
+        the average difference of gene weights between stages
     '''
     tracks = listTracks(mid,iteration,total_stage)
     difference = 0
@@ -540,51 +464,43 @@ def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate
                     adata.layers['geneWeight'] = csr_matrix(np.zeros(adata.X.shape)) 
                     adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
     return difference/(total_stage-1)
-def checkupDown(drem, genename):
+def checkupDown(idrem, genename):
     '''
     check if the TFs is a up or down regulator
-    args:
-    drem: the DREM attribute
-    genename: name of TF(str)
+    parameters
+    -----------
+    idrem: list
+        the iDREM metafile
+    genename: list
+        a list of name of TF(str)
     
-    return: if it is a up or down regulator return 1, else return 0
+    return
+    -----------
+    flag: bool
+        up regulator return 1,  down regulator return 0
     '''
     genename=genename.split(' ')[0]
 
-    if genename not in drem[3]:
-
-        
-        return 0
+    if genename not in idrem[3]:
+        flag = 0
     else:
-        return 1
-# def filterUpandDown(node,stage,filename):
-#     '''
-#     filter TFs that aren't up or down regulators
-#     args: 
-#     node: 
-#     stage:
-#     filename: the name of 
-    
-#     return: 
-#     filteredTFs: TFs that are up or down regulators
-#     '''
-#     filteredTFs=[]
-#     genedict = upandDowndict(filename)
-#     for each in node:
-#         checker = checkupDown(genedict,each[0], stage)
-#         if checker == 1:
-#             filteredTFs.append(each)
-#     return filteredTFs
+        flag = 1
+    return flag
+
 def mergeTFs(TFs,total_stage):
     '''
     merge top N up or down regulators into the stage level and remove the repeated regulators among sibling nodes of IDREM tree
-    args: 
-    TFs: a list of top N up or down regulators of a IDREM tree
-    total_stage: the total number of stages
+    parameters 
+    ----------------------
+    TFs: list
+        a list of top N up or down regulators of a IDREM tree
+    total_stage: int
+         the total number of stages
 
-    
-    return: 
-    out: a list of up or down regulators of each stage
+    return
+    -----------
+    out: list
+         a list of up or down regulators of each stage
     '''
     upAndDownset= [set(),set(),set()]
     out = [[] for _ in range(total_stage-1)]
@@ -599,12 +515,17 @@ def mergeTFs(TFs,total_stage):
 def getTopNUpandDown(TFs,topN=20):
     '''
     obtain top 20 up or down regulators based on the score overall (P value)
-    args: 
-    TFs: a list of up or down regulators
-    topN: the number of top regulators to be extracted. Default is 20
+    parameters 
+    -----------
+    TFs: list
+        a list of up or down regulators
+    topN: int
+        the number of top regulators to be extracted. Default is 20
     
-    return: 
-    TFs top N up or down regulators
+    return
+    ----------- 
+    TFs: list
+        top N up or down regulators
     '''
    
     if len(TFs[0]) == 6:
@@ -612,17 +533,24 @@ def getTopNUpandDown(TFs,topN=20):
     else:
         
         TFs = sorted(TFs,key=lambda x:x[6])
-    return TFs[:topN]
+    TFs = TFs[:topN]
+    return TFs
 def extractTFs(path,filename,total_stage,topN=20):
     '''
     extract top N up or down TFs of a certain path from the DREM json file
-    args: 
-    filename: the name of certain paths
-    total_stage: the total number of stages
-    topN: the number of top regulators to be extracted. Default is 20
+    parameters 
+    -----------
+    filename: str
+        the name of certain paths
+    total_stage: int
+        the total number of stages
+    topN: int
+        the number of top regulators to be extracted. Default is 20
     
-    return:
-    extractedTFs: top N up or down TFs of a certain path
+    return
+    -----------
+    extractedTFs: list
+        top N up or down TFs of a certain path
     '''
     print('getting TFs from ', filename)
     path = os.path.join(path,filename,'DREM.json')
@@ -637,9 +565,6 @@ def extractTFs(path,filename,total_stage,topN=20):
     
     TFs = [[] for _ in range(total_stage-1)]
     stages = [str(i+1) for i in range(total_stage-1)]
-    # stage1 = 'IPF1'
-    # stage2 = 'IPF2'
-    # stage3 = 'IPF3'
     for each in tt[0][1:]:
         temp = []
         for item in each['ETF']:
@@ -651,26 +576,26 @@ def extractTFs(path,filename,total_stage,topN=20):
         temp = getTopNUpandDown(temp,topN)
         print(each['nodetime'],stages.index(each['nodetime']))
         TFs[stages.index(each['nodetime'])].append(temp)
-        # if each['nodetime'] == stage1:
-        #     TFs[0].append(temp)
-        # elif each['nodetime'] == stage2: 
-        #     TFs[1].append(temp)
-        # elif each['nodetime'] == stage3:
-        #     TFs[2].append(temp)
-    
+
     extractedTFs = mergeTFs(TFs,total_stage=total_stage)
     
     return extractedTFs
 def getTFs(path,total_stage,topN=20):
     '''
     get top N up or down regulators of each path
-    args:
-    path: the file path of IDREM results
-    topN: the number of top regulators to be extracted. Default is 20
-    total_stage: the total number of stages
+    parameters
+    -----------
+    path: str
+        the file path of IDREM results
+    topN: int
+        the number of top regulators to be extracted. Default is 20
+    total_stage: int
+        the total number of stages
     
-    return:
-    out: a list of top N up or down regulators of each path
+    return
+    -----------
+    out: list
+        a list of top N up or down regulators of each path
     '''
     out = []
  
@@ -680,103 +605,24 @@ def getTFs(path,total_stage,topN=20):
         if each[0] != '.':
             out.append(extractTFs(path,each,topN=topN,total_stage=total_stage))
     return out
-# def matchTG(TFs,filename,genenames):
-#     f = open('./'+filename,'r')
-#     rl = f.readlines()
-#     f.close()
-#     TG = {}
-#     for line in rl[1:]:
-#         item = line.split('\t')
-#         if item[0] not in TG.keys():
-#             TG[item[0]] = []
-#         genename = item[1].split(';')[0]
-#         #if genename in genenames:
-#         TG[item[0]].append(genename)
-#     genedict = {}
-#     for i, each in enumerate(genenames):
-#         genedict[each.upper()] = i
-#     TFTG = [[] for _ in range(len(TFs))]
-#     for i, track in enumerate(TFs):
-#         temp = [[] for _ in range(3)]
-#         TFTG[i] = temp
-        
-#         for j, stage in enumerate(track):
-#             for tf in stage:
-                
-#                 targetGenes = TG[tf[0].split(' ')[0]]
-                
-#                 temp2 = np.zeros(shape=len(genenames))
-#                 for each in enumerate(targetGenes):
-#                     if each[1] in genedict.keys():
-#                         temp2[genedict[each[1]]] = 1
-
-#                 if tf[0].split(' ')[0] in genenames:
-#                     index = genedict[tf[0].split(' ')[0]]
-#                     temp2[index] = 2
-#                 TFTG[i][j].append(temp2)
-#             TFTG[i][j] = np.array(TFTG[i][j])
-#             TFTG[i][j] = np.sum(TFTG[i][j],axis = 0)
-#     TFTG = np.array(TFTG)
-#     return TFTG
-
-# def mySigmoid(z,weight=-0.5):
-#     '''
-#     shifted sigmoid transformation of given data
-#     args: 
-#     z: input data
-#     return:  
-#     out: data after shifted sigmoid transformation
-#     '''
-#     out = 2/(1+np.exp(weight*z))
-#     return out
-
-# def mySigmoid(z,weight=-4):
-#     '''
-#     new shifted sigmoid transformation for replace strategy
-#     args: 
-#     z: input data
-#     return:  
-#     out: data after shifted sigmoid transformation
-#     '''
-#     out = 1/(1+15*np.exp(weight*z))
-#     return out
 
 def mySigmoid(z,weight=-4):
     '''
     new shifted sigmoid transformation for replace strategy
-    args: 
-    z: input data
-    return:  
-    out: data after shifted sigmoid transformation
+    parameters 
+    -----------
+    z: np.array
+        input data
+    weight: float
+        the weight of sigmoid transformation
+
+    return
+    ----------- 
+    out: np.array
+        data after shifted sigmoid transformation
     '''
     out = 1/(1+20*np.exp(weight*z+1.5)) #hyper parameters needed to be adjusted by users
     return out
-
-# def geneFactor(idrem_path, tfinfo_path, defaultfactor):
-#     '''
-#     get use shifted sigmoid to normalize tf info and obtain the gene factors for retraining
-
-#     args:
-#     path to tf info file
-#     return: 
-#     out: gene factor matrics
-#     '''
-#     filenames = os.listdir(idrem_path)
-#     stage = [[] for _ in range(4)]
-#     for each in filenames:
-#         temp = each.split('.')[0].split('-')
-#         for i,item in enumerate(temp):
-#             temp1 = item.split('n')
-#             stage[i].append(temp1)
-#     genes =np.load(tfinfo_path, allow_pickle=True)
-#     #out = [{} for _ in range(10)]
-
-#     for i in range(len(genes)):
-#         for j in range(len(genes[i])):
-#             for each in stage[j+1][i]:
-#                 defaultfactor[j+1][each] = mySigmoid(np.sum(genes[i][j],axis=0))
-#             #defaultfactor[i].append(mySigmoid(np.sum(genes[i][j],axis=0)))
-#     return defaultfactor
     
 if __name__ == '__main__':
     getPosNegDynamicPathGenes('/mnt/md0/yumin/to_upload/UNAGI/tutorials/example_1/idrem','4-4-5-1.txt_viz',50)

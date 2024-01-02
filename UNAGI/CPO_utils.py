@@ -102,8 +102,10 @@ def auto_resolution(stagedata, anchor_index,neighbors, min_res, max_res):
     max_res: float
         maximum resolution for leiden clustering
 
-    return
-    ----------
+    Return:
+
+    --------------
+    
     out_res: list
         list of optimal resolution for each stage
     all_means: list
