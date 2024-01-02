@@ -23,26 +23,45 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
     '''
     updater of Graph VAE-GAN.
 
-    parameters
-    ---------
-    loss: loss function
-    model: VAE model
-    guide: guide function of the model
-    discriminator: adversarial discriminator model
-    optim: optimizer
-    x: gene expression data
-    adj: cell graph
-    i: index of the batch
-    start: start index of the batch
-    end: end index of the batch
-    device: device to run the model
-    second_optimizer: optimizer for the discriminator
-    two: whether to return the loss of the VAE and the discriminator separately
+    Parameters:
+    
+    ---------------
 
-    return
-    ------
-    loss: loss of the VAE
-    loss_discriminator: loss of the discriminator
+    loss: 
+        loss function
+    model: 
+        VAE model
+    guide: 
+        guide function of the model
+    discriminator: 
+        adversarial discriminator model
+    optim: 
+        optimizer
+    x: 
+        gene expression data
+    adj: 
+        cell graph
+    i: 
+        index of the batch
+    start: 
+        start index of the batch
+    end: 
+        end index of the batch
+    device: 
+        device to run the model
+    second_optimizer: 
+        optimizer for the discriminator
+    two: 
+        whether to return the loss of the VAE and the discriminator separately
+
+    Return:
+
+    ---------------
+
+    loss: np.float
+        loss of the VAE
+    loss_discriminator: np.float
+        loss of the discriminator
 
     '''
     
@@ -71,7 +90,6 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
     if two == True:
         return torch_item(loss_vae), torch_item(loss_discriminator)
     if isinstance(loss, tuple):
-        # Support losses that return a tuple, e.g. ReweightedWakeSleep.
         return type(loss)(map(torch_item, loss))
     else:
         return torch_item(loss)
@@ -91,10 +109,15 @@ class myELBO(ELBO):
     '''
     The customized ELBO function for the VAE-GAN model. The ELBO function is modified to include the discriminator loss.
 
-    parameters
-    ----------
-    geneWeight: the weight of the gene expression data. Default is None.
-    pushback_Score: the pushback score for the discriminator. Default is None.
+    Parameters:
+
+    ----------------
+
+    geneWeight: torch.tensor
+        The weight of the gene expression data. Default is None.
+        
+    pushback_Score: torch.tensor
+        The pushback score for the discriminator. Default is None.
 
     '''
     def __init__(self, geneWeight=None, pushback_Score = None):

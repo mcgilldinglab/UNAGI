@@ -33,12 +33,17 @@ def getClusterPaths(edges, total_stages):
     '''
     Obtain the paths of each cluster for multiple stages.
     
-    Args:
-    edges: A list of lists, where each sublist contains edges between consecutive stages.
-    total_stages: Total number of stages.
+    parameters
+    -----------
+    edges: list
+        A list of lists, where each sublist contains edges between consecutive stages.
+    total_stages: int
+        Total number of stages.
 
-    Returns:
-    paths: A collection of paths of clusters.
+    return
+    -----------
+    paths: list
+        A collection of paths of clusters.
     '''
     if len(edges) != total_stages - 1:
         raise ValueError("Number of edges must be one less than total stages")
@@ -70,12 +75,14 @@ def getClusterIdrem(paths, state, total_stages):
     '''
     Concatenate the average gene expression in a cluster tree. Shape: [number of stages, number of genes]
     
-    Args: 
+    parameters
+    -----------
     paths: The collection of paths.
     state: A list of average gene expression of each state.
     total_stages: Total number of stages.
     
-    Returns: 
+    return
+    -----------
     out: A list of gene expression of each cluster tree.
     '''
     out = []
@@ -98,12 +105,17 @@ def getClusterIdrem(paths, state, total_stages):
 def getIdrem(paths,state):
     '''
     concatenate the average gene expression of clusters in each path. shape: [number of stages, number of gene]
-    args: 
-    paths: the collection of paths
-    state: a list of average gene expression of each state
+    parameters
+    ----------------------
+    paths: list
+        the list of paths
+    state: list
+        a list of average gene expression of each state
     
-    return: 
-    out: a list of gene expression of each path
+    return
+    ---------------------- 
+    out: list
+        a list of gene expression of each path
     '''
     out = []
     for i,each in enumerate(paths):
@@ -130,12 +142,12 @@ class IDREMthread(threading.Thread):
 def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species='Human', Minimum_Standard_Deviation = 0.01,Convergence_Likelihood=0.1,Minimum_Absolute_Log_Ratio_Expression=0.05, trained=False):
     '''
     train IDREM model and save the results in iterative training with midpath and iteration
-    args:
+    
+    parameters
+    ----------------------
     paths: the path of IPF progression
     idremInput: average gene expression of each path
     trained: if the model is trained, use saved model
-    
-    
     
     '''
     dir1 = os.path.join(midpath, str(iteration)+'/idremInput')
@@ -254,11 +266,16 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
 def averageNode(nodes,state):
     '''
     calculate the average gene expression of sibling nodes
-    args: 
-    nodes: number of sibling nodes
-    state: the gene expression of each cluster in a certain stage
     
-    return: 
+    parameters
+    ----------------------
+    nodes: int
+        number of sibling nodes
+    state: list
+        the gene expression of each cluster in a certain stage
+    
+    return
+    -----------
     out: the average gene expression of sibling nodes
     '''
     out = 0

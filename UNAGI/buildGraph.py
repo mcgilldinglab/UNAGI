@@ -32,13 +32,26 @@ from .distDistance import *
 def nodesDistance(rep1,rep2,topgene1,topgene2):
     '''
     calculate the distance between two stages
-    args: 
-    rep1: the representation of clusters in stage 1
-    rep2: the representation of clusters in stage 2
-    topgene1: top 100 differential gene of clusters in stage 1
-    topgene2: top 100 differential gene of clusters in stage 2
-    return:
-    distance: normalized distance of clusters between two stages
+    
+    Parameters: 
+    
+    -------------------
+
+    rep1: list
+        The representation of clusters in stage 1
+    rep2: list
+        The representation of clusters in stage 2
+    topgene1: list
+        Top 100 differential gene of clusters in stage 1
+    topgene2: list
+        Top 100 differential gene of clusters in stage 2
+    
+    Return:
+    
+    -------------------
+
+    distance: list
+        A list of normalized distance of clusters between two stages
     '''
     distance = [[] for _ in range(len(rep2))]
     for i in range(len(rep2)):
@@ -54,6 +67,22 @@ def nodesDistance(rep1,rep2,topgene1,topgene2):
 def connectNodes(distances,cutoff = 0.05):
     '''
     Connect the clusters in two stages with smallest distance and p-value < cut-off
+
+    Parameters:
+
+    -------------------
+    
+    distances: list
+        The list of distance between two stages
+    cutoff: float
+        The cutoff of p-value
+
+    Return:
+
+    -------------------
+
+    edges: list
+        The edges between two stages
     '''
     edges = []
     for i in range(len(distances)):
@@ -70,12 +99,24 @@ def connectNodes(distances,cutoff = 0.05):
 def buildEdges(stage1,stage2,cutoff = 0.05):
     '''
     calculate the distance between two stages and connect the clusters in two stages with smallest distance
-    args: 
-    stage1: the anndata of the first selected stage
-    stage2: the anndata of the second selected stage
-    cutoff: the cutoff of p-value
-    return:
-    edges: the edges between two stages
+    
+    Parameters: 
+
+    -------------------
+
+    stage1: anndata
+        The data of the first selected stage
+    stage2: anndata
+        The data of the second selected stage
+    cutoff: float
+        The cutoff of p-value
+    
+    Return:
+    
+    -------------------
+
+    edges: list
+        The edges between two stages
     '''
     adata1 = sc.read_h5ad('./stagedata/%d.h5ad'%stage1)
     adata2 = sc.read_h5ad('./stagedata/%d.h5ad'%stage2)
@@ -91,15 +132,27 @@ def buildEdges(stage1,stage2,cutoff = 0.05):
 def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     '''
     calculate the distance between two stages and connect the clusters in two stages with smallest distance with midpath in iterative training
-    args: 
-    midpath: the path of the midpath
-    iteration: the iteration of the training
-    stage1: the anndata of the first selected stage
-    stage2: the anndata of the second selected stage
-    cutoff: the cutoff of p-value
+    Parameters:
+    
+    ------------------- 
 
-    return:
-    edges: the edges between two stages
+    midpath: str
+        The task name
+    iteration: int
+        The iteration of the training
+    stage1: anndata
+        The data of the first selected stage
+    stage2: anndata
+        The data of the second selected stage
+    cutoff: float
+        The cutoff of p-value
+
+    Return:
+    
+    -------------------
+
+    edges: list
+        The edges between two stages
     '''
     # print(stage1,stage2)
     adata1 = sc.read_h5ad(os.path.join(midpath,str(iteration)+'/stagedata/%d.h5ad'%stage1))
@@ -116,24 +169,54 @@ def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     return edges
 def getandUpadateEdges(total_stage,midpath,iteration):
     '''
-    get edges with midpath in iterative training
+    get edges in iterative training.
+    
+    Parameters:
+
+    -------------------
+
+    total_stage: int
+        The total number of stages
+    midpath: str
+        The task name
+    iteration: int
+        The iteration of the training
+
+    Return:
+
+    -------------------
+
+    edges: list
+        The edges between two stages
     '''
     edges = []
     for i in range(total_stage-1):
         edges.append(buildEdges(i,i+1,midpath,iteration))
     updateEdges(edges,midpath,iteration)
-    # print('edges updated')
     return edges
 
 def updateEdges(edges,midpath,iteration):
     '''
-    updata edges to the anndata database, calculate edges changes
-    args:
-    adata: anndata of database
-    edges: edges from buildEdges()
+    updata edges to the anndata database, calculate edges changes.
 
-    return: 
-    adata: updated anndata of database
+    Parameters:
+
+    -------------------
+
+    edges: list
+        The edges between two stages
+    midpath: str
+        The task name
+    iteration: int
+        The iteration of the training
+
+    Return:
+
+    -------------------
+
+    edges: list
+        The edges between two stages
+
     '''
     newEdges = {}
     for i in range(len(edges)):
@@ -147,12 +230,24 @@ def reupdateAttributes(adata, stage, results):
     '''
     update gaussian and gamma rep, top 100 differential genes, cell types of clusters to anndata
 
-    args: 
-    adata: anndata of database
-    results: [gaussian, gamma], a list contained top differential genes and cell types of clusters
+    Parameters: 
+
+    -------------------
+
+    adata: anndata 
+        The single-cell data
+    stage: int
+        The selected stage
+
+    results: list
+        A list contained top differential genes and cell types of clusters
     
-    returns: 
-    adata: updated anndata of database
+    Return: 
+
+    -------------------
+
+    adata: anndata
+        updated anndata of input single-cell data
     '''
     stageids = adata.obs[adata.obs['stage'] == stage].index.tolist()
     tempadata = adata[stageids]
