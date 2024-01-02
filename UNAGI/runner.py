@@ -149,8 +149,8 @@ class UNAGI_runner:
         self.Minimum_Absolute_Log_Ratio_Expression = Minimum_Absolute_Log_Ratio_Expression
         self.Convergence_Likelihood = Convergence_Likelihood
         self.Minimum_Standard_Deviation = Minimum_Standard_Deviation
-    def register_species(self, species):
-        print('Species is registered as %s'%species)
+    def set_up_species(self, species):
+        print('Species: Running on %s data'%species)
         self.species = species
     def run_IDREM(self):
         averageValues = np.load(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),allow_pickle=True)

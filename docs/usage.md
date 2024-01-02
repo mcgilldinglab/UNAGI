@@ -35,7 +35,7 @@ git clone https://github.com/phoenixding/idrem.git
     To enable the interactive visualization powered by Javascript, please make sure that you have Internet connection.
     (The users are still able to run the software off-line, but Internet access is needed to view the result interactively.)
 
-## Examples datasets
+## Examples data
 
 To use the example dataset, run the tutorials or reproduce the manuscript results.
 

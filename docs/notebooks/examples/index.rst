@@ -7,6 +7,6 @@ Running UNAGI on the example dataset
 
 .. toctree::
 
-    dataset_preparation
+    Prepare_the_example_dataset
     run_UNAGI_using_example_dataset
     visualize_UNAGI_results_example_dataset
