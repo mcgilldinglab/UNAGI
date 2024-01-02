@@ -23,10 +23,8 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
     '''
     updater of Graph VAE-GAN.
 
-    Parameters:
-    
-    ---------------
-
+    parameters
+    --------------
     loss: 
         loss function
     model: 
@@ -54,10 +52,8 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
     two: 
         whether to return the loss of the VAE and the discriminator separately
 
-    Return:
-
+    return
     ---------------
-
     loss: np.float
         loss of the VAE
     loss_discriminator: np.float
@@ -97,9 +93,12 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
 def mySigmoid(z):
     '''
     shifted sigmoid transformation of given data
-    args: 
+    parameters
+    ------------ 
     z: input data
-    return:  
+
+    return
+    -------------     
     out: data after shifted sigmoid transformation
     '''
     z = np.array(z)
@@ -109,13 +108,12 @@ class myELBO(ELBO):
     '''
     The customized ELBO function for the VAE-GAN model. The ELBO function is modified to include the discriminator loss.
 
-    Parameters:
-
+    parameters
     ----------------
 
     geneWeight: torch.tensor
         The weight of the gene expression data. Default is None.
-        
+
     pushback_Score: torch.tensor
         The pushback score for the discriminator. Default is None.
 

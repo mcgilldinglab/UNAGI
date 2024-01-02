@@ -84,7 +84,8 @@ def getIdremPaths(json,total_stage):
     
     parameters
     -----------
-    json: idrem meta files
+    json: list
+        idrem meta files
 
     return
     -----------
@@ -204,22 +205,6 @@ def getMaxOrMinNodesGenes(json,nodes):
         geneids.append(tempgeneids)
     return genes,geneids
 
-# def getMaxOrMinPathGenes(json,nodes):
-#     boolgenes = []
-#     genes = []
-#     geneids = []
-#     for each in json[0][1:]:
-#         if each['nodeID'] in nodes:
-#             boolgenes.append(each['genesInNode'])
-#     for each in boolgenes:
-
-#         for i, gene in enumerate(each):
-#             if gene == True:
-#                 genes.append(json[3][i])
-#                 geneids.append(i)
-#     genes = list(set(genes))
-#     geneids = list(set(geneids))
-#     return genes,geneids
 def readIdremJson(path, filename):
     '''
     Parse the IDREM json file
@@ -623,6 +608,5 @@ def mySigmoid(z,weight=-4):
     '''
     out = 1/(1+20*np.exp(weight*z+1.5)) #hyper parameters needed to be adjusted by users
     return out
-    
 if __name__ == '__main__':
     getPosNegDynamicPathGenes('/mnt/md0/yumin/to_upload/UNAGI/tutorials/example_1/idrem','4-4-5-1.txt_viz',50)
