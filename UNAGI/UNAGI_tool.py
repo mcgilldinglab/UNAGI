@@ -24,7 +24,8 @@ class UNAGI:
     def setup_data(self, data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
-        parameters:
+        
+        parameters
         --------------
         data_path: str 
             the directory of the h5ad file or the folder contains data.
@@ -80,7 +81,8 @@ class UNAGI:
     def calculate_neighbor_graph(self, neighbors=25,threads = 20):
         '''
         The function to calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
-        parameters:
+        
+        parameters
         --------------
         neighbors: int
             the number of neighbors for each cell, default is 25.
@@ -105,7 +107,8 @@ class UNAGI:
                  GPU=False):
         '''
         Set up the training parameters and the model parameters.
-        parameters:
+        
+        parameters
         --------------
         task: str
             the name of this task. It is used to name the output folder.
@@ -162,7 +165,8 @@ class UNAGI:
     def register_CPO_parameters(self,anchor_neighbors=10, max_neighbors=30, min_neighbors=5, resolution_min=0.8, resolution_max=1.2):
         '''
         The function to register the parameters for the CPO analysis. The parameters will be used to perform the CPO analysis.
-        parameters:
+        
+        parameters
         --------------
         anchor_neighbors: int
             the number of neighbors for each anchor cell.
@@ -184,7 +188,8 @@ class UNAGI:
     def register_species(self,species):
         '''
         The function to register the species of the single-cell data.
-        parameters:
+        
+        parameters
         --------------
         species: str
             the species of the single-cell data.
@@ -196,7 +201,8 @@ class UNAGI:
     def register_iDREM_parameters(self,Normalize_data = 'Log_normalize_data', Minimum_Absolute_Log_Ratio_Expression = 0.5, Convergence_Likelihood = 0.001, Minimum_Standard_Deviation = 0.5):
         '''
         The function to register the parameters for the iDREM analysis. The parameters will be used to perform the iDREM analysis.
-        parameters:
+        
+        parameters
         --------------
         Normalize_data: str
             the method to normalize the data. Chosen from 'Log_normalize_data' (log normalize the data), 'Normalize_data' (normalize the data), and 'No_normalize_data' (do not normalize the data).
@@ -219,7 +225,8 @@ class UNAGI:
     def run_UNAGI(self,idrem_dir):
         '''
         The function to launch the model training. The model will be trained iteratively. The number of iterations is specified by the `max_iter` parameter in the `setup_training` function.
-        parameters:
+        
+        parameters
         --------------
         idrem_dir: str
             the directory to the iDREM tool which is used to reconstruct the temporal dynamics.
@@ -250,7 +257,8 @@ class UNAGI:
     def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,target_dir=None,customized_drug=None,cmap_dir=None):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
-        parameters:
+        
+        parameters
         ---------------
         data_path: str
             the directory of the data (h5ad format, e.g. org_dataset.h5ad).

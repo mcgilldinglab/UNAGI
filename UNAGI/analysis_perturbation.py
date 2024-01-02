@@ -12,7 +12,7 @@ class perturbationAnalysis:
     '''
     The perturbationAnalysis class takes the adata object and the directory of the task as the input. 
 
-    parameters:
+    parameters
     -----------
     adata: AnnData object
         The adata object contains the single-cell data.
@@ -40,12 +40,12 @@ class perturbationAnalysis:
         '''
         Parse the IDREM json file.
 
-        parameters:
+        parameters
         -----------
         filename: str
             The name of the IDREM json file.
 
-        returns:
+        return
         --------
         tt: list
             The parsed the IDREM results.
@@ -63,12 +63,12 @@ class perturbationAnalysis:
         '''
         get the tendency of each path
         
-        parameters:
+        parameters
         -----------
         filename: str
             the file path of IDREM results
         
-        returns:
+        return
         --------
         out: list
             A list of tendency of each path
@@ -86,11 +86,11 @@ class perturbationAnalysis:
         '''
         get the tendency of each path from iDREM results
         
-        parameters:
+        parameters
         ------------
         None
 
-        returns:
+        return
         ---------
         out: list
             a list of tendency of each path
@@ -109,11 +109,11 @@ class perturbationAnalysis:
         '''
         Get all the tracks from the dataset
 
-        parameters:
+        parameters
         -----------
         None
 
-        returns:
+        return
         -----------
         tracks: list
             A list of tracks.
@@ -129,7 +129,7 @@ class perturbationAnalysis:
         '''
         Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset.
 
-        parameters:
+        parameters
         -----------
         deltaD: dict
             The perturbation results.
@@ -138,7 +138,7 @@ class perturbationAnalysis:
         track_percentage: dict
             The percentage of cells in each track. If track_percentage is None, the perturbation scores will be calculated for each track. Otherwise, the perturbation scores will be calculated for the whole dataset.
 
-        returns:
+        return
         --------
         out: dict
             The perturbation scores.
@@ -256,7 +256,7 @@ class perturbationAnalysis:
         '''
         Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset. 
 
-        parameters:
+        parameters
         -----------
         data_pathway_overlap_genes: dict
             The pathway overlap genes.
@@ -267,7 +267,7 @@ class perturbationAnalysis:
         sanity: bool
             If sanity is True, the perturbation results are from the random background perturbation. Otherwise, the perturbation results are from the in-silico perturbation.
 
-        returns:
+        return
         ----------
         out: dict
             The perturbation scores.
@@ -369,14 +369,14 @@ class perturbationAnalysis:
         '''
         Get the number of cells in a cluster.
 
-        parameters:
+        parameters
         -----------
         stage: int
             The stage of the time-series single-cell data.
         cluster: str
             The cluster id of the selected cluster.
 
-        returns:
+        return
         --------
         cells: int
             The number of cells in the selected cluster.
@@ -392,12 +392,12 @@ class perturbationAnalysis:
         '''
         Get the percentage of the number of cells for each track in the whole dataset.
 
-        parameters:
+        parameters
         -----------
         tracks: list
             A list of tracks.
 
-        returns:
+        return
         ----------
         percentage: dict
             The percentage of the number of cells for each track in the whole dataset.
@@ -424,7 +424,7 @@ class perturbationAnalysis:
         '''
         Calculate the perturbation score.
 
-        parameters:
+        parameters
         -----------
         delta: float
             The perturbation distance.(D(Perturbed cluster, others stages)  - D(Original cluster, others stages)  (in z space))
@@ -433,7 +433,7 @@ class perturbationAnalysis:
         weight: float
             The weight to control the perturbation score.
 
-        returns:
+        return
         --------
         out: float
             The perturbation score.
@@ -458,7 +458,7 @@ class perturbationAnalysis:
         '''
         Calculate the average perturbation score for each track or for the whole dataset.
 
-        parameters:
+        parameters
         -----------
         pathwaydic: dict
             The perturbation results.
@@ -467,7 +467,7 @@ class perturbationAnalysis:
         sanity: bool
             If sanity is True, the perturbation results are from the random background perturbation. Otherwise, the perturbation results are from the in-silico perturbation.
 
-        returns:
+        return
         --------
         perturbationresultdic: dict
             The perturbation scores.
@@ -502,12 +502,12 @@ class perturbationAnalysis:
         '''
         Get the statistics of the perturbation scores.
 
-        parameters:
+        parameters
         -----------
         perturbationresultdic: dict
             The perturbation scores.
 
-        returns:
+        return
         --------
         avg_backScore: list
             The average perturbation scores.
@@ -546,7 +546,7 @@ class perturbationAnalysis:
         '''
         Calculate the p-values of the perturbation scores and filter out the ineffective pertubrations..
         
-        parameters:
+        parameters
         ------------
         scores: list
             the score of all perturbations in a track
@@ -559,7 +559,7 @@ class perturbationAnalysis:
         name_order: list
             the name order of perturbation objects (pathways or compounds)
 
-        returns:    
+        return:    
         ------------
         top_compounds: list
             the names of top compounds
@@ -619,7 +619,7 @@ class perturbationAnalysis:
         '''
         get top and down objects in a track
 
-        parameters:
+        parameters
         ------------
         pathwaydic: list 
             perturbation statistic results
@@ -632,7 +632,7 @@ class perturbationAnalysis:
         flag: int
             0:both pushback score and pushforward score; 1 only pushback score, -1 only pushforward score
 
-        returns:
+        return
         ------------
         results: dict
             top and down objects in a track
@@ -684,7 +684,7 @@ class perturbationAnalysis:
         Reorder the dictionary structure of the perturbation scores. The original dictionary structure is object-track-scores. The new dictionary structure is track-object-scores.
        
         
-        parameters:
+        parameters
         ------------
 
         objects: list
@@ -698,7 +698,7 @@ class perturbationAnalysis:
         track: list
             A list of tracks.
 
-        returns:
+        return
         ------------
         pathdic: dict
             The perturbation scores of each track for each object.
@@ -742,7 +742,7 @@ class perturbationAnalysis:
         '''
         Calculate the p-values of the perturbation scores of a track for a perturbation object (pathway or compound).
 
-        parameters:
+        parameters
         ------------
         object: str
             The name of the perturbation object (pathway or compound).
@@ -759,7 +759,7 @@ class perturbationAnalysis:
         scoreindex: str
             The type of the perturbation score.
 
-        returns:
+        return
         ------------
         score: float
             The perturbation score.
@@ -780,7 +780,7 @@ class perturbationAnalysis:
         '''
         Get the perturbation score.
 
-        parameters:
+        parameters
         -----------
         track_to_analysis: list
             A list of tracks to calculate the perturbation scores.
@@ -799,17 +799,13 @@ class perturbationAnalysis:
         all: bool
             If all is True, the perturbation scores will be calculated for the whole dataset. Otherwise, the perturbation scores will be calculated for each track.
 
-        returns:
+        return
         -----------
         infodict: dict
             The perturbation scores.
         '''
 
         sanity_objectdic = self.load(gene_in_object,track_percentage,all=all,sanity=True)
-        # np.save('sanity_pathwaydic.npy',sanity_pathwaydic)
-        # np.save('pathwaydic.npy',pathwaydic)
-        # print('saved')
-        # print(gdsg)
         sanity_perturbationresultdic = self.calculateAvg(sanity_objectdic,sanity=True,tracklist=track_to_analysis)
         perturbationresultdic = self.calculateAvg(objectdic,tracklist=track_to_analysis)
         pathways = list(objectdic.keys())
@@ -885,12 +881,12 @@ class perturbationAnalysis:
         '''
         Get the tendency of the gene expression change.
 
-        parameters:
+        parameters
         -----------
         track_percentage: dict
             The percentage of the number of cells of each track in the whole dataset.
 
-        returns:
+        return
         -----------
         output: dict
             The tendency of the gene expression change.
@@ -913,14 +909,14 @@ class perturbationAnalysis:
         '''
         Calculate the p-value of the perturbation score for an online perturbation.
 
-        parameters:
+        parameters
         -----------
         score: float
             The perturbation score.
         random_score: float
             The perturbation score of the random background perturbation.
 
-        returns:
+        return
         -----------
         pval: float
             The p-value of the perturbation score.
@@ -936,7 +932,7 @@ class perturbationAnalysis:
         '''
         The main function to analyse the perturbation results.
 
-        parameters:
+        parameters
         -----------
         track_to_analysis: list
             A list of tracks to calculate the perturbation scores.
@@ -947,7 +943,7 @@ class perturbationAnalysis:
         items: list
             A list of perturbation objects (pathways or compounds).
 
-        returns:
+        return
         -----------
         results: dict
             The perturbation scores.
@@ -971,12 +967,12 @@ class perturbationAnalysis:
         '''
         Analyse the online perturbation results.
 
-        parameters:
+        parameters
         -----------
         deltaD: list
             The online perturbation results.
 
-        returns:
+        return
         -----------
         perturbation_score: float
             The perturbation score.

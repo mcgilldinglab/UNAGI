@@ -14,13 +14,13 @@ def get_data_file_path(filename):
 def split_dataset_into_stage(adata_path, folder, key):
     '''
     split dataset into stages and write to the path
-    args:
+    
+    parameters
+    ------------------
     adata: IPF database
     key: key of the dataset
     path: path to write the dataset
-    
-    return:
-    None
+
     '''
     adata = sc.read_h5ad(adata_path)
     for each in list(adata.obs[key].unqiue()):
@@ -38,10 +38,15 @@ def transfer_to_ranking_score(gw):
 def clustertype_old(adata):
     '''
     find the most common cell types to represent the cluster
-    args:
+    
+    parameters
+    ------------------
     adata: anndata of one cluster
     
-    return: the most common cell types in the cluster
+    return
+    ---------------
+    most_common_type: str
+        the most common cell types in the cluster
     '''
     dic = {}
     for each in adata.obs['ident']:
@@ -49,15 +54,21 @@ def clustertype_old(adata):
             dic[each]=1
         else:
             dic[each]+=1
-    #print(dic)        
-    return max(dic, key=dic.get)
+    #print(dic) 
+    most_common_type = max(dic, key=dic.get)       
+    return most_common_type
 def clustertype40(adata):
     '''
     annotate the cluster with cells >40% if no one >40%, annotate with the highest one
-    args:
+    
+    parameters
+    ------------------
     adata: anndata of one cluster
     
-    return: the most common cell types in the cluster
+    return
+    ---------------- 
+    anootate:
+        The cluster type
     '''
     dic = {}
     total = 0
@@ -110,17 +121,26 @@ def clustertype40(adata):
                         anootate+='/'+each
         if flag == False:
             anootate = 'Mixed'
+    
     return anootate
 
 def changeCluster(adata, ids, newIds):
     '''
     re-assign cluster id to cells
-    args: 
-    adata: IPF database
-    ids: cell id in one stage needed to be changed 
-    vamos: new cluster id of cells
-    return: 
-    out: new IPF database
+
+    parameters
+    ------------------
+    adata: anndata
+        IPF database
+    ids: int
+        cell id in one stage needed to be changed 
+    newIds: int
+        new cluster id of cells
+
+    return
+    ------------------
+    adata: anndata
+        the updated IPF data
     '''
 
     for i, cluster in enumerate(ids):
@@ -131,12 +151,20 @@ def changeCluster(adata, ids, newIds):
 def extracth5adcluster(data, ID):
     '''
     extract data from a certain cluster
-    args:
-    data: data (H5AD class) of a certain stage
-    ID: the id of cluster
+
+    parameters
+    ------------------
+    data: anndata
+        data (H5AD class) of a certain stage
+    ID: int
+        the id of cluster
     
-    return:
-    splitData: data of a certain cluster
+    return
+    ------------------
+    splitData: anndata
+        data of a certain cluster
+    splitDataID: list
+        index of cells in a certain cluster
     '''
     splitDataID = []
     splitData = []
@@ -151,12 +179,16 @@ def extracth5adcluster(data, ID):
 def extracth5adclusterids(data, ID):
     '''
     extract index from a certain cluster
-    args:
-    data: data (H5AD class) of a certain stage
-    ID: the id of cluster
+    parameters
+    ------------------
+    data: anndata
+        data (H5AD class) of a certain stage
+    ID: int
+        the id of cluster
     
     return:
-    splitData: data of a certain cluster
+    splitDataID: list
+        index of cells in a certain cluster
     '''
     splitDataID = []
     splitData = []
@@ -171,15 +203,25 @@ def extracth5adclusterids(data, ID):
 def retrieveResults(adata, ids,stage):
     '''
     retrieve results from adata
-    args:
-    adata: IPF database
-    ids: id of cells in each stage
-    stage: stage id
-    out:
-    Rep
-    cluster_type
-    top_gene
-    average_value
+    parameters
+    ------------------
+    adata: anndata
+        IPF database
+    ids: int
+        id of cells in each stage
+    stage: int
+        stage id
+    
+    return
+    ------------------
+    Rep: list
+        representations of sampled gaussian data points
+    cluster_type: list
+        cell types of clusters
+    top_gene: list
+        top 100 differential genes  
+    average_value: list
+        average value of each cluster
     '''
     Rep = []
     average_value = []
@@ -231,15 +273,22 @@ def updateAttributes(adata,reps):
     '''
     update stage, cluster id of each stage, top 100 differential genes, cell types of clusters to anndata
 
-    args: 
-    adata: anndata of database
-    stage: the IPF stage of this fold of data
+    parameters
+    ------------------
+    adata: anndata
+        anndata of database
+    reps: list
+        representations of sampled gaussian data points
     
     
-    returns: 
-    adata: updated anndata of database
-    rep: representations of sampled gaussian data points
-    average_cluster: cluster.X average values
+    return
+    ------------------ 
+    adata: anndata
+        updated anndata of database
+    rep: list
+        representations of sampled gaussian data points
+    average_cluster: np.array
+        average expression of each cluster
     '''
     #stageids = adata.obs[adata.obs['stage'] == stage].index.tolist()
     #stageadata = adata[stageids]
@@ -333,23 +382,6 @@ def get_all_adj_adata(adatas):
   
     return adata
 
-    # adata0.obsp['gcn_connectivities'] = adata0.obsp['gcn_connectivities'].tocoo()
-    # adata1.obsp['gcn_connectivities'] = adata1.obsp['gcn_connectivities'].tocoo()
-    # adata2.obsp['gcn_connectivities'] = adata2.obsp['gcn_connectivities'].tocoo()
-    # adata3.obsp['gcn_connectivities'] = adata3.obsp['gcn_connectivities'].tocoo()
-    # gcn_data = adata0.obsp['gcn_connectivities'].data.tolist()
-    # col = adata0.obsp['gcn_connectivities'].col.tolist()
-    # row = adata0.obsp['gcn_connectivities'].row.tolist()
-    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].col).tolist()
-    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].row).tolist()
-    # gcn_data+=adata1.obsp['gcn_connectivities'].data.tolist()
-    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].col).tolist()
-    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].row).tolist()
-    # gcn_data+=adata2.obsp['gcn_connectivities'].data.tolist()
-    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].col).tolist()
-    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].row).tolist()
-    # print(max(row))
-    # gcn_data+=adata3.obsp['gcn_connectivities'].data.tolist()
 def mergeAdata(path,total_stages):
     '''
     merge adata file from different stage to a whole one
@@ -360,16 +392,9 @@ def mergeAdata(path,total_stages):
         adata = sc.read_h5ad(os.path.join(path, 'stagedata/%d.h5ad'%i))
         adata.obs['stage'] = i
         adatas.append(adata)
-    # adata0 = sc.read_h5ad(os.path.join(path, 'stagedata/0.h5ad'))
-    # adata1 = sc.read_h5ad(os.path.join(path, 'stagedata/1.h5ad'))
-    # adata2 = sc.read_h5ad(os.path.join(path,'stagedata/2.h5ad'))
-    # adata3 = sc.read_h5ad(os.path.join(path,'stagedata/3.h5ad'))
     for i, each in enumerate(adatas):
         adatas[i].obsp['gcn_connectivities'] = adatas[i].obsp['gcn_connectivities'].tocoo()
-    # adata0.obsp['gcn_connectivities'] = adata0.obsp['gcn_connectivities'].tocoo()
-    # adata1.obsp['gcn_connectivities'] = adata1.obsp['gcn_connectivities'].tocoo()
-    # adata2.obsp['gcn_connectivities'] = adata2.obsp['gcn_connectivities'].tocoo()
-    # adata3.obsp['gcn_connectivities'] = adata3.obsp['gcn_connectivities'].tocoo()
+
     
     gcn_data = adatas[0].obsp['gcn_connectivities'].data.tolist()
     col = adatas[0].obsp['gcn_connectivities'].col.tolist()
@@ -381,14 +406,6 @@ def mergeAdata(path,total_stages):
         row+=(current_shape+ adatas[i].obsp['gcn_connectivities'].row).tolist()
         gcn_data+=adatas[i].obsp['gcn_connectivities'].data.tolist()
 
-    # gcn_data+=adata1.obsp['gcn_connectivities'].data.tolist()
-    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].col).tolist()
-    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].row).tolist()
-    # gcn_data+=adata2.obsp['gcn_connectivities'].data.tolist()
-    # col+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].col).tolist()
-    # row+=(adata0.obsp['gcn_connectivities'].shape[0]+ adata1.obsp['gcn_connectivities'].shape[0]+ adata2.obsp['gcn_connectivities'].shape[0]+ adata3.obsp['gcn_connectivities'].row).tolist()
-    # gcn_data+=adata3.obsp['gcn_connectivities'].data.tolist()
-
     #get X
     if sp.isspmatrix(adatas[0].X):
         X = adatas[0].X
@@ -396,32 +413,20 @@ def mergeAdata(path,total_stages):
         X = csr_matrix(adatas[0].X)
     for i in range(1,total_stages):
         X = sp.vstack((X, adatas[i].X), format='csr')
-    # X = sp.vstack((X, adata1.X), format='csr')
-    # X = sp.vstack((X, adata2.X), format='csr')
-    # X = sp.vstack((X, adata3.X), format='csr')
     
     #get geneWeight
     geneWeight = adatas[0].layers['geneWeight']
     for i in range(1,total_stages):
         geneWeight = sp.vstack((geneWeight, adatas[i].layers['geneWeight']), format='csr')
-    # geneWeight = sp.vstack((geneWeight, adata1.layers['geneWeight']), format='csr')
-    # geneWeight = sp.vstack((geneWeight, adata2.layers['geneWeight']), format='csr')
-    # geneWeight = sp.vstack((geneWeight, adata3.layers['geneWeight']), format='csr')
+
     #get var
     if 'concat' in adatas[0].layers.keys():
         concat = adatas[0].layers['concat']
         for i in range(1,total_stages):
             concat = sp.vstack((concat, adatas[i].layers['concat']), format='csr')
-        # concat = sp.vstack((concat, adata1.layers['concat']), format='csr')
-        # concat = sp.vstack((concat, adata2.layers['concat']), format='csr')
-        # concat = sp.vstack((concat, adata3.layers['concat']), format='csr')
+
     
     variable = adatas[0].var 
-    
-    # adata0.obs['stage'] = 0
-    # adata1.obs['stage'] = 1
-    # adata2.obs['stage'] = 2
-    # adata3.obs['stage'] = 3
     
     #get obs
     obs = [each.obs for each in adatas]
@@ -449,13 +454,7 @@ def mergeAdata(path,total_stages):
     clustertype = {}
     for i in range(total_stages):
         topGene[str(i)] = adatas[i].uns['topGene']
-        # top_gene_fold_change[str(i)]=adatas[i].uns['logfoldchanges']
-        # top_gene_pvals_adj[str(i)]=adatas[i].uns['top_gene_pvals_adj']
         clustertype[str(i)]=adatas[i].uns['clusterType']
-    # topGene['0']=adata0.uns['topGene']
-    # topGene['1']=adata1.uns['topGene']
-    # topGene['2']=adata2.uns['topGene']
-    # topGene['3']=adata3.uns['topGene']
     #top gene fold_change 
         adatas[i].uns['logfoldchanges'] = []
         adatas[i].uns['top_gene_pvals_adj'] = []
@@ -463,47 +462,8 @@ def mergeAdata(path,total_stages):
             adatas[i].uns['logfoldchanges'].append(adatas[i].uns['rank_genes_groups']['logfoldchanges'][str(j)])
             adatas[i].uns['top_gene_pvals_adj'].append(adatas[i].uns['rank_genes_groups']['pvals_adj'][str(j)])
 
-    # adata0.uns['logfoldchanges'] = []
-    # adata0.uns['top_gene_pvals_adj'] = []
-    # for i in set(adata0.obs['leiden']):
-    #     adata0.uns['top_gene_pvals_adj'].append(adata0.uns['rank_genes_groups']['pvals_adj'][str(i)])
-    #     adata0.uns['logfoldchanges'].append(adata0.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    # adata1.uns['logfoldchanges'] = []
-    # adata1.uns['top_gene_pvals_adj'] = []
-    # for i in set(adata1.obs['leiden']):
-    #     adata1.uns['top_gene_pvals_adj'].append(adata1.uns['rank_genes_groups']['pvals_adj'][str(i)])
-    #     adata1.uns['logfoldchanges'].append(adata1.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    # adata2.uns['logfoldchanges'] = []
-    # adata2.uns['top_gene_pvals_adj'] = []
-    # for i in set(adata2.obs['leiden']):
-    #     adata2.uns['top_gene_pvals_adj'].append(adata2.uns['rank_genes_groups']['pvals_adj'][str(i)])
-    #     adata2.uns['logfoldchanges'].append(adata2.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    # adata3.uns['logfoldchanges'] = []
-    # adata3.uns['top_gene_pvals_adj'] = []
-    # for i in set(adata3.obs['leiden']):
-    #     adata3.uns['top_gene_pvals_adj'].append(adata3.uns['rank_genes_groups']['pvals_adj'][str(i)])
-    #     adata3.uns['logfoldchanges'].append(adata3.uns['rank_genes_groups']['logfoldchanges'][str(i)])
-    # top_gene_fold_change = {}
-    # top_gene_fold_change['0']=adata0.uns['logfoldchanges']
-    # top_gene_fold_change['1']=adata1.uns['logfoldchanges']
-    # top_gene_fold_change['2']=adata2.uns['logfoldchanges']
-    # top_gene_fold_change['3']=adata3.uns['logfoldchanges']
-    #top gene pvals_adj
-    # top_gene_pvals_adj = {}
-    # top_gene_pvals_adj['0']=adata0.uns['top_gene_pvals_adj']
-    # top_gene_pvals_adj['1']=adata1.uns['top_gene_pvals_adj']
-    # top_gene_pvals_adj['2']=adata2.uns['top_gene_pvals_adj']
-    # top_gene_pvals_adj['3']=adata3.uns['top_gene_pvals_adj']
     #get uns.edges
     edges = eval(open(os.path.join(path,'edges.txt')).read())
-    #get clusterType
-
-    # clustertype = {}
-    
-    # clustertype['0']=adata0.uns['clusterType']
-    # clustertype['1']=adata1.uns['clusterType']
-    # clustertype['2']=adata2.uns['clusterType']
-    # clustertype['3']=adata3.uns['clusterType']
     clusterType = clustertype
     #build new anndata and assign attribtues and write dataset
     adata = anndata.AnnData(X=X,obs=obs,var=variable)

@@ -10,15 +10,19 @@ from .processTFs import readIdremJson
 def scoreAgainstBackground(background,input,all=False,mean=None,std=None):
     '''
     Calculate the p-value of the input gene expression change based on the background gene expression change.
-    parameters:
+    
+    parameters
+    --------------------
     background: the background gene expression change
     input: the input gene expression change
     all: if all is True, the input gene expression change will be compared with all the background gene expression changes. Otherwise, the input gene expression change will be compared with each background gene expression change.
     mean: the mean of the background gene expression change
     std: the standard deviation of the background gene expression change
 
-    return:
-    p-value of the input gene expression change
+    return
+    --------------------
+    cdf: np.float
+        p-value of the input gene expression change
     '''
 
     if all:
@@ -279,15 +283,23 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
 def getTopMarkersFromIDREM(path, background,cutoff=None,topN=None,one_dist=False):
     '''
     Get the top markers for each track from IDREM results.
-    parameters:
-    path: the directory to the IDREM results.
-    background: the background gene expression change
-    cutoff: the cutoff for p-value. Default is None.
-    topN: the number of top markers to return. Default is None.
-    one_dist: whether to consider all the background gene expression changes as one distribution. Default is False.
+    parameters
+    --------------------
+    path: str
+        the directory to the IDREM results.
+    background: np.array
+        the background gene expression change
+    cutoff: float
+        the cutoff for p-value. Default is None.
+    topN: int
+        the number of top markers to return. Default is None.
+    one_dist: bool
+        whether to consider all the background gene expression changes as one distribution. Default is False.
 
-    return:
-    a dictionary of top markers for each track.
+    return
+    ----------------
+    out:    dict
+        a dictionary of top markers for each track.
     '''
     out = {}
     filenames = os.listdir(path)
@@ -299,23 +311,28 @@ def getTopMarkersFromIDREM(path, background,cutoff=None,topN=None,one_dist=False
                 out[each] = getTopMarkers(path,background,name,cutoff,topN,one_dist=one_dist)
             else:
                 out[each] = getTopMarkers(path,background[each],name,cutoff,topN)
-            # print(out[each]['decreasing'])
-            # df = pd.DataFrame.from_dict(out[each], orient='index')
     return out
 
 def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=None):
     '''
     Get the top markers for each track from IDREM results and save as a csv file.
-    parameters:
-    directory: the directory to the IDREM results.
-    background: the directory to the background gene expression change.
-    cutoff: the cutoff for p-value. Default is None.
-    topN: the number of top markers to return. Default is None.
-    save_dir: the directory to save the csv file.
+    
+    parameters
+    --------------------
+    directory: str
+        the directory to the IDREM results.
+    background: str
+        the directory to the background gene expression change.
+    cutoff: float
+        the cutoff for p-value. Default is None.
+    topN: int
+        the number of top markers to return. Default is None.
+    save_dir: str
+        the directory to save the csv file.
 
-    return:
-    None.
-
+    return
+    ---------------
+    None
     '''
     background = dict(np.load(background,allow_pickle=True).tolist())
     out = getTopMarkersFromIDREM(directory,background,topN=topN,cutoff=cutoff)
@@ -337,14 +354,22 @@ def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=
 def runGetProgressionMarker(directory,background, cutoff=0.05, topN=None):
     '''
     Get the top markers for each track from IDREM results.
-    parameters:
-    directory: the directory to the IDREM results.
-    background: the directory to the background gene expression change.
-    cutoff: the cutoff for p-value. Default is 0.05.
-    topN: the number of top markers to return. Default is None.
+    
+    parameters
+    --------------------
+    directory: str
+        the directory to the IDREM results.
+    background: str
+        the directory to the background gene expression change.
+    cutoff: float
+        the cutoff for p-value. Default is 0.05.
+    topN: int
+        the number of top markers to return. Default is None.
 
-    return:
-    a dictionary of top markers for each track.
+    return
+    ---------------
+    out:    dict
+        a dictionary of top markers for each track.
     '''
     out = getTopMarkersFromIDREM(directory,background,cutoff = cutoff,topN=topN)
     return out
@@ -353,14 +378,22 @@ def runGetProgressionMarker(directory,background, cutoff=0.05, topN=None):
 def runGetProgressionMarker_one_dist(directory,background,size, cutoff=0.05, topN=None):
     '''
     Get the top markers for each track from IDREM results and consider the whole background as one distribution.
-    parameters:
-    directory: the directory to the IDREM results.
-    background: the directory to the background gene expression change.
-    cutoff: the cutoff for p-value. Default is 0.05.
-    topN: the number of top markers to return. Default is None.
+    
+    parameters
+    --------------------
+    directory: str
+        the directory to the IDREM results.
+    background: str
+        the directory to the background gene expression change.
+    cutoff: float
+        the cutoff for p-value. Default is 0.05.
+    topN: int
+        the number of top markers to return. Default is None.
 
-    return:
-    a dictionary of top markers for each track.
+    return
+    ---------------
+    out:    
+        a dictionary of top markers for each track.
     '''
 
     one_dist  = []

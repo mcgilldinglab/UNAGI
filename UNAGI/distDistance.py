@@ -34,12 +34,9 @@ def getSimilarity(adatai,adataj, i, j):
     '''
     calculate the differential gene similarity between two clusters. Differentail gene similarity = (1-Jaccard index) * gene ranking difference factor
     
-    Parameters: 
-
+    parameters
     -------------------
-
     adatai: anndata
-    
         The data of stage i
     adataj: anndata 
         The data of stage j
@@ -48,12 +45,9 @@ def getSimilarity(adatai,adataj, i, j):
     j: int
         the cluster id in stage j
 
-    Return: 
-
+    return
     -------------------
-
     distance: np.array
-    
         The distance of top 100 differential gene between two clusters
 
     '''
@@ -95,10 +89,8 @@ def mcSampling(mus, sigmas):
     for example the hidden space is 10, then sample 100 data point from input cell. If the number of cell is 200, then
     the sampled matrix will be [10, 200*100]
     
-    Parameters:
-
+    parameters
     -------------------
-
     mus: list
         mu vectors of input cells (shape: [number of cell, number of hidden nodes])
 
@@ -106,10 +98,8 @@ def mcSampling(mus, sigmas):
         sigma vectors of input cells (shape: [number of cell, number of hidden nodes])
 
     
-    Return:
-
+    return
     -------------------
-
     samplegaussian: list
         A list of sampled data-points from fitted gaussian distributions.
     '''
@@ -133,10 +123,8 @@ class GaussianRepThread(threading.Thread):
     '''
     The class to fit gaussian distributions for each hidden node.
 
-    Parameters:
-
+    parameters
     -------------------
-
     output: list
         A list of threads
     data: list
@@ -156,17 +144,13 @@ def fitClusterGaussianRepresentation(data):
     '''
     Fitting gaussian distributions for each hidden node
 
-    Parameters: 
-
+    parameters
     -------------------
-
     data: list
         A list of samples of the gaussian distribution of each hidden node
     
-    Return:
-
+    return
     -------------------
-
     out: list
         A list of mu and sigma of each hidden node
     '''
@@ -183,18 +167,15 @@ def getClusterRepresentation(mus, sigmas):
     '''
     MC strategy to sample gaussian data points. Use sampled data points to fit gaussian distributions
     
-    Parameters: 
-
+    parameters
     -------------------
-
     mus: np.array
         mu vectors of input cells (shape: [number of cell, number of hidden nodes])
     
     sigmas: np.array
         sigma vectors of input cells (shape: [number of cell, number of hidden nodes])
    
-    Return: 
-
+    return
     -------------------
     fitted_gaussian_distributions: list
         A list of fitted gaussian distributions
@@ -210,15 +191,12 @@ def normalizeDistance(distance):
     '''
     Normalize the kl divergence distance and top differential gene distances. (Use the min-max normalization method.)
     
-    Parameters: 
-
+    parameters
     -------------------
-
     distance: list
         A list of distance metrics. ([gaussian kl divergence, top differential gene difference])
     
-    return:
-
+    return
     -------------------
 
     normalizedDistance: np.array
@@ -247,8 +225,7 @@ def calculateKL(cluster1gaussian, cluster2gaussian):
     '''
     calculate KL divergence of multivariate gaussian distributions between two clusters.
     
-    Parameters:
-
+    parameters
     ------------------- 
 
     cluster1gaussian: list
@@ -258,8 +235,7 @@ def calculateKL(cluster1gaussian, cluster2gaussian):
         A list of [mean, std] of gaussian distribution of cluster 2
 
     
-    Return:
-
+    return
     -------------------
 
     kl: np.array
