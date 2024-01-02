@@ -18,7 +18,9 @@ class UNAGI:
     The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
     '''
     def __init__(self,):
-        pass
+        self.CPO_parameters = None
+        self.iDREM_parameters = None
+        self.species = 'human'
     def setup_data(self, data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
@@ -157,6 +159,63 @@ class UNAGI:
         self.model = VAE(self.input_dim, self.latent_dim, self.hidden_dim,beta=1,distribution=self.dist)
         # self.dis_model = Discriminator(self.input_dim)
         self.unagi_trainer = UNAGI_trainer(self.model,self.task,self.BATCHSIZE,self.epoch_initial,self.epoch_iter,self.device,self.lr, self.lr_dis,cuda=self.GPU)
+    def register_CPO_parameters(self,anchor_neighbors=10, max_neighbors=30, min_neighbors=5, resolution_min=0.8, resolution_max=1.2):
+        '''
+        The function to register the parameters for the CPO analysis. The parameters will be used to perform the CPO analysis.
+        parameters:
+        --------------
+        anchor_neighbors: int
+            the number of neighbors for each anchor cell.
+        max_neighbors: int
+            the maximum number of neighbors for each cell.
+        min_neighbors: int
+            the minimum number of neighbors for each cell.
+        resolution_min: float
+            the minimum resolution for the Leiden community detection.
+        resolution_max: float
+            the maximum resolution for the Leiden community detection.
+        '''
+        self.CPO_parameters = {}
+        self.CPO_parameters['anchor_neighbors'] = anchor_neighbors
+        self.CPO_parameters['max_neighbors'] = max_neighbors
+        self.CPO_parameters['min_neighbors'] = min_neighbors
+        self.CPO_parameters['resolution_min'] = resolution_min
+        self.CPO_parameters['resolution_max'] = resolution_max
+    def register_species(self,species):
+        '''
+        The function to register the species of the single-cell data.
+        parameters:
+        --------------
+        species: str
+            the species of the single-cell data.
+        '''
+        if species not in ['human','mouse']:
+            raise ValueError('species should be either human or mouse')
+        self.species = species
+
+    def register_iDREM_parameters(self,Normalize_data = 'Log_normalize_data', Minimum_Absolute_Log_Ratio_Expression = 0.5, Convergence_Likelihood = 0.001, Minimum_Standard_Deviation = 0.5):
+        '''
+        The function to register the parameters for the iDREM analysis. The parameters will be used to perform the iDREM analysis.
+        parameters:
+        --------------
+        Normalize_data: str
+            the method to normalize the data. Chosen from 'Log_normalize_data' (log normalize the data), 'Normalize_data' (normalize the data), and 'No_normalize_data' (do not normalize the data).
+        Minimum_Absolute_Log_Ratio_Expression: float
+            the minimum absolute log ratio expression for the iDREM analysis.
+        Convergence_Likelihood: float
+            the convergence likelihood for the iDREM analysis.
+        Minimum_Standard_Deviation: float
+            the minimum standard deviation for the iDREM analysis.
+        '''
+        
+        self.iDREM_parameters = {}
+        if Normalize_data not in ['Log_normalize_data','Normalize_data','No_normalize_data']:
+            raise ValueError('Normalize_data should be chosen from Log_normalize_data, Normalize_data and No_normalize_data')
+        self.iDREM_parameters['Normalize_data'] = Normalize_data
+        self.iDREM_parameters['Minimum_Absolute_Log_Ratio_Expression'] = Minimum_Absolute_Log_Ratio_Expression
+        self.iDREM_parameters['Convergence_Likelihood'] = Convergence_Likelihood
+        self.iDREM_parameters['Minimum_Standard_Deviation'] = Minimum_Standard_Deviation
+
     def run_UNAGI(self,idrem_dir):
         '''
         The function to launch the model training. The model will be trained iteratively. The number of iterations is specified by the `max_iter` parameter in the `setup_training` function.
@@ -174,6 +233,17 @@ class UNAGI:
                 initalcommand = 'mkdir '+ dir1 +' && mkdir '+dir2
                 p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
             unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,idrem_dir)
+            unagi_runner.set_up_species(self.species)
+            if self.CPO_parameters is not None:
+                if type (self.CPO_parameters) != dict:
+                    raise ValueError('CPO_parameters should be a dictionary')
+                else:
+                    unagi_runner.set_up_CPO(anchor_neighbors=self.CPO_parameters['anchor_neighbors'], max_neighbors=self.CPO_parameters['max_neighbors'], min_neighbors=self.CPO_parameters['min_neighbors'], resolution_min=self.CPO_parameters['resolution_min'], resolution_max=self.CPO_parameters['resolution_max'])
+            if self.iDREM_parameters is not None:
+                if type (self.iDREM_parameters) != dict:
+                    raise ValueError('iDREM_parameters should be a dictionary')
+                else:
+                    unagi_runner.set_up_iDREM(Minimum_Absolute_Log_Ratio_Expression = self.iDREM_parameters['Minimum_Absolute_Log_Ratio_Expression'], Convergence_Likelihood = self.iDREM_parameters['Convergence_Likelihood'], Minimum_Standard_Deviation = self.iDREM_parameters['Minimum_Standard_Deviation'])
             unagi_runner.run()
 
   

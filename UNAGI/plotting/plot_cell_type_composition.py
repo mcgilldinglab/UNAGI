@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scanpy as sc
 
-def plot_cell_type_composition(adata, cell_type_key, stage_key,ax=None,dpi=300,show_cutoff = 0.04, colormaps='Spectral',category_colors=None, save=None):
+def cell_type_composition(adata, cell_type_key, stage_key,ax=None,dpi=300,show_cutoff = 0.04, colormaps='Spectral',category_colors=None, save=None):
     '''
     Plot the cell type composition of each stage
     '''
@@ -26,7 +26,7 @@ def plot_cell_type_composition(adata, cell_type_key, stage_key,ax=None,dpi=300,s
     width = 0.3
     if ax is None:
         fig,ax = plt.subplots(figsize=(15, 3),dpi=dpi)
-    
+
     #transform the type of list to array
     # y_pos = [0, 1]
     for i in stage_types.keys():
