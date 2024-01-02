@@ -14,11 +14,17 @@ class analyst:
     '''
     The analyst class is the class to perform downstream analysis. The analyst class will calculate the hierarchical markers, dynamic markers and perform the pathway and drug perturbations. 
     parameters:
-    data_path: the directory of the data (h5ad format, e.g. org_dataset.h5ad).
-    iteration: the iteration used for analysis.
-    target_dir: the directory to save the results. Default is None.
-    customized_drug: the customized drug perturbation list. Default is None.
-    cmap_dir: the directory to the cmap database. Default is None.
+    ----------------
+    data_path: str
+        the directory of the data (h5ad format, e.g. org_dataset.h5ad).
+    iteration: int
+        the iteration used for analysis.
+    target_dir: str
+        the directory to save the results. Default is None.
+    customized_drug: str
+        the customized drug perturbation list. Default is None.
+    cmap_dir: str
+        the directory to the cmap database. Default is None.
     '''
     def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None):
         self.adata = sc.read(data_path)
@@ -38,7 +44,9 @@ class analyst:
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         parameters:
-        progressionmarker_background_sampling: the number of times to sample the background cells for dynamic markers discoveries.
+        ----------------
+        progressionmarker_background_sampling: int
+            the number of times to sample the background cells for dynamic markers discoveries.
         '''
         print('calculate hierarchical markers.....')
         hcmarkers= get_dataset_hcmarkers(self.adata,stage_key='stage',cluster_key='leiden',use_rep='umaps')
