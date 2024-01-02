@@ -545,6 +545,23 @@ class perturbation:
             perturbed_genes.append(out_temp)
         return drug_names, perturbed_genes
     def startAutoPerturbation_online(self,lastCluster,perturbed_genes,CUDA=False):
+        '''
+        Start the perturbation analysis (online version).
+
+        parameters:
+        -------------------
+        lastCluster: int
+            The cluster id of the last cluster in the track
+        perturbed_genes: list
+            A list of perturbed genes
+        CUDA: bool
+            Whether to use GPU
+
+        return:
+        -------------------
+        out: dict
+            A dictionary of perturbation results
+        '''
         out = {}
         out['online'] = {}
         track = self.getTrack(len(self.stageadata)-1,lastCluster)
@@ -600,6 +617,28 @@ class perturbation:
         return out
 
     def startAutoPerturbation_online_speed(self,lastClusters,perturbed_genes,track_names,CUDA=False):
+        '''
+        Start the perturbation analysis (online version).
+        
+        parameters:
+        -------------------
+        lastClusters: list
+            A list of last clusters in the track
+        perturbed_genes: list
+            A list of perturbed genes
+        track_names: list
+            A list of track names
+        CUDA: bool
+            Whether to use GPU
+
+        return:
+        -------------------
+        out1: dict
+            A dictionary of perturbation results
+        out2: dict
+            A dictionary of perturbation results
+
+        '''
         out = {}
         out['online'] = {}
         
@@ -651,27 +690,23 @@ class perturbation:
                 out2[track_names[i]]['online'][str(j)] = outs[1][i][j]
         
         return out1, out2
-
-        # for i, selectedcluster in enumerate(track):
-        #     # print(i)
-        #     threads = []
-        #     self.stageadata[i].obs['leiden'] = self.stageadata[i].obs['leiden'].astype('string')
-        #     perturbation_results[i] += self.perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, None,impactFactor,CUDA)
-                                      
-        #     for thread in threads:
-        #         thread.start()
-        #     for thread in threads:
-        #         thread.join()
-            
-        #     for od, each in enumerate(perturbation_results[i]):
-        #         tempout = []
-        #         for kk in range(self.total_stage):
-        #             tempout.append(each[len(each)-self.total_stage+kk])
-        #         out['online'][str(i)] = tempout
-
-        # return out
     
     def assign_random_direction_to_random_genes(self,random_genes):
+        '''
+        Build the the sets of random genes with random direction.
+
+        parameters:
+        -------------------
+        random_genes: list
+            A of list of random genes
+
+        return:
+        -------------------
+        out: list
+            A list of random genes with random direction
+        reversed_out: list
+            A list of random genes with reversed direction
+        '''
         out = []
         reversed_out = []
         temp_random_genes = random_genes.copy()
@@ -697,6 +732,30 @@ class perturbation:
         return out,reversed_out
    #~~~~~         
     def startAutoPerturbation(self,lastCluster,bound,mode,CUDA = True,random_genes= None, random_times = None,written=True):
+        '''
+        Start the perturbation analysis.
+
+        parameters:
+        -------------------
+        lastCluster: int
+            The cluster id of the last cluster in the track
+        bound: float    
+            The perturbation bound
+        mode: str
+            The perturbation mode, can be 'drug', 'pathway', 'perfect', 'random_background', 'online_random_background'
+        CUDA: bool
+            Whether to use GPU
+        random_genes: list
+            A list of random genes
+        random_times: int
+            The number of random genes
+        written: bool
+            Whether to write the results to disk
+
+        return:
+        -------------------
+        None
+        '''
         track = self.getTrack(len(self.stageadata)-1,lastCluster)
 
         track_name = str(track[0][0]) 
@@ -906,7 +965,28 @@ class perturbation:
                             tempout.append(each[len(each)-self.total_stage+kk])
                         self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][str(i)] = tempout
     def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = True):
-        
+        '''
+        Perform perturbation.
+
+        parameters:
+        -------------------
+        mode: str
+            perturbation mode, 'drug', 'pathway', 'random_background', 'online_random_background', 'perfect'
+        log2fc: float
+            log2fc of the perturbation
+        inplace: bool
+            whether to write the perturbation results to the adata object
+        random_times: int
+            number of random genes to be perturbed
+        random_genes: int
+            number of random genes to be perturbed
+        CUDA: bool
+            whether to use CUDA
+
+        return:
+        -------------------
+        None
+        '''
         if inplace == False:
             written=True
         else:
@@ -944,14 +1024,33 @@ class perturbation:
                 self.perturb_stage_data_mean = []
     def run_online_speed(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,stage = None, lastCluster=None,CUDA=False):
         '''
-        allTracks: one track or all tracks bool
-        stage: stage to be perturbed
-        lastCluster: last cluster to be perturbed (if allTracks is False)
-        perturbated_gene: gene to be perturbed format a:0.5, b: 2.5, c:0.5...
-        perturbated_gene_reversed: gene to be perturbed format a:2.0, b: 0.4, c:2.0... (reversed log2fc to the original)
-        unit_name: name of the unit to be perturbed
-        stage: stage to be perturbed, if None choose all
-        CUDA: whether to use CUDA
+        Perform online perturbation.
+        
+        parameters:
+        -------------------
+        allTracks: bool
+            Using one track or all tracks
+
+        perturbated_gene: dict
+            gene to be perturbed and the regulated intensity ({a:0.5, b: 2.5, c:0.5...})
+        perturbated_gene_reversed: dict
+            gene to be perturbed and the regulated intensity ({a:2.0, b: 0.4, c:2.0...} (reversed log2fc to the original)
+
+        unit_name: str
+            name of the unit to be perturbed
+        stage: 
+            stage to be perturbed, if None choose all
+        CUDA: bool
+            whether to use CUDA
+
+        return:
+        -------------------
+        perturbation_score: float
+            perturbation score
+        pval: float
+            p value
+        out_deltaD: dict
+            deltaD of the perturbed unit
         '''
         import time
 
@@ -1052,7 +1151,20 @@ class perturbation:
             print('step6 time: ', step6_end - step6_start)
         return perturbation_score, pval,out_deltaD
     def analysis(self,mode,log2fc,all=True,stage=None):
-        # self.adata = self.read_mergeadata()
+        '''
+        Analysis of perturbation results
+        
+        parameters:
+        mode: str
+            The mode is choosing from ['drug', 'pathway', 'online']
+        log2fc: float
+            log2fc is the log2 fold change of perturbation
+        all: bool
+            all is whether to analysis all tracks or one track
+        stage: int
+            stage is the stage to be analysis, if all is True, stage is None
+        '''
+
         self.adata.obs['leiden'] = self.adata.obs['leiden'].astype('string')
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
         analyst = perturbationAnalysis(self.adata,self.idrem_dir, stage=stage,log2fc = log2fc, mode = mode)

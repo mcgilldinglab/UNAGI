@@ -7,6 +7,6 @@ This contains examples and tutorials
     :maxdepth: 2
     :caption: Contents:
 
-    notebooks/examples/index
     notebooks/tutorials/index
+    notebooks/examples/index
     notebooks/manuscript_figs/index

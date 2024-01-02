@@ -99,6 +99,22 @@ class UNAGI_runner:
         return adata,averageValue,reps
     
     def set_up_CPO(self, anchor_neighbors, max_neighbors, min_neighbors, resolution_min, resolution_max):
+        '''
+        Set up the parameters for finding the clustering optimal parameters.
+
+        parameters:
+        ------------
+        anchor_neighbors: int
+            the number of neighbors for the anchor cells.
+        max_neighbors: int
+            the maximum number of neighbors for the single cell data.
+        min_neighbors: int
+            the minimum number of neighbors for the single cell data.
+        resolution_min: float
+            the minimum resolution for the single cell data.
+        resolution_max: float   
+            the maximum resolution for the single cell data.
+        '''
         self.setup_CPO = True
         self.anchor_neighbors = anchor_neighbors
         self.max_neighbors = max_neighbors
@@ -107,6 +123,9 @@ class UNAGI_runner:
         self.resolution_max = resolution_max
 
     def run_CPO(self):
+        '''
+        Find the clustering optimal parameters for the single cell data.
+        '''
         max_adata_cells = 0
         num_cells = []
         for each in self.adata_stages:
@@ -126,6 +145,9 @@ class UNAGI_runner:
             self.resolutions,_ = auto_resolution(self.adata_stages, anchor_index, self.neighbor_parameters, self.resolution_min, self.resolution_max)
     
     def update_cell_attributes(self):
+        '''
+        Update and save the cell attributes including the top genes, cell types and latent representations.
+        '''
         self.averageValues = []
         reps = []
         for i in range(0,len(self.adata_stages)):
@@ -143,16 +165,43 @@ class UNAGI_runner:
         np.save(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),self.averageValues)
         saveRep(reps,self.data_path,self.iteration)
     def build_temporal_dynamics_graph(self):
+        '''
+        Build the temporal dynamics graph.
+        '''
         self.edges = getandUpadateEdges(self.total_stage,self.data_path,self.iteration)
     def set_up_IDREM(self,Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood, Minimum_Standard_Deviation):
+        '''
+        Set up the parameters for running the iDREM software.
+
+        parameters:
+        ------------
+        Minimum_Absolute_Log_Ratio_Expression: float
+            the minimum absolute log ratio expression.
+        Convergence_Likelihood: float
+            the convergence likelihood.
+        Minimum_Standard_Deviation: float
+            the minimum standard deviation.
+        '''
         self.setup_IDREM = True
         self.Minimum_Absolute_Log_Ratio_Expression = Minimum_Absolute_Log_Ratio_Expression
         self.Convergence_Likelihood = Convergence_Likelihood
         self.Minimum_Standard_Deviation = Minimum_Standard_Deviation
     def set_up_species(self, species):
+        '''
+        Set up the species for running the iDREM software.
+
+        parameters:
+        ------------
+        species: str
+            the species of the single cell data.
+        '''
+
         print('Species: Running on %s data'%species)
         self.species = species
     def run_IDREM(self):
+        '''
+        Run the iDREM software.
+        '''
         averageValues = np.load(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),allow_pickle=True)
         paths = getClusterPaths(self.edges,self.total_stage)
         idrem= getClusterIdrem(paths,averageValues,self.total_stage)
@@ -176,15 +225,30 @@ class UNAGI_runner:
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
             
     def update_gene_weights_table(self,topN=100):
+        '''
+        Update the gene weights table.
+
+        parameters:
+        ------------
+        topN: int
+            the number of top genes to be selected.
+        
+        '''
         TFs = getTFs(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),total_stage=self.total_stage)
         scope = getTargetGenes(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),topN)
         p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames,self.total_stage)
         #np.save('../data/mes/'+str(iteration)+'/tfinfo.npy',np.array(p))
         updateLoss = updataGeneTablesWithDecay(self.data_path,str(self.iteration),p,self.total_stage)
     def build_iteration_dataset(self):
+        '''
+        Build the iteration dataset.
+        '''
         mergeAdata(os.path.join(self.data_path,str(self.iteration)),total_stages=self.total_stage)
        
     def run(self):
+        '''
+        Run the UNAGI pipeline.
+        '''
         self.load_stage_data()
         if self.iteration == 0:
             is_iterative = False

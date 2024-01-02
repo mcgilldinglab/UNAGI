@@ -19,15 +19,27 @@ class UNAGI_trainer():
     '''
     The trainer class is the class to train the UNAGI model. The trainer class will train the model for a given number of epochs. 
     parameters:
-    model: the model to be trained.
-    modelName: the name of the model.
-    batch_size: the batch size for training.
-    epoch_initial: the initial epoch for training.
-    epoch_iter: the total number of epochs for training.
-    device: the device to train the model.
-    lr: the learning rate for the variational autoencoder (VAE) model.
-    lr_dis: the learning rate for the discriminator.
-    cuda: whether to use GPU for the model training. Default is True.
+    ----------------
+    model: object
+        the model to be trained.
+    modelName: str
+        the name of the model.
+    batch_size: int
+        the batch size for training.
+    epoch_initial: int
+        the initial epoch for training.
+    epoch_iter: int
+        the total number of epochs for training.
+    device: str
+        the device to train the model.
+    lr: float
+        the learning rate for the variational autoencoder (VAE) model.
+    lr_dis: float
+        the learning rate for the discriminator.
+    cuda: bool
+        whether to use GPU for the model training. Default is True.
+    
+
     '''
     def __init__(self,model, modelName,batch_size,epoch_initial,epoch_iter,device,lr, lr_dis,cuda=True):
         super(UNAGI_trainer, self).__init__()
@@ -44,12 +56,25 @@ class UNAGI_trainer():
         '''
         The function to train the model.
         parameters:
-        adata: the single-cell data.
-        vae: the model to be trained.
-        train_loader: the data loader for the model training.
-        adj: the adjacency matrix of cell graphs.
-        geneWeights: the gene weights for the model training. Default is None.
-        use_cuda: whether to use GPU for the model training. Default is True.
+        ----------------
+
+        adata: anndata
+            the single-cell data.
+        vae: model
+            the model to be trained.
+        train_loader: DataLoader
+            the data loader for the model training.
+        adj: scipy.sparse.csr_matrix
+            the adjacency matrix of cell graphs.
+        geneWeights: np.array
+            the gene weights for the model training. Default is None.
+        use_cuda: bool
+            whether to use GPU for the model training. Default is True.
+
+        return:
+        ----------------
+        total_epoch_loss_train: float
+            the total loss for the model training.
         '''
         # initialize loss accumulator
         epoch_loss = 0.
@@ -105,10 +130,24 @@ class UNAGI_trainer():
         '''
         Retrieve the latent representation of the single-cell data.
         parameters:
-        adata: the single-cell data.
-        iteration: the iteration used for analysis.
-        target_dir: the directory of the task.
+        ----------------
+        adata: anndata
+            the single-cell data.   
+        iteration: int
+            the iteration used for analysis.
+        target_dir: str
+            the directory of the task.
+
+        return:
+        ----------------
+        z_locs: np.array
+            the mean of the latent representation.
+        z_scales: np.array
+            the variance of the latent representation.
+        TZ: np.array
+            the latent representation.
         '''
+
         if 'X_pca' not in adata.obsm.keys():
             sc.pp.pca(adata)
     
@@ -154,10 +193,15 @@ class UNAGI_trainer():
         '''
         The function to train the model.
         parameters:
-        adata: the single-cell data.
-        iteration: the iteration used for analysis.
-        target_dir: the directory of the task.
-        is_iterative: whether to use the iterative training strategy. Default is False.
+        ----------------
+        adata: anndata
+            the single-cell data.
+        iteration: int
+            the iteration used for analysis.
+        target_dir: str 
+            the directory of the task.
+        is_iterative: bool
+            whether to use the iterative training strategy. Default is False.
         '''
         
         assert 'X_pca' in adata.obsm.keys(), 'PCA is not performed'
