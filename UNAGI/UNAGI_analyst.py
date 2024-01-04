@@ -5,11 +5,11 @@ import pickle
 import scanpy as sc
 import subprocess
 import numpy as np
-from .afterall_utils import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking
-from .get_hcmarkers import get_dataset_hcmarkers
-from .speedup_perturbation import perturbation
-from .shuffle_progressionMarker_background import get_progressionmarker_background
-from .getProgressionTopMarkers import runGetProgressionMarker_one_dist
+from .utils.analysis_helper import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking
+from .marker_discovery.hierachical_static_markers import get_dataset_hcmarkers
+from .perturbations.speedup_perturbation import perturbation
+from .marker_discovery.dynamic_markers_helper import get_progressionmarker_background
+from .marker_discovery.dynamic_markers import runGetProgressionMarker_one_dist
 class analyst:
     '''
     The analyst class is the class to perform downstream analysis. The analyst class will calculate the hierarchical markers, dynamic markers and perform the pathway and drug perturbations. 

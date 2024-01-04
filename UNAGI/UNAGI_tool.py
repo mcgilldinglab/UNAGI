@@ -3,16 +3,16 @@ This is the main module of UNAGI. It contains the UNAGI class, which is the main
 '''
 import subprocess
 import numpy as np
-from .utils import split_dataset_into_stage, get_all_adj_adata
+from .utils.attribute_utils import split_dataset_into_stage, get_all_adj_adata
 import os
 import scanpy as sc
 import gc
-from .gcn_utilis import get_gcn_exp
-from .runner import UNAGI_runner
+from .utils.gcn_utils import get_gcn_exp
+from .train.runner import UNAGI_runner
 import torch
-from .pyro_models import VAE,Discriminator
+from .model.models import VAE,Discriminator
 from .UNAGI_analyst import analyst
-from .trainer import UNAGI_trainer
+from .train.trainer import UNAGI_trainer
 class UNAGI:
     '''
     The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
