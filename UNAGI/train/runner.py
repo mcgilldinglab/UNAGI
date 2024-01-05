@@ -13,7 +13,10 @@ from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import csr_matrix
 class UNAGI_runner:
     '''
-    The UNAGI_runner class is used to set up the hyperparameters to run iDREM, find clustering optimal parameters and run the UNAGI model . It takes the following parameters:
+    The UNAGI_runner class is used to set up the hyperparameters to run iDREM, find clustering optimal parameters and run the UNAGI model . It takes the following 
+    
+    parameters
+    ------------
     data_path: the path to the data
     total_stage: the total number of time-series stages
     iteration: the total iteration to run the UNAGI model
@@ -51,14 +54,14 @@ class UNAGI_runner:
         '''
         Retreive the latent representations of given single cell data. Performing clusterings, generating the UMAPs, annotating the cell types and adding the top genes and cell types attributes.
 
-        parameters:
+        Parameters
         ------------
         adata: anndata
             the single cell data.
         stage: int
             the stage of the single cell data.
 
-        returns:
+        return
         ------------
         adata: anndata
             the annotated single cell data.
@@ -102,7 +105,7 @@ class UNAGI_runner:
         '''
         Set up the parameters for finding the clustering optimal parameters.
 
-        parameters:
+        Parameters
         ------------
         anchor_neighbors: int
             the number of neighbors for the anchor cells.
@@ -173,7 +176,7 @@ class UNAGI_runner:
         '''
         Set up the parameters for running the iDREM software.
 
-        parameters:
+        Parameters
         ------------
         Minimum_Absolute_Log_Ratio_Expression: float
             the minimum absolute log ratio expression.
@@ -190,7 +193,7 @@ class UNAGI_runner:
         '''
         Set up the species for running the iDREM software.
 
-        parameters:
+        Parameters
         ------------
         species: str
             the species of the single cell data.
@@ -228,7 +231,7 @@ class UNAGI_runner:
         '''
         Update the gene weights table.
 
-        parameters:
+        Parameters
         ------------
         topN: int
             the number of top genes to be selected.

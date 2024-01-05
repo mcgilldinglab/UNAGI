@@ -544,7 +544,7 @@ class perturbation:
         '''
         Start the perturbation analysis (online version).
 
-        parameters:
+        parameters
         -------------------
         lastCluster: int
             The cluster id of the last cluster in the track
@@ -553,7 +553,7 @@ class perturbation:
         CUDA: bool
             Whether to use GPU
 
-        return:
+        return
         -------------------
         out: dict
             A dictionary of perturbation results
@@ -616,7 +616,7 @@ class perturbation:
         '''
         Start the perturbation analysis (online version).
         
-        parameters:
+        parameters
         -------------------
         lastClusters: list
             A list of last clusters in the track
@@ -627,7 +627,7 @@ class perturbation:
         CUDA: bool
             Whether to use GPU
 
-        return:
+        return
         -------------------
         out1: dict
             A dictionary of perturbation results
@@ -691,12 +691,12 @@ class perturbation:
         '''
         Build the the sets of random genes with random direction.
 
-        parameters:
+        parameters
         -------------------
         random_genes: list
             A of list of random genes
 
-        return:
+        return
         -------------------
         out: list
             A list of random genes with random direction
@@ -731,7 +731,7 @@ class perturbation:
         '''
         Start the perturbation analysis.
 
-        parameters:
+        parameters
         -------------------
         lastCluster: int
             The cluster id of the last cluster in the track
@@ -748,7 +748,7 @@ class perturbation:
         written: bool
             Whether to write the results to disk
 
-        return:
+        return
         -------------------
         None
         '''
@@ -964,7 +964,7 @@ class perturbation:
         '''
         Perform perturbation.
 
-        parameters:
+        parameters
         -------------------
         mode: str
             perturbation mode, 'drug', 'pathway', 'random_background', 'online_random_background', 'perfect'
@@ -979,7 +979,7 @@ class perturbation:
         CUDA: bool
             whether to use CUDA
 
-        return:
+        return
         -------------------
         None
         '''
@@ -1022,7 +1022,7 @@ class perturbation:
         '''
         Perform online perturbation.
         
-        parameters:
+        parameters
         -------------------
         allTracks: bool
             Using one track or all tracks
@@ -1039,7 +1039,7 @@ class perturbation:
         CUDA: bool
             whether to use CUDA
 
-        return:
+        return
         -------------------
         perturbation_score: float
             perturbation score
@@ -1095,14 +1095,33 @@ class perturbation:
         return perturbation_score, pval,out_deltaD
     def run_online(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,stage = None, lastCluster=None,CUDA=False):
         '''
-        allTracks: one track or all tracks bool
-        stage: stage to be perturbed
-        lastCluster: last cluster to be perturbed (if allTracks is False)
-        perturbated_gene: gene to be perturbed format a:0.5, b: 2.5, c:0.5...
-        perturbated_gene_reversed: gene to be perturbed format a:2.0, b: 0.4, c:2.0... (reversed log2fc to the original)
-        unit_name: name of the unit to be perturbed
-        stage: stage to be perturbed, if None choose all
-        CUDA: whether to use CUDA
+        Perform online perturbation.
+
+        parameters
+        -------------------
+        allTracks: bool
+            One track or all tracks
+        stage: int
+            stage to be perturbed
+        lastCluster: int
+            last cluster to be perturbed (if allTracks is False)
+        perturbated_gene: list
+            gene to be perturbed format a:0.5, b: 2.5, c:0.5...
+        perturbated_gene_reversed: list
+            gene to be perturbed format a:2.0, b: 0.4, c:2.0... (reversed log2fc to the original)
+        unit_name: str
+            name of the unit to be perturbed
+        stage: int
+            stage to be perturbed, if None choose all
+        CUDA: bool
+            whether to use CUDA
+
+        return
+        -------------------
+        perturbation_score: np.float
+            perturbation score
+        pval: np.float
+            p value
         '''
         import time
 
@@ -1150,7 +1169,8 @@ class perturbation:
         '''
         Analysis of perturbation results
         
-        parameters:
+        parameters
+        ----------------
         mode: str
             The mode is choosing from ['drug', 'pathway', 'online']
         log2fc: float

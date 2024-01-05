@@ -1,3 +1,6 @@
+'''
+The customized elbo to support the VAE and discriminator loss.
+'''
 from pyro import poutine
 import pyro.ops.jit
 import numpy as np
@@ -86,20 +89,6 @@ def graphUpdater(loss, model, guide,discriminator, optim,x,adj,i, start,end,devi
     else:
         return torch_item(loss)
     
-def mySigmoid(z):
-    '''
-    shifted sigmoid transformation of given data
-    parameters
-    ------------ 
-    z: input data
-
-    return
-    -------------     
-    out: data after shifted sigmoid transformation
-    '''
-    z = np.array(z)
-    out = 2*1/(1+np.exp(-z))
-    return out
 class myELBO(ELBO):
     '''
     The customized ELBO function for the VAE-GAN model. The ELBO function is modified to include the discriminator loss.

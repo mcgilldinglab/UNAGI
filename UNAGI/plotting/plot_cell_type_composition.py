@@ -8,6 +8,27 @@ import scanpy as sc
 def cell_type_composition(adata, cell_type_key, stage_key,ax=None,dpi=300,show_cutoff = 0.04, colormaps='Spectral',category_colors=None, save=None):
     '''
     Plot the cell type composition of each stage
+
+    Parameters
+    ----------
+    adata : AnnData object
+        Annotated data matrix.
+    cell_type_key : str
+        Key for cell type column in adata.obs.
+    stage_key : str
+        Key for stage column in adata.obs.
+    ax : matplotlib axis, optional
+        The default is None.
+    dpi : int, optional
+        The default is 300.
+    show_cutoff : float, optional
+        The default is 0.04.
+    colormaps : str, optional
+        The default is 'Spectral'.
+    category_colors : list, optional
+        The default is None.
+    save : str, optional
+        Path to save the figure. The default is None.
     '''
 
     all_types = adata.obs[cell_type_key].unique().tolist()
