@@ -26,11 +26,6 @@ Perform perturbations using compounds/drugs or pathways, analyze the perturbatio
 
 ```{eval-rst}
 
-.. automodule:: UNAGI.UNAGI_analyst
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 .. autosummary::
     :toctree: _autosummary
 
