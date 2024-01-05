@@ -2,6 +2,38 @@ import scanpy as sc
 
 
 def hierarchical_static_markers_heatmap(adata,stage,cluster,level,n_genes,stage_key,celltype_key,protein_encoding_gene=True,min_logfoldchange=1,dpi=None,save=None):
+    '''
+    Plot the heatmap of the hierarchical static markers of the chosen cluster and its siblings.
+
+    Parameters
+    ----------
+    adata : AnnData object
+        Annotated data matrix.
+    stage : int
+        Time point of the data.
+    cluster : int
+        Cluster id.
+    level : int
+        Level of the cluster.
+    n_genes : int
+        Number of genes to plot.
+    stage_key : str
+        Key for stage column in adata.obs.
+    celltype_key : str
+        Key for cell type column in adata.obs.
+    protein_encoding_gene : bool, optional
+        Whether to plot only protein encoding genes. The default is True.
+    min_logfoldchange : int, optional
+        Minimum log fold change. The default is 1.
+    dpi : int, optional
+        The default is None.
+    save : str, optional
+        Path to save the figure. The default is None.
+
+    Returns
+    ----------------
+    None
+    '''
     import warnings
     warnings.filterwarnings('ignore')
     if protein_encoding_gene:

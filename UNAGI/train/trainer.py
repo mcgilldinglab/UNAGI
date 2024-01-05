@@ -15,7 +15,8 @@ from pyro.optim import Adam
 class UNAGI_trainer():
     '''
     The trainer class is the class to train the UNAGI model. The trainer class will train the model for a given number of epochs. 
-    parameters:
+    
+    parameters
     ----------------
     model: object
         the model to be trained.
@@ -52,6 +53,7 @@ class UNAGI_trainer():
     def train_model(self,adata, vae, train_loader,adj, geneWeights=None, use_cuda=True):
         '''
         The function to train the model.
+
         parameters:
         ----------------
 
@@ -126,6 +128,7 @@ class UNAGI_trainer():
     def get_latent_representation(self,adata,iteration,target_dir):
         '''
         Retrieve the latent representation of the single-cell data.
+
         parameters:
         ----------------
         adata: anndata
@@ -189,7 +192,8 @@ class UNAGI_trainer():
     def train(self, adata, iteration, target_dir, is_iterative=False):
         '''
         The function to train the model.
-        parameters:
+
+        parameters
         ----------------
         adata: anndata
             the single-cell data.

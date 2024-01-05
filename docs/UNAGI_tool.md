@@ -1,7 +1,5 @@
 ## UNAGI launcher
 
-The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
-
 ```{eval-rst}
 
 .. automodule:: UNAGI.UNAGI_tool.UNAGI

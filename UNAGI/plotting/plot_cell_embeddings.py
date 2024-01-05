@@ -12,6 +12,21 @@ from sklearn.metrics import adjusted_rand_score,normalized_mutual_info_score
 from sklearn.neighbors import kneighbors_graph
 
 def plot_with_colormap(values,color_dict):
+    '''
+    The color scheme the cell types are plotted with.
+    
+    Parameters
+    ----------
+    values : list
+        List of cell types.
+    color_dict : dict
+        Dictionary of cell types and their colors.
+    
+    Returns
+    -------
+    color_dict : dict
+        Dictionary of cell types and their colors.
+    '''
     color_list = [[0.36862745, 0.30980392, 0.63529412, 1.        ],'tab:pink','tab:olive','tab:cyan','gold', 'springgreen','coral','skyblue','tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','yellow','aqua', 'turquoise','orangered', 'lightblue','darkorchid', 'fuchsia','royalblue','slategray', 'silver', 'teal', 'fuchsia','grey','indigo','khaki','magenta','tab:gray']
     # random.shuffle(color_list)
     values = list(set(values))
@@ -21,6 +36,30 @@ def plot_with_colormap(values,color_dict):
             color_dict[value] = color_list[(len(list(color_dict.keys()))+1)]
     return color_dict
 def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_scheme=None,ax=None,dpi=300,save=None):
+    '''
+    Plot the latent representation of the cells colored by cell type and leiden clusters.
+
+    Parameters
+    ----------
+    adatas : AnnData object
+        Annotated data matrix.
+    cell_type_key : str
+        Key for cell type column in adata.obs.
+    stage_key : str
+        Key for stage column in adata.obs.
+    color_scheme : dict, optional
+        Dictionary of cell types and their colors. The default is None.
+    ax : matplotlib axis, optional  
+        The default is None.
+    dpi : int, optional
+        The default is 300.
+    save : str, optional
+        Path to save the figure. The default is None.
+
+    Returns
+    --------------
+
+    '''
     sc.set_figure_params(scanpy=True, dpi=dpi)
     consistency = []
     ariss= []

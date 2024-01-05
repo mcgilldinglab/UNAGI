@@ -3,6 +3,26 @@ import pickle
 import matplotlib.pyplot as plt
 import scipy.cluster.hierarchy as sch
 def plot_hc_dendrogram(adata,stage_key,celltype_key,save=False,dpi=None):
+    '''
+    Plot the dendrogram of the hierarchical static markers of each stage.
+
+    Parameters
+    ----------
+    adata : AnnData object
+        Annotated data matrix.
+    stage_key : str
+        Key for stage column in adata.obs.
+    celltype_key : str
+        Key for cell type column in adata.obs.
+    save : bool, optional
+        Whether to save the figure. The default is False.
+    dpi : int, optional
+        The default is None.
+
+    Returns
+    -------------
+    None
+    '''
     for stage in list(adata.obs[stage_key].unique()):
         sch.dendrogram(adata.uns['hcmarkers'][str(stage)]['Z'],no_plot=True)
         #replace the labels of the leaves with the labels of the original data

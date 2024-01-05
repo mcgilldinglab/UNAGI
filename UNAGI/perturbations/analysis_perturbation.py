@@ -559,7 +559,7 @@ class perturbationAnalysis:
         name_order: list
             the name order of perturbation objects (pathways or compounds)
 
-        return:    
+        return  
         ------------
         top_compounds: list
             the names of top compounds
