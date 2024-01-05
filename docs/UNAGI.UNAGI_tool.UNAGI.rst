@@ -1,7 +1,7 @@
-﻿UNAGI.UNAGI
-===========
+﻿UNAGI.UNAGI\_tool.UNAGI
+=======================
 
-.. currentmodule:: UNAGI
+.. currentmodule:: UNAGI.UNAGI_tool
 
 .. autoclass:: UNAGI
 

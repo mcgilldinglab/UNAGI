@@ -344,7 +344,9 @@ class GraphEncoder(nn.Module):
         return z_loc, z_scale
     
 class Discriminator(nn.Module):
-
+    '''
+        The discriminator of UNAGI, which distinguishes the real data from the generated data.
+    '''
     def __init__(self,input_dim,hidden_dim):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
@@ -366,7 +368,7 @@ class Discriminator(nn.Module):
         #ys = torch.LongTensor(ys)
         return self.bce(xs,ys)
     
-class NewDecoder(nn.Module):
+class Decoder(nn.Module):
     def __init__(self, in_dim, z_dim, hidden_dim):
         super().__init__()
 
@@ -394,6 +396,9 @@ class NewDecoder(nn.Module):
         return loc, scale, dropout
     
 class VAE(PyroBaseModuleClass):
+    '''
+    The VAE model of UNAGI, which contains the encoder and decoder of VAE.
+    '''
     def __init__(self,  n_input, n_latent,n_graph,beta,distribution): 
         super().__init__()
         self.n_latent = n_latent
@@ -404,7 +409,7 @@ class VAE(PyroBaseModuleClass):
        # in the init, we create the parameters of our elementary stochastic computation unit.
        
         # First, we setup the parameters of the generative model
-        self.decoder = NewDecoder(self.n_input,self.n_latent,self.n_graph)
+        self.decoder = Decoder(self.n_input,self.n_latent,self.n_graph)
         self.log_theta = torch.nn.Parameter(torch.randn(self.n_input))
         self.gate_logits = torch.nn.Parameter(torch.randn(self.n_input))
         self.discriminator = Discriminator(self.n_input, self.n_latent)
