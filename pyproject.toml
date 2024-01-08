@@ -13,6 +13,7 @@ readme = "README.md"
 
 
 dependencies = [
+    'recommonmark',
     'h5py>=3.9.0',
     'idna>=3.4',
     'igraph>=0.10.7',
@@ -80,5 +81,6 @@ doc = [
     "jinja2<3.1",
     "prompt-toolkit<3.0.0",
     'myst-nb',
-    'myst-parser'
+    'myst-parser',
+    'recommonmark'
 ]

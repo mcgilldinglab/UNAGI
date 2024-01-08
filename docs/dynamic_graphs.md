@@ -12,6 +12,7 @@ Construct the dynamic graphs for the given data.
 
 .. autosummary::
     :toctree: _autosummary
+    :nosignatures:
 
     UNAGI.dynamic_graphs.buildGraph
 
@@ -22,6 +23,7 @@ Construct the dynamic graphs for the given data.
 
 .. autosummary::
     :toctree: _autosummary
+    :nosignatures:
 
     UNAGI.dynamic_graphs.distDistance
 ```

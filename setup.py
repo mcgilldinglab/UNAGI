@@ -62,7 +62,8 @@ setup(
     'wheel>=0.38.4',
     'pyro-ppl>=1.8.6',
     'scvi-tools>=1.0.3',
-    'leidenalg>=0.10.1'
+    'leidenalg>=0.10.1',
+    'recommonmark'
     ],
     include_package_data=True,
     author='Yumin Zheng',

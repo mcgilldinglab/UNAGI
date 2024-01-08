@@ -12,6 +12,7 @@ Reconstruct the dynamic regulatory networks using iDREM for the dynamic graphs.
 
 .. autosummary::
     :toctree: _autosummary
+    :nosignatures:
 
     UNAGI.dynamic_regulatory_networks.processIDREM.runIdrem
 ```
@@ -26,10 +27,11 @@ Identify dynamic genes and accumulate gene weights.
    :members:
    :undoc-members:
    :show-inheritance:
-
+    
 .. autosummary::
     :toctree: _autosummary
-
+    :nosignatures:
+    
     UNAGI.dynamic_regulatory_networks.processTFs.updataGeneTablesWithDecay
 ```
 

@@ -4,13 +4,9 @@ Perform perturbations using compounds/drugs or pathways, analyze the perturbatio
 
 ```{eval-rst}
 
-.. automodule:: UNAGI.perturbations
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 .. autosummary::
     :toctree: _autosummary
+    :nosignatures:
 
     UNAGI.perturbations.compounds.get_top_compounds
     UNAGI.perturbations.pathways.get_top_pathways
@@ -28,7 +24,8 @@ Perform perturbations using compounds/drugs or pathways, analyze the perturbatio
 
 .. autosummary::
     :toctree: _autosummary
-
+    :nosignatures:
+    
     UNAGI.UNAGI_analyst.analyst
     UNAGI.UNAGI_analyst.analyst.start_analyse
 ```

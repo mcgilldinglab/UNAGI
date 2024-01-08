@@ -22,15 +22,15 @@ The modules to start the training of UNAGI.
 
 ```{eval-rst}
 
-<!-- .. automodule:: UNAGI.train
+.. automodule:: UNAGI.train
    :members:
    :undoc-members:
-   :show-inheritance: -->
+   :show-inheritance:
 
 .. autosummary::
     :toctree: 
     :nosignatures:
-
+    
     UNAGI.train.trainer.UNAGI_trainer
     UNAGI.train.runner.UNAGI_runner
     UNAGI.train.customized_elbo
