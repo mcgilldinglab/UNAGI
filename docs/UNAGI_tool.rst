@@ -1,6 +1,5 @@
-## UNAGI launcher
-
-```{eval-rst}
+UNAGI launcher
+-----------------
 
 .. automodule:: UNAGI.UNAGI_tool.UNAGI
    :members:
@@ -18,4 +17,3 @@
     UNAGI.UNAGI_tool.UNAGI.register_iDREM_parameters
     UNAGI.UNAGI_tool.UNAGI.register_species
     UNAGI.UNAGI_tool.UNAGI.run_UNAGI
-```

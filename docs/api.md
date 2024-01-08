@@ -10,11 +10,11 @@ Documentaions for the UNAGI package.
 
 ```{eval-rst}
 
-.. include:: UNAGI_tool.md
-.. include:: train.md
-.. include:: dynamic_graphs.md
-.. include:: dynamic_regulatory_networks.md
-.. include:: perturbations.md
-.. include:: marker_discovery.md
-.. include:: plottings.md
+.. include:: UNAGI_tool.rst
+.. include:: train.rst
+.. include:: dynamic_graphs.rst
+.. include:: dynamic_regulatory_networks.rst
+.. include:: perturbations.rst
+.. include:: marker_discovery.rst
+.. include:: plottings.rst
 ```
