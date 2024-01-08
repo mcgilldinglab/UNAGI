@@ -17,10 +17,10 @@
 
    .. autosummary::
    
+      Decoder
       Discriminator
       GraphConvolution
       GraphEncoder
-      NewDecoder
       VAE
       ZeroInflatedDistribution
       myZeroInflatedGamma

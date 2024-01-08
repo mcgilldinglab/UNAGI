@@ -8,14 +8,13 @@ from UNAGI import UNAGI
 
 Documentaions for the UNAGI package.
 
-```{toctree}
-:maxdepth: 2
+```{eval-rst}
 
-UNAGI_tool.md
-train.md
-dynamic_graphs.md
-dynamic_regulatory_networks.md
-perturbations.md
-marker_discovery.md
-plottings.md
+.. include:: UNAGI_tool.md
+.. include:: train.md
+.. include:: dynamic_graphs.md
+.. include:: dynamic_regulatory_networks.md
+.. include:: perturbations.md
+.. include:: marker_discovery.md
+.. include:: plottings.md
 ```

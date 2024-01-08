@@ -11,7 +11,8 @@ Functions to visualize the outputs of UNAGI, including cell type compositions, l
 
 .. autosummary::
     :toctree: _autosummary
-
+    :nosignatures:
+    
     UNAGI.plotting.plot_cell_embeddings.plot_stages_latent_representation
     UNAGI.plotting.plot_cell_embeddings.plot_with_colormap
     UNAGI.plotting.plot_cell_type_composition.cell_type_composition
