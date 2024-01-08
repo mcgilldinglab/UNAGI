@@ -1,9 +1,7 @@
-## Dynamic graphs
+Dynamic graphs
+---------------------
 
 Construct the dynamic graphs for the given data. 
-
-
-```{eval-rst}
 
 .. automodule:: UNAGI.dynamic_graphs
    :members:
@@ -26,4 +24,3 @@ Construct the dynamic graphs for the given data.
     :nosignatures:
 
     UNAGI.dynamic_graphs.distDistance
-```

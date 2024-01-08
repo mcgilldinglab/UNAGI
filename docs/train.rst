@@ -1,8 +1,8 @@
-## The model architecture of UNAGI 
+The model architecture of UNAGI 
+--------------------------------
 
 The module contains the VAE model and the discriminator model.
 
-```{eval-rst}
 
 .. automodule:: UNAGI.model
    :members:
@@ -14,13 +14,12 @@ The module contains the VAE model and the discriminator model.
 
     UNAGI.model.models
 
-```
 
-## Trainer of UNAGI
+Trainer of UNAGI
+----------------
 
 The modules to start the training of UNAGI.
 
-```{eval-rst}
 
 .. automodule:: UNAGI.train
    :members:
@@ -34,4 +33,3 @@ The modules to start the training of UNAGI.
     UNAGI.train.trainer.UNAGI_trainer
     UNAGI.train.runner.UNAGI_runner
     UNAGI.train.customized_elbo
-```

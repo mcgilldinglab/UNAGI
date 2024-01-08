@@ -1,8 +1,8 @@
-## Marker discovery
+Marker discovery
+------------------------
 
 UNAGI supports to discover dynamic markers (temporal) and hierarchical markers (static). 
 
-```{eval-rst}
 Dynamic markers
 
 .. autosummary::
@@ -22,4 +22,3 @@ Hierarchical static markers
     :nosignatures:
 
     UNAGI.marker_discovery.hierachical_static_markers.get_dataset_hcmarkers
-```

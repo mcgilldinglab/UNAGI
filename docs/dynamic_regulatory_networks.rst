@@ -1,9 +1,8 @@
-## Dynamic regulatory networks
+Dynamic regulatory networks
+-------------------------
 
 Reconstruct the dynamic regulatory networks using iDREM for the dynamic graphs. 
 
-
-```{eval-rst}
 
 .. automodule:: UNAGI.dynamic_regulatory_networks
    :members:
@@ -15,13 +14,13 @@ Reconstruct the dynamic regulatory networks using iDREM for the dynamic graphs.
     :nosignatures:
 
     UNAGI.dynamic_regulatory_networks.processIDREM.runIdrem
-```
 
-## Gene weights accumulation
+
+Gene weights accumulation
+-------------------------
 
 Identify dynamic genes and accumulate gene weights.
 
-```{eval-rst}
 
 .. automodule:: UNAGI.dynamic_regulatory_networks
    :members:
@@ -33,5 +32,5 @@ Identify dynamic genes and accumulate gene weights.
     :nosignatures:
     
     UNAGI.dynamic_regulatory_networks.processTFs.updataGeneTablesWithDecay
-```
+
 
