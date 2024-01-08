@@ -3,9 +3,6 @@ Tutorials
 
 This section contains step-by-step tutorials for using the UNAGI tool.
 
-Modules
-------------
-
 .. toctree::
 
     dataset_preparation.ipynb

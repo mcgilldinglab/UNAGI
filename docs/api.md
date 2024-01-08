@@ -3,7 +3,7 @@
 Import UNAGI:
 
 ```python
-From UNAGI import UNAGI
+from UNAGI import UNAGI
 ```
 
 Documentaions for the UNAGI package.
