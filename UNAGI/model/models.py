@@ -175,7 +175,7 @@ class ZeroInflatedDistribution(TorchDistribution):
         return new
 class myZeroInflatedGamma(ZeroInflatedDistribution):
     """
-    A Zero Inflated Normal distribution.
+    A Zero Inflated Gamma distribution.
 
     :param total_count: non-negative number of negative Bernoulli trials.
     :type total_count: float or torch.Tensor
@@ -209,7 +209,7 @@ class myZeroInflatedGamma(ZeroInflatedDistribution):
 
 class myZeroInflatedLogNormal(ZeroInflatedDistribution):
     """
-    A Zero Inflated Normal distribution.
+    A Zero Inflated Log Normal distribution.
 
     :param total_count: non-negative number of negative Bernoulli trials.
     :type total_count: float or torch.Tensor

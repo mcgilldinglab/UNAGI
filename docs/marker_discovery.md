@@ -3,6 +3,7 @@
 UNAGI supports to discover dynamic markers (temporal) and hierarchical markers (static). 
 
 ```{eval-rst}
+Dynamic markers
 
 .. autosummary::
     :toctree: _autosummary
@@ -12,6 +13,8 @@ UNAGI supports to discover dynamic markers (temporal) and hierarchical markers (
     UNAGI.marker_discovery.dynamic_markers.runGetProgressionMarkercsv
     UNAGI.marker_discovery.dynamic_markers.getTopMarkersFromIDREM
     UNAGI.marker_discovery.dynamic_markers.scoreAgainstBackground
+
+Hierarchical static markers
 
 .. autosummary::
     :toctree: _autosummary

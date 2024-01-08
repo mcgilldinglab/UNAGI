@@ -6,10 +6,11 @@
    :members:
    :undoc-members:
    :show-inheritance:
-
+    
 .. autosummary::
     :toctree: _autosummary
-
+    :nosignatures:
+    
     UNAGI.UNAGI_tool.UNAGI.setup_data
     UNAGI.UNAGI_tool.UNAGI.setup_training
     UNAGI.UNAGI_tool.UNAGI.calculate_neighbor_graph
