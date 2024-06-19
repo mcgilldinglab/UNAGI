@@ -1,0 +1,313 @@
+
+	<!DOCTYPE html>
+	<html lang="en">
+	  <head>
+		<meta charset="utf-8">
+
+		<title>Visualization</title>
+		<!--canvg library-->
+		<link rel="stylesheet" type="text/css" href="style.css">
+		<script src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+		<script src="d3/d3.min.js"></script>
+		
+		
+		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+		<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+		
+		<script src="d3.chart.sankey/sankey.js"></script>
+		<script src="d3.chart.sankey/d3.chart.min.js"></script>
+		<script src="d3.chart.sankey/d3.chart.sankey.min.js"></script>
+		
+		<!--
+		<script src="http://cdn.rawgit.com/newrelic-forks/d3-plugins-sankey/master/sankey.js"></script>
+		<script src="http://cdn.rawgit.com/misoproject/d3.chart/master/d3.chart.min.js"></script>
+		<script src="http://cdn.rawgit.com/q-m/d3.chart.sankey/master/d3.chart.sankey.min.js"></script>
+		-->
+		
+		<script src="parseJSON.js"></script>
+		<script type="text/javascript" src="DREM.json" async></script>
+		<script type="text/javascript" src="compare.json" async></script>
+		<script type="text/javascript" src="cells.json" async></script>
+		<script>
+		var fold=function(divid){
+			var x=document.getElementById(divid);
+			if (x.style.display === 'none') {
+				x.style.display = 'block';
+			} else {
+				x.style.display = 'none';
+			}
+
+		}
+
+		</script>
+		
+	  </head>
+	  
+	  <body onload="onload()">
+		 
+		  <div id="loadercontainer">
+			
+			<div id="loader">
+			</div>
+			
+			<div id="load-text">
+			Loading... (might take up to a few minutes for the first load)
+			</div>
+			</div>
+		  		
+		  <div id="myviz" style="display:none;" class="animate-bottom">	
+		  <!-- This DIV contains static visualization configuration config-->
+		  <table>
+		  <tr>
+		  <td>
+		  <div id="div_config">
+			  <div class="tf">
+				<nav>
+					<div class="menu-item"><h4><a onclick="fold('globalconfig')">GLOBAL CONFIG</a></h4></div>
+					<div class="menu-item" id="globalconfig" >
+					  <ul>
+						 <li>
+						   <span>Reset: <input type="submit", onclick="resetconfig()" value="RESET"></span><br>
+							  <input type="range" id="zoomsliderbar" value="50" min="0" max="100" onchange="zoom(this.value)"></input>
+							  <span id="zoomslider">50</span>
+							</li>
+						 <li>
+							 <label title="Enable/Disable mouseover popup">Enable/Disable mouseover popup:<input class="checkbox" id="tooltipcheck" type="checkbox"> </input></label>
+							 
+							  <input title="cutoff to show the TFs on mouseover" type="range" id="popupcutslider" value="20" min="10" max="100" onchange="popupchange(this.value)"></input>
+							  <span id="popupcut">20</span>
+					    </li>
+					    
+						 <li>
+								<table>
+								<tr>
+								<td><input type="submit" onclick="setbgcolor()" value="Set Background" title="change/set the background color of the figure"></td>
+								<td><input type="color" id="bgcolor" value="#333333" onchange="setbgcolor()"> </td>
+								</tr>
+								<tr><td><input type="submit" onclick="setnodecolor()" value="Set Node color" title="change/set the node color of the figure"></td>
+								<td><input type="color" id="nodecolor" value="#ffffff" onchange="setnodecolor()"></td>
+								</tr>
+								<tr><td><input type="submit" onclick="resetnodesize()" value="Set Node size" title="change/set the node size of the figure"></td> 
+								<td><input type="text" value="10" id="nodesizetext"></td>
+								</tr>
+								<tr>
+								<td><input type="submit" onclick="settextcolor()" value="Set text color" title="change/set the text color of the figure"></td>
+								<td><input type="color" id="textcolor" value="#ffffff" onchange="settextcolor()"> </td>
+								</tr>
+								
+								<tr><td><input type="submit" onclick="resettextsize()" value="Set text size" title="change/set the text size of the figure"></td> 
+								<td><input type="text" value="10" id="textsize"></td>
+								
+								<tr>
+								<td><input type="submit" onclick="setpathcolor()" value="Set path color" title="change/set the text color of the figure"></td>
+								<td><input type="color" id="pathcolor" value="#aaaaaa" onchange="setpathcolor()"></td>
+								</tr>
+								</table>
+							</li>
+						<li>
+							<div id="clickdropdowndiv">Click: </div>
+					
+							<div id="shiftclickdropdowndiv">Shift Click: </div>
+						</li>
+					  </ul>
+					</div>
+					 
+					<div class="menu-item"><h4><a onclick="fold('tfconfig')">Regulator Panel</a></h4></div>  
+					<div class="menu-item" id="tfconfig" style="display:none;">
+
+					  <ul>
+						<li>
+							<input title="Explore the regulating node/path for given regulator" type="submit" value="Explore Regulator" onclick="wildexploretf()">
+							<input type="text" id="tfName" value="" onkeydown="if (event.keyCode == 13) { wildexploretf() }">
+							
+							<div id="tfdropdown"></div>
+						
+							<span title="Ranking cutoff for Regulator. If the ranking is larger than this cutoff, the regulator is regarded as non-regulating.">Regulator rank cutoff:</span>
+							<input type="range" id="tfcutSelectorbar" value="50" min="10" max="100" onchange="tfcutChange(this.value)"></input>
+							<span id="tfcutSelector">50</span>
+						</li>
+					  </ul>
+					</div>
+					
+					
+					<div class="menu-item"><h4><a onclick="fold('genelistconfig')">Gene Enrichment Panel</a></h4></div>    
+					<div class="menu-item" id="genelistconfig" style="display:none;">
+					<ul>
+						
+							<li> <span> Please input your gene list: (comma/tab/space/newline delimited) </span>
+								<textarea id="genelistarea"></textarea> 
+								<input title="explore overlapping nodes for given gene list" type=submit value="Search enriched nodes" onclick="explorenrichment()"><br>
+							</li>	
+						</ul>
+					</div>
+						
+					  
+					<div class="menu-item"><h4><a onclick="fold('geneconfig')">Expression Panel</a></h4></div>    
+					<div class="menu-item" id="geneconfig" style="display:none;">
+					  
+					  <ul>
+						<li><input title="Show Path Expression Pattern" type="submit" value="Show Path Expression" onclick="explorepath()"></li>
+						<li>
+							<input title="Explore associated nodes and relative expression (to time 0) for given gene" type="submit" value="Explore Gene" onclick="wildexploregene()">
+							<input type="text" id="deName" value="" onkeydown="if (event.keyCode == 13) { wildexploregene() }">
+							</li>
+						
+						<li>
+							<input title="Explore miRNA expression" type="submit" value="Explore miRNA" onclick="wildexploremir()">
+							<input type="text" id="mirName" value="" onkeydown="if (event.keyCode == 13) { wildexploremir() }">
+							</li>
+						
+						<li>
+							<input title="Explore gene/miRNA absolute expression" type="submit" value="Explore Gene/miRNA absolute expression" onclick="wildexploreab()">
+							<input type="text" id="abName" value="" onkeydown="if (event.keyCode == 13) { wildexploreab() }">
+						</li>
+						
+						<li>
+							<input title="Explore Regulator targets expression" type="submit" value="Explore Regulator targets expression" onclick="wildexploretftargets()">
+							<input type="text" id="tfTarget" value="" onkeydown="if (event.keyCode == 13) { wildexploretftargets() }">
+						</li>
+						
+					  </ul>
+					</div>
+					
+					<div class="menu-item"><h4><a onclick="fold('methyconfig')">Epigenomics Panel</a></h4></div>  
+					<div class="menu-item" id="methyconfig" style="display:none;">
+						
+						<ul>
+							<li>
+							<input title="Explore the methylation for given gene" type="submit" value="Explore gene methylation" onclick="wildexploremethy()">
+							<input type="text" id="methyName" value="" onkeydown="if (event.keyCode==13) {wildexploremethy()}">
+							
+							<div id="methydropdownTimediv"></div>
+							<div id="methydropdownGenediv"></div></li>
+							<li>
+								<input title="Explore the methylation for targets of given regulator" type="submit" value="Explore Regulator Methylation" onclick="wildexploretfmethy()">
+								<input type="text" id="methyNameTF" value="" onkeydown="if (event.keyCode==13) {wildexploretfmethy()}"> 
+								Targets in node: <div id="methydropdownRegulatorNodediv"></div>
+							</li>
+							<li>
+								<input title="Explore the genes with different methylation  between time points " type="submit" value="Explore methylation difference" onclick="explorediffmethy()">
+								<div id="diffmethydropdownTimediv1"></div>
+								<div id="diffmethydropdownTimediv2"></div>
+							</li>
+							   
+							<li>
+								<input title="View methylation track in UCSC genome browser " type="submit" value="View methylation track in UCSC genome browser" onclick="viewmethytrack()">
+								DataLink:<input type="text" id="viewmethy" value="" onkeydown="if (event.keyCode==13) {viewmethytrack()}"><br>
+								DataType:<select id="datatypeselect">
+									<option value="bigWig">bigWig</option>
+									<option value="bigBed">bigBed</option>  
+									<option value="bam">bam</option>
+								 </select>
+								DataReference:
+								<select id="datareferenceselect">
+									<option value="mm10">mm10</option>
+									<option value="mm9">mm9</option>
+									<option value="hg19">hg19</option>
+									<option value="hg38">hg38</option>  
+									
+								 </select>
+							</li>
+						</ul>
+					</div>
+					
+					<div class="menu-item"><h4><a onclick="fold('proteconfig')">Proteomics Panel</a></h4></div>  
+					<div class="menu-item" id="proteconfig" style="display:none;">
+						<ul>
+							<li>
+								<input title="Explore the protein level" type="submit" value="Explore Protein level" onclick="exploreprote()">
+								<input type="text" id="proteText" value="" onkeydown="if (event.keyCode==13) {exploreprote()}">
+							
+						</ul>
+					</div>
+					
+					
+					
+					<div class="menu-item"><h4><a onclick="fold('cellconfig')">Cell Types Panel</a></h4></div>  
+					<div class="menu-item" id="cellconfig" style="display:none;">
+						<ul>
+							<li>
+								<input title="Explore the single cell type" type="submit" value="Explore Single Cell Type" onclick="exploresinglecell()">
+								<input type="text" id="singleCellType" value="" onkeydown="if (event.keyCode==13) {exploresinglecell()}">
+							
+							<div id="singlecelldropdowndiv"></div></li>
+							
+							<li>
+								<input title="Explore the sorted cell type" type="submit" value="Explore Sorted Cell Type" onclick="exploresortedcell()">
+								<input type="text" id="sortedCellType" value="" onkeydown="if (event.keyCode==13) {exploresortedcell()}">
+							
+							<div id="sortedcelldropdowndiv"></div></li>
+						</ul>
+					</div>
+					
+					
+					<div class="menu-item"><h4><a onclick="fold('pathfunction')">Path Function Panel</a></h4></div>  
+					<div class="menu-item" id="pathfunction" style="display:none;">
+					  <ul>
+						<li>
+							<input title="show path functions" type="submit" value="show path function Sankey diagram" onclick="exploreopathfunction()"> <br>
+							<input title="Sankey Diagram style" type="radio" name="checkstyle" value="1" checked> Style 1 
+							<input title="Sankey Diagram style" type="radio" name="checkstyle" value="2"> Style 2 <br>
+							<span title="Ranking cutoff for GO terms ">GO term rank cutoff:</span><br>
+							<input type="range" id="gosliderbar" value="5" min="2" max="10" onchange="setgoslider(this.value)"></input>
+							<span id="goslider">5</span> <br>
+							
+							<span title="Ranking cutoff for TFs in Sankey diagram">Sankey TF rank cutoff:</span> <br>
+							<input type="range" id="sankeytfsliderbar" value="10" min=5 max="20" onchange="setsankeytfslider(this.value)"></input>
+							<span id="sankeytfslider">10</span> <br>
+							
+							<span title="Ranking cutoff for regulators in Sankey diagram">Sankey miRNA rank cutoff:</span> <br>
+							<input type="range" id="sankeymirsliderbar" value="5" min=2 max="20" onchange="setsankeymirslider(this.value)"></input>
+							<span id="sankeymirslider">5</span>
+							
+							</li>
+					  </ul>
+					</div>
+					
+					
+					<div class="menu-item"><h4><a onclick="fold('omnibus')">Omnibus Panel</a></h4></div>  
+					<div class="menu-item" id="omnibus" style="display:none;">
+					  
+					  <ul>
+						<li>
+							<input title="show omnibus of the input" type="submit" value="showOmibus" onclick="exploreomnibus()">
+							<input type="text" id="omnibus-gene" value="" onkeydown="if (event.keyCode == 13) { exploreomnibus() }">
+							</li>
+						
+					  </ul>
+					</div>
+					
+					
+					<div class="menu-item"><h4><a onclick="fold('manualconfig')">Manual</a></h4></div>  
+					<div class="menu-item" id="manualconfig" style="display:none;">
+					  
+					  <ul>
+						<li><a href="https://github.com/phoenixding/idrem/blob/master/readme.md#interactive-visualization" target="_blank">Manual</a></li>
+					  </ul>
+					</div>
+					
+					<div class="menu-item"><h4><a onclick="fold('downloadconfig')">DOWNLOAD</a></h4></div>  
+						<div class="menu-item" id="downloadconfig" style="display:none">
+						  <ul>
+						
+							<li><label><input type="submit" onclick="downloadjson('jsondownloadlink')" value="Generate Json download file:"></label></li>
+							<li><a id="jsondownloadlink"></a></li>
+							
+					  </ul>
+					  </div>
+					</div>	
+					
+				</nav>
+			  </div>
+		 </td>
+		 <td>
+		  <!-- This DIV contains dynamic data-driven svg elements -->
+		  <div id="div_svg"> </div>
+		  </td>
+		  </tr>
+		  </table>
+		  </div>
+			</body>
+	</html>
+	
+
