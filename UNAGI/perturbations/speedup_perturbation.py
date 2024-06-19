@@ -7,6 +7,7 @@ import torch
 from scipy.sparse import issparse
 #import DataLoader from torch
 from torch.utils.data import DataLoader
+from ..utils.gcn_utils import setup_graph
 import threading
 from ..model.models import VAE
 from .analysis_perturbation import perturbationAnalysis
@@ -81,10 +82,21 @@ class perturbation:
                     out.append(item[1])
         return out
     def getDistance(self,rep, cluster):
+        #use centroid to represent the cluster
+        cluster = np.mean(cluster,axis=0)
+        if rep.ndim == 2:
+            rep = np.mean(rep,axis=0)
+            return np.linalg.norm(rep-cluster)
+        elif rep.ndim == 3:
+            rep = np.mean(rep,axis=1)
+            return np.linalg.norm(rep-cluster,axis=1)
+        else:
+            raise ValueError('rep should be 2 or 3 dimension')
 
-        cluster = cluster.reshape(1,-1)
-        cluster = cluster.repeat(rep.shape[0],axis=0)
-        return np.linalg.norm(rep-cluster,axis=1)
+        
+        # cluster = cluster.reshape(1,-1)
+        # cluster = cluster.repeat(rep.shape[0],axis=0)
+        
     def matchSingleClusterGeneDict(self,goadata,gotop):
         gene_dict={}
         for i,each in enumerate(goadata.var.index.tolist()):
@@ -136,14 +148,14 @@ class perturbation:
             if impactfactor is None:
                 return self.hiddenReps[stage]
             else:
-                data = self.perturb_stage_data_mean[stage]
+                data,adj = self.perturb_stage_data_mean[stage]
         else:
             
             
 
             clusterAdataID = adata.obs[adata.obs['leiden'] == str(cluster)].index.tolist()
             clusterAdata = adata[clusterAdataID]
-            
+            adj = clusterAdata.obsp['gcn_connectivities']
             # gcn_connectivities = clusterAdata.obsp['gcn_connectivities']
             
             # temp = gcn_connectivities[clusterAdataID]
@@ -154,14 +166,15 @@ class perturbation:
             # input[temp] = adata.X[temp]
             # input = gcn_connectivities @ input
             # input = input[temp].toarray()
-            input = clusterAdata.obsp['gcn_connectivities'] @ clusterAdata.X
-            if issparse(input):
-                input = input.toarray()
-            data = np.mean(input,axis=0).reshape(1,-1)
+            data = clusterAdata.X#clusterAdata.obsp['gcn_connectivities'] @ clusterAdata.X
+            # if issparse(input):
+                # input = input.toarray()
+            
+            # data = np.mean(input,axis=0).reshape(1,-1)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
-        # vae = VAE(clusterAdata.shape[1], 256, 1024, 64,beta=1,distribution='ziln')#torch.load(loadModelDict)
-        # vae = torch.load(loadModelDict)
-        vae = VAE(data.shape[1], 64, 256, 0.5)
+        vae = VAE(data.shape[1], 256, 1024, 64,beta=1,distribution='ziln')#torch.load(loadModelDict)
+        # vae = torch.load(loadModelDict)nput_dim, hidden_dim, graph_dim, latent_dim
+        # vae = VAE(data.shape[1], 64, 256, 0.5)
         if CUDA:
             vae.load_state_dict(torch.load(loadModelDict,map_location=torch.device('cuda:0')))
             # vae = torch.load(loadModelDict)
@@ -179,39 +192,48 @@ class perturbation:
         # data = np.mean(clusterAdata.layers['concat'].toarray(),axis=0).reshape(1,-1)#
         # print(np.mean(data))
         if impactfactor is not None:
-            data = np.repeat(data.reshape(1,-1), len(impactfactor), axis=0)
-            cell_loader = DataLoader(data.astype('float32'), batch_size=len(impactfactor), shuffle=False, num_workers=0)
-        else:
+            data = np.expand_dims(data,axis=0)
+            data = np.repeat(data, len(impactfactor), axis=0)
+            print(data.shape)
             cell_loader = DataLoader(data.astype('float32'), batch_size=1, shuffle=False, num_workers=0)
+        else:
+            data = data.toarray()
+            cell_loader = DataLoader(data.astype('float32'), batch_size=len(data), shuffle=False, num_workers=0)
+            adj = adj.asformat('coo')
+            adj = setup_graph(adj)
         # cell_loader = DataLoader(clusterAdata.layers['concat'].toarray().astype('float32'), batch_size=2000, shuffle=False, num_workers=1)
         # xx_adj = np.ones(np.shape(clusterAdata.X)[0])
         
-        adj = torch.tensor(1)
+        # adj = torch.tensor(1)
+    #if it's not tensor then as format
+
+        
         if CUDA:
             adj = adj.to('cuda:0')
-        for x in cell_loader:
-
-
+        for perturbed_index, x in enumerate(cell_loader):
+            
             if impactfactor is not None:
-
+                x = x.squeeze(0)
                 impactfactor = impactfactor.astype('float32')
                 # x = x+impactfactor
-                x = x+x*impactfactor
 
+                x = x+x*impactfactor[perturbed_index]
+            
     
             # if on GPU put mini-batch into CUDA memory
             if CUDA:
                 x = x.to('cuda:0')
-
-            z=vae.getZ(x,adj,0,0,1,test=True)
-            zs+=z[0].cpu().detach().numpy().tolist()
-            zmeans+=z[1].cpu().detach().numpy().tolist()
-            zstds+=z[2].cpu().detach().numpy().tolist()
+            z = vae.get_latent_representation(x,adj)
+            
+            zs+=z.cpu().detach().numpy().tolist()
+           
         zs = np.array(zs)
-
+        if impactfactor is not None:
+            zs = zs.reshape(len(impactfactor),-1,64)
+        print('zs.shape',zs.shape)
         if stage >= len(self.hiddenReps):
             self.hiddenReps.append(zs)
-            self.perturb_stage_data_mean.append(data)
+            self.perturb_stage_data_mean.append([data,adj])
         return zs
     class perturbationthread(threading.Thread):
         def __init__(self, outer_instance,outs, selectedstage,selectedcluster,track,bound,perturbated_gene,CUDA):
@@ -354,7 +376,7 @@ class perturbation:
                 temp = self.getZandZc(adatacollection[stage],stage,leiden,CUDA=CUDA)
             
                 hiddenReps.append(temp)
-        hiddenReps = np.array(hiddenReps)
+        hiddenReps = np.array(hiddenReps, dtype=object)
 
         dijresults = []
         
@@ -363,7 +385,6 @@ class perturbation:
         for stage, clusters in enumerate(track):
             temp = []
             for clusterid, leiden in enumerate(clusters):
-            
                 temp=self.getDistance(hiddenReps[flag],hiddenReps[count])
                 count+=1
             dijresults.append(temp)
@@ -377,8 +398,8 @@ class perturbation:
                 temp = self.getDistance(selectedtemp,hiddenReps[count])
                 count+=1
             fijresults.append(temp)
-        delta = np.array(fijresults) - np.array(dijresults)
 
+        delta = np.array(fijresults) - np.array(dijresults)[:,np.newaxis]
         gc.collect()
         
         out = []
@@ -397,32 +418,44 @@ class perturbation:
             stageadata = adata[stage]
             clusterAdata = self.stage_cluster[str(stage)][str(leiden)]#stageadata[self.stage_cluster_index[str(stage)][str(leiden)]]#.index.tolist()
             # clusterAdata = stageadata[clusterAdataID]
-            # print(clusterAdata.obsp['gcn_connectivities'])
+            adj = clusterAdata.obsp['gcn_connectivities']
             # matrix1 = cupyx.scipy.sparse.csr_matrix(clusterAdata.obsp['gcn_connectivities'])#cp.asarray(clusterAdata.obsp['gcn_connectivities'])
             # matrix2 = cp.asarray(clusterAdata.X)
             # input = matrix1 @ matrix2
             # input = cp.asnumpy(input)
-            input = clusterAdata.obsp['gcn_connectivities'] @ clusterAdata.X
-            if issparse(input):
-                input = input.toarray()
+            # input = clusterAdata.obsp['gcn_connectivities'] @ clusterAdata.X
+            # if issparse(input):
+            #     input = input.toarray()
+            #expand [10,3] to [1,10,3]
+            input = clusterAdata.X
+            data = np.expand_dims(input,axis=0)
 
-            data = np.mean(input,axis=0).reshape(1,-1)
+            
         else:
-            data = raw
+            data,adj = raw
+            data = np.array(data)
         if impactfactors is not None:
             # print(np.mean(data + data * impactfactors- data))
-            data =data + data * impactfactors
+            data = data.repeat(len(impactfactors),axis=1)
+
+            data =data + data * impactfactors[:, :, np.newaxis, np.newaxis]
         
         if raw is None:
-            return data.reshape(-1)
+            return [data,adj]#.reshape(-1)
         else:
-            return data
+            return [data,adj]
     def getZ_speedup(self, input,CUDA=False):
         zs = []
         zmeans = []
         zstds = []
+        input_adata = input[0]
+        input_adj = input[1]
+        input_adata = np.array(input_adata)
+        input_adata = input_adata.reshpae(input_adata[0]*input_adata[1],input_adata[2],-1)
+        input_adj = np.array(input_adj)
+        input_adj = input_adj.reshape(input_adj[0]*input_adj[1],input_adj[2],-1)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
-        vae = myGrphVAEPyroModule(input.shape[1], 64, 0, 0.5)
+        vae = VAE(input_adata.shape[2], 256,1024, 64,beta=1,distribution=self.dist)
         if CUDA:
             
             vae.load_state_dict(torch.load(loadModelDict,map_location='cuda:0'))
@@ -433,18 +466,17 @@ class perturbation:
             vae.to('cpu')
         
         vae.eval()
-        cell_loader = DataLoader(input.astype('float32'), batch_size=len(input), shuffle=False, num_workers=0)
-        adj = torch.tensor(1)
-        if CUDA:
-            adj = adj.to('cuda:0')
-        for x in cell_loader:
+        cell_loader = DataLoader(input_adata.astype('float32'), batch_size=1, shuffle=False, num_workers=0)
+        
+       
+        for adj_idx, x in enumerate(cell_loader):
             # if on GPU put mini-batch into CUDA memory
+            adj = input_adj[adj_idx]
             if CUDA:
                 x = x.to('cuda:0')
-            z=vae.getZ(x,adj,0,0,1,test=True)
-            zs+=z[0].cpu().detach().numpy().tolist()
-            zmeans+=z[1].cpu().detach().numpy().tolist()
-            zstds+=z[2].cpu().detach().numpy().tolist()
+                adj = adj.to('cuda:0')
+            z = vae.get_latent_representation(x,adj)
+            zs+=z.cpu().detach().numpy().tolist()
         zs = np.array(zs)
         return zs
     def perturbation__auto_centroid_speed(self,adata, lastClusters, perturbated_genes,CUDA=False):
@@ -467,11 +499,11 @@ class perturbation:
                 for clusterid, leiden in enumerate(clusters):
                     input_data.append(self.prepare_speed_perturbation_data(adata, stage, leiden))
         
-        input_data = np.array(input_data)
+        # input_data = np.array(input_data)
         input_pertubred_forward = self.prepare_speed_perturbation_data(adata, stage, leiden, raw =input_data, impactfactors = perturbated_genes[0])
         input_pertubred_backward = self.prepare_speed_perturbation_data(adata, stage, leiden, raw =input_data, impactfactors = perturbated_genes[1])
         input_pertubred = np.append(input_pertubred_forward,input_pertubred_backward,axis=0)
-        input_pertubred = np.array(input_pertubred)
+        # input_pertubred = np.array(input_pertubred)
 
         Z_input = self.getZ_speedup(input_data,CUDA).reshape(-1,4,64)
         Z_perturbed = self.getZ_speedup(input_pertubred,CUDA).reshape(-1,4,64)

@@ -18,11 +18,9 @@ from torch.utils.data import Dataset,DataLoader
 from scipy.sparse import csc_matrix
 import umap
 from ..dynamic_regulatory_networks.processTFs import mySigmoid
-from scvi import data
-import scvi
 #NUMGENES=len(adata.var)
 # customized h5ad dataset
-class H5ADataSet(Dataset):
+class H5ADDataSet(Dataset):
     '''
     The customized dataset for the data without gene weights. (For the initial iteration) The dataset will return the gene expression and the cell graph for each cell.
     '''
@@ -37,12 +35,36 @@ class H5ADataSet(Dataset):
         x=csc_matrix(self.data.X[idx])[0].toarray()[0]
         x=x.astype(np.float32)
         x_tensor=torch.from_numpy(x)
+        if 'gcn_connectivities' not in self.data.obsp.keys():
+            return x_tensor,None,idx
         return x_tensor,self.data.obsp['gcn_connectivities'][idx].indices.tolist(),idx#,self.data.obs['Sample.ID'][idx]
     def num_genes(self):
         return len(self.data.var)
     def returnadata(self):
         return self.data
+class H5ADPlainDataSet(Dataset):
+    '''
+    The customized dataset for the data without gene weights. (For the initial iteration) The dataset will return the gene expression and the cell graph for each cell.
+    '''
+    def __init__(self,fname):
+        self.data=fname
+        # self.neighbors = neighbors
+    def __len__(self):
+        return self.data.X.shape[0]
+    
+    def __getitem__(self,idx):
 
+        x=csc_matrix(self.data.X[idx])[0].toarray()[0]
+        x=x.astype(np.float32)
+        x_tensor=torch.from_numpy(x)
+        if 'gcn_connectivities' not in self.data.obsp.keys():
+            return x_tensor,0,idx
+        return x_tensor,0,idx#,self.data.obs['Sample.ID'][idx]
+    def num_genes(self):
+        return len(self.data.var)
+    def returnadata(self):
+        return self.data
+    
 class H5ADataSetGeneWeight(Dataset):
     '''
     The customized dataset for the data with gene weights. The dataset will return the gene expression and the gene weight for each cell.

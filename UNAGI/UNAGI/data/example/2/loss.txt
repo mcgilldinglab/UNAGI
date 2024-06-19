@@ -1,5 +1,0 @@
-[epoch 000]  average training loss: 3.0786
-[epoch 001]  average training loss: 3.0452
-[epoch 002]  average training loss: 3.0131
-[epoch 003]  average training loss: 2.9837
-[epoch 004]  average training loss: 2.9583

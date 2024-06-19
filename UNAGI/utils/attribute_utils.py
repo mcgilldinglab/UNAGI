@@ -24,7 +24,7 @@ def get_data_file_path(filename):
     file_path: str
         path of the file
     '''
-    file_path = os.path.join(os.path.dirname(__file__), 'data', filename)
+    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', filename)
     return file_path
 
 def split_dataset_into_stage(adata_path, folder, key):

@@ -23,7 +23,8 @@ def getClusterPaths(edges, total_stages):
         raise ValueError("Number of edges must be one less than total stages")
 
     paths = {}
-
+    for key in list(edges.keys()):
+        edges[int(key)] = edges[key]
     # Initialize paths with the first set of edges
     for each in edges[0]:
         if str(each[0]) not in paths:
@@ -148,60 +149,62 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
             for j, row in enumerate(idremInput[i]):
                 row_data = '\t'.join(str(r) for r in row)
                 f.write("%s\t%s\n" % (genenames[j], row_data))
-        examplefile = open(os.path.join(idrem_dir, 'example_settings.txt'), 'r')
+        examplefile_path = os.path.join(idrem_dir, 'example_settings.txt')#open(os.path.join(idrem_dir, 'example_settings.txt'), 'r')
         settings_file_path = os.path.join(midpath, str(iteration), 'idremsetting', f'{file_name}.txt')
-        with open(settings_file_path, 'w') as f:
-            for k, line in enumerate(examplefile.readlines()):
+        with open(examplefile_path, 'r') as examplefile:
+        # Open settings_file_path for writing
+            with open(settings_file_path, 'w') as f:
+                for k, line in enumerate(examplefile.readlines()):
 
-                if trained and k == 4:
-                    print(midpath) 
-                    f.write('%s\t%s\n' % ('Saved_Model_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
-                elif k == 1:
-                    if species == 'Human':
-                        f.write('%s\t%s\n' % ('TF-gene_Interaction_Source', 'human_encode.txt.gz'))
+                    if trained and k == 4:
+                        print(midpath) 
+                        f.write('%s\t%s\n' % ('Saved_Model_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
+                    elif k == 1:
+                        if species == 'Human':
+                            f.write('%s\t%s\n' % ('TF-gene_Interaction_Source', 'human_encode.txt.gz'))
+                            
+                            continue
+                    elif k == 2:
+                        if species == 'Human':
+                            f.write('%s\t%s\n' % ('TF-gene_Interactions_File', 'TFInput/human_encode.txt.gz'))
+                            continue
+                    elif k == 5:
+                        if species == 'Human':
+                            f.write('%s\t%s\n' % ('Gene_Annotation_Source', 'Human (EBI)'))
+                            continue
+                    elif k == 6:
+                        if species == 'Human':
+                            f.write('%s\t%s\n' % ('Gene_Annotation_File', 'goa_human.gaf.gz'))
+                            continue 
+                    elif k== 17:
+                        f.write('%s\n' % ('miRNA-gene_Interaction_Source'))
                         continue
-                elif k == 2:
-                    if species == 'Human':
-                        f.write('%s\t%s\n' % ('TF-gene_Interactions_File', 'TFInput/human_encode.txt.gz'))
+                    elif k== 18:
+                        f.write('%s\n' % ('miRNA_Expression_Data_File'))
                         continue
-                elif k == 5:
-                    if species == 'Human':
-                        f.write('%s\t%s\n' % ('Gene_Annotation_Source', 'Human (EBI)'))
+                    elif k== 26:
+                        f.write('%s\n' % ('Proteomics_File'))
                         continue
-                elif k == 6:
-                    if species == 'Human':
-                        f.write('%s\t%s\n' % ('Gene_Annotation_File', 'goa_human.gaf.gz'))
-                        continue 
-                elif k== 17:
-                    f.write('%s\n' % ('miRNA-gene_Interaction_Source'))
-                    continue
-                elif k== 18:
-                    f.write('%s\n' % ('miRNA_Expression_Data_File'))
-                    continue
-                elif k== 26:
-                    f.write('%s\n' % ('Proteomics_File'))
-                    continue
-                elif k == 34:
-                    f.write('%s\n' % ('Epigenomic_File'))
-                    continue
-                elif k == 35:
-                    f.write('%s\n' % ('GTF File'))
-                    continue
-                elif k == 42:
-                    f.write('%s\t%s\n' % ('Minimum_Absolute_Log_Ratio_Expression', str(Minimum_Absolute_Log_Ratio_Expression)))
-                    continue
-                elif k ==51 :
-                    f.write('%s\t%s\n' % ('Convergence_Likelihood_%', str(Convergence_Likelihood)))
-                    continue
-                elif k == 52:
-                    f.write('%s\t%s\n' % ('Minimum_Standard_Deviation', str(Minimum_Standard_Deviation)))
-                    continue
-                elif k != 3:
-                    f.write(line)
-                else:
-                    f.write('%s\t%s\n' % ('Expression_Data_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
+                    elif k == 34:
+                        f.write('%s\n' % ('Epigenomic_File'))
+                        continue
+                    elif k == 35:
+                        f.write('%s\n' % ('GTF File'))
+                        continue
+                    elif k == 42:
+                        f.write('%s\t%s\n' % ('Minimum_Absolute_Log_Ratio_Expression', str(Minimum_Absolute_Log_Ratio_Expression)))
+                        continue
+                    elif k ==51 :
+                        f.write('%s\t%s\n' % ('Convergence_Likelihood_%', str(Convergence_Likelihood)))
+                        continue
+                    elif k == 52:
+                        f.write('%s\t%s\n' % ('Minimum_Standard_Deviation', str(Minimum_Standard_Deviation)))
+                        continue
+                    elif k != 3:
+                        f.write(line)
+                    else:
+                        f.write('%s\t%s\n' % ('Expression_Data_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
 
-        examplefile.close()
         settinglist = os.listdir(os.path.join(midpath,str(iteration)+'/idremsetting/'))
     
     print(settinglist)
