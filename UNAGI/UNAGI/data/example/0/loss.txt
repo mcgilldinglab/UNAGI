@@ -1,0 +1,1 @@
+[epoch 000]  average training loss: 4.0174
