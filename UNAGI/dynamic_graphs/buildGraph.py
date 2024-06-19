@@ -128,7 +128,7 @@ def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
     edges = connectNodes(distance,cutoff)
     return edges
-def getandUpadateEdges(total_stage,midpath,iteration):
+def getandUpadateEdges(total_stage,midpath,iteration,cutoff = 0.05):
     '''
     get edges in iterative training.
     
@@ -140,6 +140,8 @@ def getandUpadateEdges(total_stage,midpath,iteration):
         The task name
     iteration: int
         The iteration of the training
+    cutoff: float
+        The cutoff of p-value to connect nodes
 
     return
     -------------------
@@ -148,8 +150,8 @@ def getandUpadateEdges(total_stage,midpath,iteration):
     '''
     edges = []
     for i in range(total_stage-1):
-        edges.append(buildEdges(i,i+1,midpath,iteration))
-    updateEdges(edges,midpath,iteration)
+        edges.append(buildEdges(i,i+1,midpath,iteration,cutoff=cutoff))
+    edges = updateEdges(edges,midpath,iteration)
     return edges
 
 def updateEdges(edges,midpath,iteration):
@@ -178,7 +180,7 @@ def updateEdges(edges,midpath,iteration):
     f = open(os.path.join(midpath,str(iteration)+'/edges.txt'),'w')
     f.write(str(newEdges))
     f.close()
-
+    return newEdges
 def reupdateAttributes(adata, stage, results):
     '''
     update gaussian and gamma rep, top 100 differential genes, cell types of clusters to anndata

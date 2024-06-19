@@ -87,8 +87,14 @@ def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_sch
     for i,stage in enumerate(stage_keys):
         
         temp_count = 0
-        print(len(adatas.obs[adatas.obs[stage_key] == str(stage)].index.tolist()))
-        adata = adatas[adatas.obs[adatas.obs[stage_key] == str(stage)].index.tolist()]
+        #check the type of adatas.obs[stage_key]
+        if adatas.obs[stage_key].dtype == 'str':
+            stage = str(stage)
+        elif adatas.obs[stage_key].dtype == 'int':
+            stage = int(stage)
+        print(len(adatas.obs[adatas.obs[stage_key] == stage].index.tolist()))
+
+        adata = adatas[adatas.obs[adatas.obs[stage_key] == stage].index.tolist()]
     #         print(len(adata))
         adata.obs['UNAGI'] = adata.obs[cell_type_key].astype('category')
         
@@ -99,17 +105,19 @@ def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_sch
         sorted_list = sorted(list(adata.obs['UNAGI'].unique()))
         color_dict_unagi = plot_with_colormap(sorted_list,color_dict_unagi)
         adata.obs['leiden'] = adata.obs['leiden'].astype('string')
-        
-        sc.pl.umap(adata,color='UNAGI',ax=ax[i,0], show=False,palette=color_dict_unagi,title=stage_keys[i])
-        sc.pl.umap(adata,color='leiden',ax=ax[i,1], show=False,title = stage_keys[i])
+        sc.pl.umap(adata,color='UNAGI',ax=ax[i,0], show=False,palette=color_dict_unagi,title=str(stage_keys[i]))
+        sc.pl.umap(adata,color='leiden',ax=ax[i,1], show=False,title = str(stage_keys[i]))
         total_adata+=len(adata)
         count+=temp_count
-        print('ARI: ', adjusted_rand_score(adata.obs['name.simple'],adata.obs['UNAGI'] ))
-        print('NMIs: ', normalized_mutual_info_score(adata.obs['name.simple'],adata.obs['UNAGI']))
-        print('silhouette score: ', silhouette_score(adata.obsm['z'], adata.obs['leiden']))
-        NMI += normalized_mutual_info_score(adata.obs['name.simple'], adata.obs['UNAGI'])
-        silhouettes+=silhouette_score(adata.obsm['z'], adata.obs['leiden'])
-        aris += adjusted_rand_score( adata.obs['name.simple'],adata.obs['UNAGI'])
+        temp_ari = adjusted_rand_score(adata.obs['name.simple'],adata.obs['UNAGI'] )
+        temp_nmi = normalized_mutual_info_score(adata.obs['name.simple'],adata.obs['UNAGI'])
+        temp_silhouette_score = silhouette_score(adata.obsm['z'], adata.obs['leiden'])
+        print('ARI: ', temp_ari)
+        print('NMIs: ', temp_nmi)
+        print('silhouette score: ', temp_silhouette_score)
+        NMI += temp_nmi
+        silhouettes += temp_silhouette_score
+        aris += temp_ari
     consistency.append(count/total_adata)
     ariss.append(aris/4)
     NMIs.append(NMI/4)
@@ -121,6 +129,6 @@ def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_sch
     print('ARIs: ', ariss)
     print('NMI: ', NMIs)
     print('silhouette score: ', silhouettes/4)
-if __name__ == '__main__':
-    adata = sc.read_h5ad('small_1/dataset.h5ad')
-    plot_stages_latent_representation(adata,'ident','stage')
+# if __name__ == '__main__':
+#     adata = sc.read_h5ad('../dataset.h5ad')
+#     plot_stages_latent_representation(adata,'ident','stage')

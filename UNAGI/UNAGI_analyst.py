@@ -31,6 +31,7 @@ class analyst:
         self.adata = sc.read(data_path)
         self.data_folder = os.path.dirname(data_path)
         self.adata.uns = pickle.load(open(self.data_folder+'/org_attribute.pkl', 'rb'))
+        self.total_stage = len(self.adata.obs['stage'].unique())
         self.customized_drug = customized_drug
         self.cmap_dir = cmap_dir
         self.iteration = iteration
@@ -70,7 +71,7 @@ class analyst:
             progressionmarker_background = np.load(os.path.join(self.target_dir,str(progressionmarker_background_sampling)+'progressionmarker_background.npy'),allow_pickle=True)
             progressionmarker_background = dict(progressionmarker_background.tolist())
         else:
-            progressionmarker_background = get_progressionmarker_background(times=progressionmarker_background_sampling,adata= self.adata)
+            progressionmarker_background = get_progressionmarker_background(times=progressionmarker_background_sampling,adata= self.adata,total_stage=self.total_stage)
             np.save(os.path.join(self.target_dir,str(progressionmarker_background_sampling)+'progressionmarker_background.npy'),progressionmarker_background)
         self.adata.uns['progressionMarkers'] = runGetProgressionMarker_one_dist(os.path.join(os.path.dirname(self.data_folder),'idremResults'),progressionmarker_background,self.adata.shape[1],cutoff=0.05)
         print('Dynamic markers discovery.....done....')

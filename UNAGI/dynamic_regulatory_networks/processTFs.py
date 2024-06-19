@@ -369,12 +369,11 @@ def updateGeneFactorsWithDecay(adata, clusterid,iteration,geneWeight, decayRate 
         adata.layers['geneWeight'] = lil_matrix(np.zeros(adata.X.shape)) 
     else:
         adata.layers['geneWeight'] = adata.layers['geneWeight'].tolil()
-    adata.layers['geneWeight'][celllist] = adata.layers['geneWeight'][celllist]*decayRate#.multiply(decayCandidate) change it to all decrease for all cells in one stage
-    # adata.layers['geneWeight'][celllist] += geneWeight
+    adata.layers['geneWeight'][celllist] += geneWeight
     adata.layers['geneWeight'] = adata.layers['geneWeight'].tocsr()
     return adata
     
-def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate = 0.5):
+def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate = 0.3):
     '''
     update gene weights and decay the weight of genes that are not important in this iteration
 
@@ -534,8 +533,8 @@ def extractTFs(path,filename,total_stage,topN=20):
         if len(temp) ==0:
             continue
         temp = getTopNUpandDown(temp,topN)
-        print(each['nodetime'],stages.index(each['nodetime']))
-        TFs[stages.index(each['nodetime'])].append(temp)
+        print(each['nodetime'],stages.index(each['nodetime'][-1]))
+        TFs[stages.index(each['nodetime'][-1])].append(temp)
 
     extractedTFs = mergeTFs(TFs,total_stage=total_stage)
     
