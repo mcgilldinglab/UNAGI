@@ -1,0 +1,290 @@
+
+	body{
+		width:1600px;
+	}
+	
+	#loadercontainer {
+	
+	  width: 100vw;
+	  height: 100vh;
+	  position: fixed;
+	  top: 0;
+	  left: 0;
+
+	  flex-direction: column;
+	  align-items: stretch;
+	  /*justify-content: center;
+	  align-content: center;*/
+	}
+
+	#loader {
+	  margin: auto;
+	  margin-top: 200px;
+	  border: 16px solid #f3f3f3;
+	  border-radius: 50%;
+	  border-top: 16px solid blue;
+	  border-bottom: 16px solid red;
+	  width: 120px;
+	  height: 120px;
+	  -webkit-animation: spin 2s linear infinite;
+	  animation: spin 2s linear infinite;
+	}
+
+	@-webkit-keyframes spin {
+	  0% { -webkit-transform: rotate(0deg); }
+	  100% { -webkit-transform: rotate(360deg); }
+	}
+
+	@keyframes spin {
+	  0% { transform: rotate(0deg); }
+	  100% { transform: rotate(360deg); }
+	}
+
+	
+
+	#load-text {
+	  padding-top: 15px;
+	  text-align: center;
+	  font: 14pt "Helvetica Neue", Helvetica, Arial, sans-serif;
+	  color: lighten(#6767fa, 75%);
+	}
+		
+	
+	/*div svg */
+
+	#div_svg{
+			padding-left:10px;
+			padding-top:10px;
+			padding-right:10px;
+			padding-bottom:10px;
+			width:1200px;
+			height:1200px;
+			overflow:auto;	
+		}
+		
+
+	/*div config*/	
+
+
+	#div_config{
+		
+		padding-left:10px;
+		padding-top:10px;
+		padding-right:10px;
+		padding-bottom:10px;
+		width:300px;
+		height:1200px;
+		border:1px solid;
+		float:left;
+		font-size:12px;
+		background:silver;
+		overflow:scroll; 
+	}width
+
+	#div_config button{
+		height:15px;
+		font-size:12px;
+		margin-left:10px;
+	}
+
+	#div_config input{
+		height:20px;
+		font-size:10px;
+
+	}
+
+	#div_config input[type=submit]{
+		border-radius:10px;
+	}
+
+	#div_config input[type=text]{
+		height:15px;
+		width:100px;
+		border-radius:10px;
+		background:silver;
+		border:none;
+	}
+	select{
+		border-radius:10px;
+		height:20px;
+		width:140px;
+		font-size:10px;
+	}
+	/* vetrical toolbar starts*/
+
+	nav {
+	  font-family: Helvetica, Arial, "Lucida Grande";
+	  font-size: 13px;
+	  line-height: 1.5;
+	  width: 280px;
+	  -webkit-box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+		 -moz-box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+			  box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+	}
+
+	.menu-item {
+	  background: silver;
+	  width: 280px; 
+	}
+
+	/*Menu Header Styles*/
+	.menu-item h4 {
+	  border-bottom: 1px solid rgba(0,0,0,0.3);
+	  border-top: 1px solid rgba(255,255,255,0.2);
+	  color: #fff;
+	  font-size: 12px;
+	  font-weight: 500;
+	  padding: 7px 12px;
+	  background: steelblue;
+	}
+
+	.menu-item h4:hover{  
+	  background: black;
+	}
+
+	.menu-item h4 a {
+	  color: white;
+	  display: block;
+	  text-decoration: none;
+	  width: 280px;
+	}
+
+	/*ul Styles*/
+	.menu-item ul {
+	  background: #fff;
+	  font-size: 12px;
+	  line-height: 30px;
+	  height: 0px;
+	  list-style-type: none;
+	  overflow: hidden;
+	  padding: 0px;
+	
+	  /*Animation*/
+	
+	  -webkit-transition: height 1s ease;
+		 -moz-transition: height 1s ease;
+		   -o-transition: height 1s ease;
+		  -ms-transition: height 1s ease;
+			  transition: height 1s ease;
+	
+	}
+
+	.menu-item ul {
+		height: 93px; 
+	}
+	
+	#globalconfig.menu-item ul{
+		height:423px;
+	}
+	
+	#tfconfig.menu-item ul{
+		height:153px;
+		
+	}
+	#genelistconfig.menu-item ul{
+		height:220px;
+	}
+	
+	#geneconfig.menu-item ul{
+		height:243px;
+		
+	}
+	
+	#methyconfig.menu-item ul{
+		height:413px;
+		
+	}
+	#cellconfig.menu-item ul{
+		height:153px;
+		
+	}
+	
+	#pathfunction.menu-item ul{
+		height:263px;
+	}
+	
+	#downloadconfig.menu-item ul{
+		
+	}
+	
+	#genelistconfig textarea{
+		width:240px;
+		height:100px;
+	}
+
+	/*li Styles*/
+
+	.menu-item li {
+
+	  border-bottom: 1px solid #eee;
+	  margin-left: 10px;
+	  text-decoration: none;
+	  color: #black;
+	  display: block;
+	  width: 250px;
+	  border-radius:10px;
+	  border:1px groove silver;
+	  margin-top:2px;
+	 
+	}
+
+	.menu-item li a:hover {
+	  background: #eee;
+	}
+
+
+	input .checkbox{
+	  width: 13px;
+	  height: 13px;
+	  padding: 0;
+	  margin:0;
+	  vertical-align:middle;
+	  position: relative;
+	  overflow: hidden;
+	}
+
+	/* vetrical toolbar ends*/
+
+	/*bar chart */
+
+	.axis path,
+	.axis line {
+	  fill: none;
+	  stroke: #000;
+	  shape-rendering: crispEdges;
+	  color:red;
+	}
+	.axis{
+		color: red;
+	}
+	
+	
+
+	#sankeychart {
+		position: relative;
+		/*border:1px solid red; */
+		/* width: 1800px;
+		height:3000px;
+		left: 200px;
+		* */
+	}
+
+	#sankeychart .node rect {
+		fill-opacity: .9;
+		shape-rendering: crispEdges;
+		border: 10px solid red;
+	}
+	#sankeychart .node text {
+		font-size:40x;
+		pointer-events: none;
+		text-shadow: 0 1px 0 #fff;
+	}
+	#sankeychart .link {
+		fill: none;
+		stroke: #000;
+		stroke-opacity: .2;
+	}
+	#sankeychart .link:hover {
+		stroke-opacity: .5;
+	}
+	
