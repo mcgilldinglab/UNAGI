@@ -39,9 +39,12 @@ def split_dataset_into_stage(adata_path, folder, key):
 
     '''
     adata = sc.read_h5ad(adata_path)
-    for each in list(adata.obs[key].unqiue()):
+    for each in list(adata.obs[key].unique()):
         adata_temp = adata[adata.obs[key] == each]
+        if 'X_pca' not in adata_temp.obsm.keys():
+            sc.tl.pca(adata_temp)
         adata_temp.write_h5ad(os.path.join(folder,'%s.h5ad'%each),compression='gzip',compression_opts=9)
+    return adata_temp.shape[1]
 def transfer_to_ranking_score(gw):
     '''
     transfer gene weight to ranking score

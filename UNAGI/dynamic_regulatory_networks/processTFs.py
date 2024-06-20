@@ -533,7 +533,7 @@ def extractTFs(path,filename,total_stage,topN=20):
         if len(temp) ==0:
             continue
         temp = getTopNUpandDown(temp,topN)
-        print(each['nodetime'],stages.index(each['nodetime'][-1]))
+        # print(each['nodetime'],stages.index(each['nodetime'][-1]))
         TFs[stages.index(each['nodetime'][-1])].append(temp)
 
     extractedTFs = mergeTFs(TFs,total_stage=total_stage)

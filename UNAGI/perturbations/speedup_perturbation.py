@@ -171,10 +171,15 @@ class perturbation:
                 # input = input.toarray()
             
             # data = np.mean(input,axis=0).reshape(1,-1)
+        import json
+        import os
+        model_dir = os.path.dirname(self.model_name)
+        with open(model_dir+'/training_parameters.json', 'r') as json_file:
+            training_parameters = json.load(json_file)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
-        vae = VAE(data.shape[1], 256, 1024, 64,beta=1,distribution='ziln')#torch.load(loadModelDict)
+
+        vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=1,distribution=training_parameters['dist'])#torch.load(loadModelDict)
         # vae = torch.load(loadModelDict)nput_dim, hidden_dim, graph_dim, latent_dim
-        # vae = VAE(data.shape[1], 64, 256, 0.5)
         if CUDA:
             vae.load_state_dict(torch.load(loadModelDict,map_location=torch.device('cuda:0')))
             # vae = torch.load(loadModelDict)
@@ -194,7 +199,6 @@ class perturbation:
         if impactfactor is not None:
             data = np.expand_dims(data,axis=0)
             data = np.repeat(data, len(impactfactor), axis=0)
-            print(data.shape)
             cell_loader = DataLoader(data.astype('float32'), batch_size=1, shuffle=False, num_workers=0)
         else:
             data = data.toarray()
@@ -229,8 +233,7 @@ class perturbation:
            
         zs = np.array(zs)
         if impactfactor is not None:
-            zs = zs.reshape(len(impactfactor),-1,64)
-        print('zs.shape',zs.shape)
+            zs = zs.reshape(len(impactfactor),-1,training_parameters['latent_dim'])
         if stage >= len(self.hiddenReps):
             self.hiddenReps.append(zs)
             self.perturb_stage_data_mean.append([data,adj])
@@ -455,7 +458,12 @@ class perturbation:
         input_adj = np.array(input_adj)
         input_adj = input_adj.reshape(input_adj[0]*input_adj[1],input_adj[2],-1)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
-        vae = VAE(input_adata.shape[2], 256,1024, 64,beta=1,distribution=self.dist)
+        import json
+        import os
+        model_dir = os.path.dirname(self.model_name)
+        with open(model_dir+'/training_parameters.json', 'r') as json_file:
+            training_parameters = json.load(json_file)
+        vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=1,distribution=training_parameters['dist'])#torch.load(loadModelDict)
         if CUDA:
             
             vae.load_state_dict(torch.load(loadModelDict,map_location='cuda:0'))
@@ -478,7 +486,7 @@ class perturbation:
             z = vae.get_latent_representation(x,adj)
             zs+=z.cpu().detach().numpy().tolist()
         zs = np.array(zs)
-        return zs
+        return zs.reshape(-1,training_parameters['total_stage'],training_parameters['latent_dim'])
     def perturbation__auto_centroid_speed(self,adata, lastClusters, perturbated_genes,CUDA=False):
         '''
         remove non top genes and tf. compared
@@ -504,9 +512,9 @@ class perturbation:
         input_pertubred_backward = self.prepare_speed_perturbation_data(adata, stage, leiden, raw =input_data, impactfactors = perturbated_genes[1])
         input_pertubred = np.append(input_pertubred_forward,input_pertubred_backward,axis=0)
         # input_pertubred = np.array(input_pertubred)
-
-        Z_input = self.getZ_speedup(input_data,CUDA).reshape(-1,4,64)
-        Z_perturbed = self.getZ_speedup(input_pertubred,CUDA).reshape(-1,4,64)
+        
+        Z_input = self.getZ_speedup(input_data,CUDA)#.reshape(-1,4,64)
+        Z_perturbed = self.getZ_speedup(input_pertubred,CUDA)#.reshape(-1,4,64)
         input_distance = []
         for i, each in enumerate(Z_input):
             for  j, each1 in enumerate(each):

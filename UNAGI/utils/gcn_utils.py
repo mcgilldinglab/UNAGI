@@ -55,7 +55,8 @@ def get_gcn_exp(source_directory,total_stage,neighbors,threads= 20):
         print('Calculating cell graph for stage %d.....'%i)
         read_path = source_directory+'/%d.h5ad'%i
         temp = sc.read_h5ad(read_path)
-        
+        if 'X_pca' not in temp.obsm.keys():
+            sc.pp.pca(temp)
         if 'gcn_connectivities' in temp.obsp.keys():
             continue
 

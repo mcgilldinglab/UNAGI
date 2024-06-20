@@ -23,7 +23,7 @@ class UNAGI:
         self.iDREM_parameters = None
         self.species = 'Human'
         self.input_dim = None
-    def setup_data(self, data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
+    def setup_data(self,data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
         
@@ -61,14 +61,21 @@ class UNAGI:
         else:
             print('The dataset is not splited into stages, please use setup_data function to split the dataset into stages first')
             self.data_path = data_path
-            split_dataset_into_stage(self.data_path, self.data_folder, self.stage_key)
+            self.input_dim = split_dataset_into_stage(self.data_path, self.data_folder, self.stage_key)
             gcn_connectivities = False
             
         self.data_path = os.path.join(data_path,'0.h5ad')
         
         self.ns = total_stage
         #data folder is the folder that contains all the h5ad files
-        self.data_folder = data_path#os.path.dirname(data_path)
+        self.data_folder = os.path.dirname(data_path)
+
+        if os.path.exists(os.path.join(self.data_folder , '0')):
+            raise ValueError('The iteration 0 folder is already existed, please remove the folder and rerun the code')
+        if os.path.exists(os.path.join(self.data_folder , '0/stagedata')):
+            raise ValueError('The iteration 0/stagedata folder is already existed, please remove the folder and rerun the code')
+        if os.path.exists(os.path.join(self.data_folder , 'model_save')):
+            raise ValueError('The iteration model_save folder is already existed, please remove the folder and rerun the code')
         dir1 = os.path.join(self.data_folder , '0')
         dir2 = os.path.join(self.data_folder , '0/stagedata')
         dir3 = os.path.join(self.data_folder , 'model_save')
@@ -78,7 +85,8 @@ class UNAGI:
         if not gcn_connectivities:
             print('Cell graphs not found, calculating cell graphs for individual stages! Using K=%d and threads=%d for cell graph construction'%(neighbors,threads))
             self.calculate_neighbor_graph(neighbors,threads)
-        
+        else:
+            print('Cell graphs found, skipping cell graph construction!')
         
     def calculate_neighbor_graph(self, neighbors=25,threads = 20):
         '''
@@ -91,6 +99,7 @@ class UNAGI:
         threads: int
             the number of threads for the cell graph construction, default is 20.
         '''
+    
         get_gcn_exp(self.data_folder, self.ns ,neighbors,threads= threads)
     def setup_training(self,
                  task, 
@@ -157,11 +166,7 @@ class UNAGI:
         self.BATCHSIZE = BATCHSIZE
         self.max_iter = max_iter
         self.GPU = GPU
-        if self.GPU:
-            assert self.device is not None, "GPU is enabled but device is not specified"
-            self.device = torch.device(self.device)
-        else:
-            self.device = torch.device('cpu')
+        
         #if self.input is not existed then raised error
         if self.input_dim is None:
             raise ValueError('Please use setup_data function to prepare the data first')
@@ -175,6 +180,31 @@ class UNAGI:
             self.dis_model = Discriminator(self.input_dim)
         else:
             self.dis_model = None
+        self.training_parameters = {
+                                    'dist': self.dist,
+                                    'device': self.device,
+                                    'epoch_iter': self.epoch_iter,
+                                    'epoch_initial': self.epoch_initial,
+                                    'lr': self.lr,
+                                    'beta': self.beta,
+                                    'lr_dis': self.lr_dis,
+                                    'task': self.task,
+                                    'latent_dim': self.latent_dim,
+                                    'graph_dim': self.graph_dim,
+                                    'hidden_dim': self.hidden_dim,
+                                    'BATCHSIZE': self.BATCHSIZE,
+                                    'max_iter': self.max_iter,
+                                    'GPU': self.GPU,
+                                    'input_dim': self.input_dim,  # assuming self.input_dim is defined elsewhere
+                                    'GCN': self.GCN,
+                                    'adversarial': self.adversarial,
+                                    'total_stage':self.ns
+                                }
+        if self.GPU:
+            assert self.device is not None, "GPU is enabled but device is not specified"
+            self.device = torch.device(self.device)
+        else:
+            self.device = torch.device('cpu')
         self.unagi_trainer = UNAGI_trainer(self.model,self.dis_model,self.task,self.BATCHSIZE,self.epoch_initial,self.epoch_iter,self.device,self.lr, self.lr_dis,GCN=self.GCN,cuda=self.GPU)
     def register_CPO_parameters(self,anchor_neighbors=15, max_neighbors=35, min_neighbors=10, resolution_min=0.8, resolution_max=1.5):
         '''
@@ -248,10 +278,14 @@ class UNAGI:
             the directory to the transcription factor file. The transcription factor file is used to perform the CPO analysis.
         '''
         start_iteration = 0
+        import json
+        with open(os.path.join(self.data_folder , 'model_save')+'/training_parameters.json', 'w') as json_file:
+            json.dump(self.training_parameters, json_file, indent=4)
         if resume:
             start_iteration = resume_iteration
         for iteration in range(start_iteration,self.max_iter):
             
+
             if iteration != 0:
                 dir1 = os.path.join(self.data_folder , str(iteration))
                 dir2 = os.path.join(self.data_folder , str(iteration)+'/stagedata')
