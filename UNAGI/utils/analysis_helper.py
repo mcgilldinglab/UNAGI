@@ -4,8 +4,12 @@ import scipy
 import pandas as pd
 from scipy.stats import norm
 from .attribute_utils import get_data_file_path
-def calculateDataPathwayOverlapGene(adata):
-    data_path = get_data_file_path('gesa_pathways.npy')
+def calculateDataPathwayOverlapGene(adata, customized_pathway=None):
+    if customized_pathway is None:
+        data_path = get_data_file_path('gesa_pathways.npy')
+    else:
+        data_path = get_data_file_path(customized_pathway)
+
     pathways = dict(np.load(data_path,allow_pickle=True).tolist())
     # read_path = os.path.join(source_folder,str(ITERATION),'stagedata/dataset.h5ad')
     adata = adata
@@ -45,8 +49,7 @@ def calculateTopPathwayGeneRanking(adata):
     rank pathways based on gene weights
     '''
     pathway_gene = adata.uns['data_pathway_overlap_genes']
-    # pathway_gene = np.load('./iterativeTrainingNOV26/'+str(ITERATION)+'/data_pathway_overlap_genes.npy',allow_pickle=True)
-    # pathway_gene = dict(pathway_gene.tolist())
+
     avg_ranking = {}
     for i in range(1,4):
         # adata = sc.read_h5ad(f'./iterativeTrainingNOV26/'+str(ITERATION)+'/stagedata/%d.h5ad'%i)
@@ -175,8 +178,6 @@ def calculateDrugOverlapGene(adata, cmap_df=None, drug_profile_directory=None):
         out = {}
         for value, keys in tmp.items():
             out[','.join(keys)] = value.split('!')
-
-        # np.save('./iterativeTrainingNOV26/'+str(ITERATION)+'/data_drug_overlap_genes.npy',out)
         specific_gene_len_dict = {}
         data_pathway_overlap_genes = out
         for each in list(data_pathway_overlap_genes.keys()):
@@ -197,8 +198,6 @@ def calculateDrugOverlapGene(adata, cmap_df=None, drug_profile_directory=None):
 
         adata.uns['data_drug_overlap_genes'] = data_pathway_overlap_genes
         adata.uns['drug-gene_len_dict'] = specific_gene_len_dict
-        # adata.write('./iterativeTrainingNOV26/'+str(ITERATION)+'/stagedata/dataset.h5ad')
-        # np.save('./iterativeTrainingNOV26/'+str(ITERATION)+'/drug-gene_len_dict.npy',specific_gene_len_dict)
         return adata
 
 

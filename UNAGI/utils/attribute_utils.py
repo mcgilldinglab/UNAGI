@@ -437,7 +437,7 @@ def mergeAdata(path,total_stages):
     gcn = csr_matrix((gcn_data, (row,col)), shape=(adata.X.shape[0],adata.X.shape[0]))
     adata.obsp['gcn_connectivities'] = gcn 
     attribute = adata.uns
-    with open(os.path.join(path,'stagedata/org_attribute.pkl'),'wb') as f:
+    with open(os.path.join(path,'stagedata/attribute.pkl'),'wb') as f:
         pickle.dump(attribute, f)
     del adata.uns
-    adata.write_h5ad(os.path.join(path,'stagedata/org_dataset.h5ad'),compression='gzip',compression_opts=9)
+    adata.write_h5ad(os.path.join(path,'stagedata/dataset.h5ad'),compression='gzip',compression_opts=9)

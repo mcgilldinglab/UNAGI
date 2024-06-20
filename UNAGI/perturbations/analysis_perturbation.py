@@ -962,7 +962,7 @@ class perturbationAnalysis:
         
         topdownpathways = self.getTopDownObjects(objectdic,track_percentage,track_to_analysis,all=all)
         results = self.getSummarizedResults(track_to_analysis,topdownpathways,objectdic,track_percentage,items,score,direction_dict,all=all)
-        return 
+        return  results
     def online_analysis(self,deltaD):
         '''
         Analyse the online perturbation results.

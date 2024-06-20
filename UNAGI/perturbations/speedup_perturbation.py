@@ -3,6 +3,7 @@ import numpy as np
 import os
 import random
 import gc
+import json
 import torch
 from scipy.sparse import issparse
 #import DataLoader from torch
@@ -11,6 +12,7 @@ from ..utils.gcn_utils import setup_graph
 import threading
 from ..model.models import VAE
 from .analysis_perturbation import perturbationAnalysis
+
 class perturbation:
     def __init__(self, target_directory,model_name,idrem_dir):
         self.model_name = model_name
@@ -49,9 +51,9 @@ class perturbation:
                 stage_have_clusters[str(j)].append(str(track[j][0]))
                 track_name += '-' + str(track[j][0])
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
-        for i in range(0,4):
+        for i in list(self.adata.obs['stage'].unique()):
 
-            stagedataids = self.adata.obs[self.adata.obs['stage']==str(i)].index.values
+            stagedataids = self.adata.obs[self.adata.obs['stage']==i].index.values
             
 
             adata = self.adata[stagedataids]
@@ -143,50 +145,33 @@ class perturbation:
                     tempcluster=track[k]
         return track
 
-    def getZandZc(self,adata,stage,cluster,CUDA = False, impactfactor=None,topN = None):
+    def getZandZc(self,adata,stage,cluster,CUDA = False, impactfactor=None,topN = None,device='cpu'):
+        import time
         if stage < len(self.hiddenReps):
             if impactfactor is None:
                 return self.hiddenReps[stage]
             else:
                 data,adj = self.perturb_stage_data_mean[stage]
         else:
-            
-            
-
             clusterAdataID = adata.obs[adata.obs['leiden'] == str(cluster)].index.tolist()
             clusterAdata = adata[clusterAdataID]
             adj = clusterAdata.obsp['gcn_connectivities']
-            # gcn_connectivities = clusterAdata.obsp['gcn_connectivities']
-            
-            # temp = gcn_connectivities[clusterAdataID]
-            # temp = list(set(temp.indices))
-            # # input = np.zeros(shape = (adata.X.shape[0],adata.X.shape[1]))
-            # input = csr_matrix(input)
-                
-            # input[temp] = adata.X[temp]
-            # input = gcn_connectivities @ input
-            # input = input[temp].toarray()
-            data = clusterAdata.X#clusterAdata.obsp['gcn_connectivities'] @ clusterAdata.X
-            # if issparse(input):
-                # input = input.toarray()
-            
-            # data = np.mean(input,axis=0).reshape(1,-1)
-        import json
-        import os
+            data = clusterAdata.X
+
+        
         model_dir = os.path.dirname(self.model_name)
         with open(model_dir+'/training_parameters.json', 'r') as json_file:
             training_parameters = json.load(json_file)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
-
         vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=1,distribution=training_parameters['dist'])#torch.load(loadModelDict)
-        # vae = torch.load(loadModelDict)nput_dim, hidden_dim, graph_dim, latent_dim
         if CUDA:
-            vae.load_state_dict(torch.load(loadModelDict,map_location=torch.device('cuda:0')))
+
+            vae.load_state_dict(torch.load(loadModelDict,map_location=torch.device(device)))
             # vae = torch.load(loadModelDict)
-            vae.to('cuda:0')
+            vae.to(device)
         else:
 
-            vae.load_state_dict(torch.load(loadModelDict), map_location=torch.device('cpu'))
+            vae.load_state_dict(torch.load(loadModelDict, map_location=torch.device('cpu')))
             vae.to('cpu')
         
         vae.eval()
@@ -194,49 +179,43 @@ class perturbation:
         zs = []
         zmeans = []
         zstds = []
-        # data = np.mean(clusterAdata.layers['concat'].toarray(),axis=0).reshape(1,-1)#
         # print(np.mean(data))
         if impactfactor is not None:
-            data = np.expand_dims(data,axis=0)
-            data = np.repeat(data, len(impactfactor), axis=0)
-            cell_loader = DataLoader(data.astype('float32'), batch_size=1, shuffle=False, num_workers=0)
+            data = torch.tensor(data).float()
+            impactfactor = torch.tensor(impactfactor).float()
+            data = data + impactfactor.unsqueeze(1)
+            cell_loader = data
         else:
             data = data.toarray()
             cell_loader = DataLoader(data.astype('float32'), batch_size=len(data), shuffle=False, num_workers=0)
             adj = adj.asformat('coo')
             adj = setup_graph(adj)
-        # cell_loader = DataLoader(clusterAdata.layers['concat'].toarray().astype('float32'), batch_size=2000, shuffle=False, num_workers=1)
-        # xx_adj = np.ones(np.shape(clusterAdata.X)[0])
-        
-        # adj = torch.tensor(1)
-    #if it's not tensor then as format
-
         
         if CUDA:
-            adj = adj.to('cuda:0')
-        for perturbed_index, x in enumerate(cell_loader):
-            
-            if impactfactor is not None:
-                x = x.squeeze(0)
-                impactfactor = impactfactor.astype('float32')
-                # x = x+impactfactor
+            adj = adj.to(device)
 
-                x = x+x*impactfactor[perturbed_index]
+        for perturbed_index, x in enumerate(cell_loader):
             
     
             # if on GPU put mini-batch into CUDA memory
             if CUDA:
-                x = x.to('cuda:0')
+                x = x.to(device)
+                
             z = vae.get_latent_representation(x,adj)
             
-            zs+=z.cpu().detach().numpy().tolist()
-           
+            if CUDA:
+                zs+=z.cpu().detach().numpy().tolist()
+            else:
+                zs+=z.detach().numpy().tolist()
+        
         zs = np.array(zs)
+
         if impactfactor is not None:
             zs = zs.reshape(len(impactfactor),-1,training_parameters['latent_dim'])
         if stage >= len(self.hiddenReps):
             self.hiddenReps.append(zs)
             self.perturb_stage_data_mean.append([data,adj])
+
         return zs
     class perturbationthread(threading.Thread):
         def __init__(self, outer_instance,outs, selectedstage,selectedcluster,track,bound,perturbated_gene,CUDA):
@@ -270,7 +249,7 @@ class perturbation:
             for each in ids:
                 dic[int(each)] = i
         return dic
-    def perfect_perturbation__auto_centroid(self,stageadata, adata, selectedstage,selectedcluster,track,bound,perturbated_genes,CUDA=False):
+    def perfect_perturbation__auto_centroid(self,stageadata, adata, selectedstage,selectedcluster,track,bound,perturbated_genes,CUDA=False,device='cpu'):
         '''
         remove non top genes and tf. compared
         '''
@@ -288,7 +267,7 @@ class perturbation:
                 if stage == selectedstage and leiden == selectedcluster:
                     flag = len(hiddenReps)
                 
-                temp = self.getZandZc(adatacollection[stage],stage,leiden,CUDA=CUDA)
+                temp = self.getZandZc(adatacollection[stage],stage,leiden,CUDA=CUDA,device=device)
             
                 hiddenReps.append(temp)
         hiddenReps = np.array(hiddenReps)
@@ -334,7 +313,7 @@ class perturbation:
             por = diff/mean_current
             impactFactor = por * impactFactor
 
-        selectedtemp = self.getZandZc(None,selectedstage,track[selectedstage][0],impactfactor = impactFactor,CUDA=CUDA)
+        selectedtemp = self.getZandZc(None,selectedstage,track[selectedstage][0],impactfactor = impactFactor,CUDA=CUDA,device=device)
         count = 0
         fijresults = []
         for stage, clusters in enumerate(track):
@@ -358,11 +337,11 @@ class perturbation:
             out.append(temp)
 
         return out
-    def perturbation__auto_centroid(self,stageadata, adata, selectedstage,selectedcluster,track,bound,perturbated_genes,CUDA=False):
+    def perturbation__auto_centroid(self,stageadata, adata, selectedstage,selectedcluster,track,bound,perturbated_genes,CUDA=False,device='cpu'):
         '''
         remove non top genes and tf. compared
         '''
-
+        
         hiddenReps=[]
         repNodes = []
         flag = -1 #to indicate which cluster in the track to be changed like [40,1,3,2,4,5] 3 is no.2
@@ -376,7 +355,7 @@ class perturbation:
                 if stage == selectedstage and leiden == selectedcluster:
                     flag = len(hiddenReps)
                
-                temp = self.getZandZc(adatacollection[stage],stage,leiden,CUDA=CUDA)
+                temp = self.getZandZc(adatacollection[stage],stage,leiden,CUDA=CUDA,device=device)
             
                 hiddenReps.append(temp)
         hiddenReps = np.array(hiddenReps, dtype=object)
@@ -385,6 +364,7 @@ class perturbation:
         
         count=0
         
+        
         for stage, clusters in enumerate(track):
             temp = []
             for clusterid, leiden in enumerate(clusters):
@@ -392,7 +372,9 @@ class perturbation:
                 count+=1
             dijresults.append(temp)
         impactFactor = perturbated_genes
-        selectedtemp = self.getZandZc(None,selectedstage,track[selectedstage][0],impactfactor = impactFactor,CUDA=CUDA)
+        
+        selectedtemp = self.getZandZc(None,selectedstage,track[selectedstage][0],impactfactor = impactFactor,CUDA=CUDA,device=device)
+
         count = 0
         fijresults = []
         for stage, clusters in enumerate(track):
@@ -404,7 +386,7 @@ class perturbation:
 
         delta = np.array(fijresults) - np.array(dijresults)[:,np.newaxis]
         gc.collect()
-        
+
         out = []
         for i in range(impactFactor.shape[0]):
             temp = []
@@ -419,17 +401,8 @@ class perturbation:
     def prepare_speed_perturbation_data(self, adata, stage, leiden,raw=None, impactfactors=None):
         if raw is None:
             stageadata = adata[stage]
-            clusterAdata = self.stage_cluster[str(stage)][str(leiden)]#stageadata[self.stage_cluster_index[str(stage)][str(leiden)]]#.index.tolist()
-            # clusterAdata = stageadata[clusterAdataID]
+            clusterAdata = self.stage_cluster[str(stage)][str(leiden)]
             adj = clusterAdata.obsp['gcn_connectivities']
-            # matrix1 = cupyx.scipy.sparse.csr_matrix(clusterAdata.obsp['gcn_connectivities'])#cp.asarray(clusterAdata.obsp['gcn_connectivities'])
-            # matrix2 = cp.asarray(clusterAdata.X)
-            # input = matrix1 @ matrix2
-            # input = cp.asnumpy(input)
-            # input = clusterAdata.obsp['gcn_connectivities'] @ clusterAdata.X
-            # if issparse(input):
-            #     input = input.toarray()
-            #expand [10,3] to [1,10,3]
             input = clusterAdata.X
             data = np.expand_dims(input,axis=0)
 
@@ -523,7 +496,7 @@ class perturbation:
                     each2 = each2.reshape(1, -1)
                     input_distance.append(self.getDistance(each1,each2))
         input_distance = np.array(input_distance)
-        input_distance = input_distance.reshape(-1,4,4)
+        input_distance = input_distance.reshape(-1,Z_input.shape[1],Z_input.shape[1])
         distance = []
         # print(input_distance.shape)
         for i, each in enumerate(Z_perturbed):
@@ -538,7 +511,7 @@ class perturbation:
                     distance.append(self.getDistance(each1,each2))
         
         distance = np.array(distance)
-        distance = distance.reshape(-1,4,4)
+        distance = distance.reshape(-1,Z_input.shape[1],Z_input.shape[1])
         # print(distance.shape)
         
         #delta1 is first half of delta, delta2 is second half of delta
@@ -767,7 +740,7 @@ class perturbation:
             reversed_out.append(copyout_temp)
         return out,reversed_out
    #~~~~~         
-    def startAutoPerturbation(self,lastCluster,bound,mode,CUDA = True,random_genes= None, random_times = None,written=True):
+    def startAutoPerturbation(self,lastCluster,bound,mode,CUDA = True,random_genes= None, random_times = None,written=True,device='cpu'):
         '''
         Start the perturbation analysis.
 
@@ -869,7 +842,6 @@ class perturbation:
                 impactFactor.append(temp)
             impactFactor = np.array(impactFactor)
 
-
         for i, selectedcluster in enumerate(track):
     
             if '%s_perturbation_deltaD'%mode not in self.adata.uns.keys():
@@ -917,11 +889,14 @@ class perturbation:
             self.stageadata[i].obs['leiden'] = self.stageadata[i].obs['leiden'].astype('string')
             # outs[i] = self.perturbationthread(self,i, selectedcluster[0], track, bound,impactFactor,CUDA)
             if mode == 'perfect':
-                outs[i] +=self.perfect_perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, bound,impactFactor,CUDA)
-
+                
+                outs[i] +=self.perfect_perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, bound,impactFactor,CUDA,device=device)
+                
             else:
-                outs[i] += self.perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, bound,impactFactor,CUDA)
-
+                import time
+                t1 = time.time()
+                outs[i] += self.perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, bound,impactFactor,CUDA,device=device)
+                print(time.time()-t1)
             for od, each in enumerate(outs[i]):
                 if written == True:
                     # with open('./'+self.target_directory+'/tsdg2_%s_%s.csv'%(mode,bound),"a+") as f:
@@ -1000,7 +975,7 @@ class perturbation:
                         for kk in range(self.total_stage):
                             tempout.append(each[len(each)-self.total_stage+kk])
                         self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][str(i)] = tempout
-    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = True):
+    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = False,device = 'cuda:0'):
         '''
         Perform perturbation.
 
@@ -1031,31 +1006,37 @@ class perturbation:
             for i in self.tracks.keys():
 
                 print(i)
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA)
+                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'pathway':
             for i in self.tracks.keys():
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA)
+                print('track:',i)
+                import time
+                start = time.time()
+                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
+                end = time.time()
+                print('finsihed')
+                print('time:',end-start)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'random_background':
             for i in self.tracks.keys():
-                self.startAutoPerturbation(i,log2fc,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA)
-                self.startAutoPerturbation(i,1/log2fc,mode, written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA)
+                self.startAutoPerturbation(i,log2fc,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,mode, written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'online_random_background':
             for i in self.tracks.keys():
-                self.startAutoPerturbation(i,1,mode,random_times=random_times,written =written,CUDA=CUDA)
+                self.startAutoPerturbation(i,1,mode,random_times=random_times,written =written,CUDA=CUDA,device=device)
         elif mode == 'perfect':
             for i in self.tracks.keys():
 
                 print(i)
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA)
+                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
     def run_online_speed(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,stage = None, lastCluster=None,CUDA=False):
