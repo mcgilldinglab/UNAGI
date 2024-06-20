@@ -320,7 +320,7 @@ class UNAGI:
         parameters
         ---------------
         data_path: str
-            the directory of the data (h5ad format, e.g. org_dataset.h5ad).
+            the directory of the data (h5ad format, e.g. dataset.h5ad).
         iteration: int
             the iteration used for analysis.
         progressionmarker_background_sampling_times: int
@@ -335,8 +335,10 @@ class UNAGI:
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir)
         analysts.start_analyse(progressionmarker_background_sampling_times)
         print('The analysis has been done, please check the outputs!')
-
-
+    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',show=False,top_n=None,cut_off=None):
+        analysts = analyst(data_path,iteration,target_dir=target_dir)
+        analysts.perturbation_analyse_customized_pathway(customized_pathway,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
+        return analysts.adata
         
 
         
