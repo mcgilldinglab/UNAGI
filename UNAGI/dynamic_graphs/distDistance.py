@@ -103,7 +103,6 @@ def mcSampling(mus, sigmas):
     samplegaussian: list
         A list of sampled data-points from fitted gaussian distributions.
     '''
-
     samplegaussian= [[] for _ in range(len(mus[1]))] #hyperparameter needed to be changed by users
     hiddensize=len(mus[1])
     mus = np.vstack(mus)

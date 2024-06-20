@@ -19,10 +19,27 @@ UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug disco
 
 ## Installation
 
+Create a new conda environment
+```
+conda create -n unagi python=3.9
+conda activate unagi
+```
+
 UNAGI installation
+
+### Option 1: Install from pip
+
+```
+pip install scUNAGI
+```
+
+### Option 2: install from Github
+
+Installing UNAGI directly from GitHub ensures you have the latest version.
 ```
 git clone https://github.com/mcgilldinglab/UNAGI.git
-pip install scUNAGI
+cd UNAGI
+pip install .
 ```
 
 ### Prerequisites
@@ -36,12 +53,13 @@ pip install scUNAGI
 **Required files**
 
 Preprocessed CMAP database: [One Drive](https://mcgill-my.sharepoint.com/:u:/g/personal/yumin_zheng_mail_mcgill_ca/EazTbqa3vKtJnwd6-DL87GUBaAwEA8AXaHHCdEXtS1bPFg?e=Y5A2WO)
--    Requried data to run UNAGI, move it to the folder containing UNAGI and idrem.
+-    **Mandatory** data to run UNAGI perturbation function.
 
 Preprocessed IPF snRNA-seq dataset: [One Drive](https://mcgill-my.sharepoint.com/:f:/g/personal/yumin_zheng_mail_mcgill_ca/EhUPO3Ip0IhCh0kz-Uply_MBzksNoX9N6HDEgC_dUHbCkg?e=biVLuV)
 -    UNAGI outcomes to reproduce the figures and tables generated for the manuscript.
 
 Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example)
+-   A sample dataset for UNAGI demonstration. 
 
 **iDREM installation:**
 
@@ -73,6 +91,8 @@ Install the iDREM to the source folder of UNAGI
 ### Visualize the results of UNAGI method
 
 [Visualization on an example dataset.](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/visualize_UNAGI_results_example_dataset.ipynb)
+
+Please visit [UNAGI-docs](https://unagi-docs.readthedocs.io/en/latest/index.html) for more examples and tutorials.
 
 ## Contact
 [Yumin Zheng](mailto:yumin.zheng@mail.mcgill.ca), [Naftali Kaminski](mailto:naftali.kaminski@yale.edu), [Jun Ding](mailto:jun.ding@mcgill.ca)
