@@ -33,7 +33,7 @@ UNAGI installation
 pip install scUNAGI
 ```
 
-### Option 2: install from Github
+### Option 2: Install from Github
 
 Installing UNAGI directly from GitHub ensures you have the latest version.
 ```
@@ -59,7 +59,7 @@ Preprocessed IPF snRNA-seq dataset: [One Drive](https://mcgill-my.sharepoint.com
 -    UNAGI outcomes to reproduce the figures and tables generated for the manuscript.
 
 Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example)
--   A sample dataset for UNAGI demonstration. 
+-   The dataset for UNAGI walktrhough demonstration. 
 
 **iDREM installation:**
 
