@@ -3,12 +3,28 @@
 (installation)=
 ## Installation
 
-**UNAGI installation:**
+Create a new conda environment
 
-To use UNAGI, first install it using pip:
+```bash
+  $ conda create -n unagi python=3.9
+  $ conda activate unagi
+```
+
+### UNAGI installation
+
+**Option 1: Install from pip**
 
 ```bash
   $ pip install scUNAGI
+```
+
+**Option 2: Install from Github**
+
+Installing UNAGI directly from GitHub ensures you have the latest version.
+```bash
+  $ git clone https://github.com/mcgilldinglab/UNAGI.git
+  $ cd UNAGI
+  $ pip install .
 ```
 
 ### Prerequisites
@@ -50,10 +66,11 @@ To use the example dataset, run the tutorials or reproduce the manuscript result
 **Required files**
 
 Preprocessed CMAP database: [One Drive.](https://mcgill-my.sharepoint.com/:u:/g/personal/yumin_zheng_mail_mcgill_ca/EazTbqa3vKtJnwd6-DL87GUBaAwEA8AXaHHCdEXtS1bPFg?e=Y5A2WO)
--    Requried data to run UNAGI, move it to the folder containing UNAGI and idrem.
+-    **Mandatory** data to run UNAGI.
 
 Preprocessed IPF snRNA-seq dataset: [One Drive.](https://mcgill-my.sharepoint.com/:f:/g/personal/yumin_zheng_mail_mcgill_ca/EhUPO3Ip0IhCh0kz-Uply_MBzksNoX9N6HDEgC_dUHbCkg?e=biVLuV)
 -    UNAGI outcomes to reproduce the figures and tables generated for the manuscript.
 
 Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example)
+-   The dataset for UNAGI walktrhough demonstration. 
 
