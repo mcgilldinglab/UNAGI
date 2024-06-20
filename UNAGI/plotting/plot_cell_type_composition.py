@@ -56,7 +56,25 @@ def cell_type_composition(adata, cell_type_key, stage_key,ax=None,dpi=300,show_c
     data = np.array(list(stage_types.values()))
     data_cum = data.cumsum(axis=1)
     if category_colors is None:
-        category_colors = mpl.colormaps[colormaps](np.linspace(0.1, 1, data.shape[1]))
+        category_colors = [
+    "#4dbbd5",  # Blue
+    "#f39b7f",  # Orange
+    "#00a087",  # Green
+    "#e64b35",  # Red
+    "#3c5488",  # Purple
+    "#8c564b",  # Brown
+    "#e377c2",  # Pink
+    "#7f7f7f",  # Gray
+    "#bcbd22",  # Yellow-Green
+    "#17becf",  # Cyan
+    "#ff9896",  # Light Red
+    "#c5b0d5",  # Light Purple
+    "#c49c94",  # Light Brown
+    "#f7b6d2",  # Light Pink
+    "#c7c7c7",  # Light Gray
+    "#dbdb8d",   # Light Yellow-Green
+    'tab:pink','tab:olive','tab:cyan','gold', 'springgreen','coral','skyblue','tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','yellow','aqua', 'turquoise','orangered', 'lightblue','darkorchid', 'fuchsia','royalblue','slategray', 'silver', 'teal', 'fuchsia','grey','indigo','khaki','magenta','tab:gray'
+]
     for j, (types,c) in enumerate(zip(all_types,category_colors)):
         widths = data[:,j]
         starts = data_cum[:, j] - widths 

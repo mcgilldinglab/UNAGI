@@ -27,7 +27,23 @@ def plot_with_colormap(values,color_dict):
     color_dict : dict
         Dictionary of cell types and their colors.
     '''
-    color_list = [[0.36862745, 0.30980392, 0.63529412, 1.        ],'tab:pink','tab:olive','tab:cyan','gold', 'springgreen','coral','skyblue','tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','yellow','aqua', 'turquoise','orangered', 'lightblue','darkorchid', 'fuchsia','royalblue','slategray', 'silver', 'teal', 'fuchsia','grey','indigo','khaki','magenta','tab:gray']
+    color_list = ["#4dbbd5",  # Blue
+                    "#f39b7f",  # Orange
+                    "#00a087",  # Green
+                    "#e64b35",  # Red
+                    "#3c5488",  # Purple
+                    "#8c564b",  # Brown
+                    "#e377c2",  # Pink
+                    "#7f7f7f",  # Gray
+                    "#bcbd22",  # Yellow-Green
+                    "#17becf",  # Cyan
+                    "#ff9896",  # Light Red
+                    "#c5b0d5",  # Light Purple
+                    "#c49c94",  # Light Brown
+                    "#f7b6d2",  # Light Pink
+                    "#c7c7c7",  # Light Gray
+                    "#dbdb8d"  , # Light Yellow-Green,
+                    'tab:pink','tab:olive','tab:cyan','gold', 'springgreen','coral','skyblue','tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','yellow','aqua', 'turquoise','orangered', 'lightblue','darkorchid', 'fuchsia','royalblue','slategray', 'silver', 'teal', 'fuchsia','grey','indigo','khaki','magenta','tab:gray']
     # random.shuffle(color_list)
     values = list(set(values))
     values = sorted(values)
