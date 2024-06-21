@@ -35,7 +35,8 @@ pip install scUNAGI
 
 ### Option 2: Install from Github
 
-Installing UNAGI directly from GitHub ensures you have the latest version.
+Installing UNAGI directly from GitHub ensures you have the latest version. **(Please install directly from GitHub to use the provided Jupyter notebooks for tutorials and walkthrough examples.)**
+
 ```
 git clone https://github.com/mcgilldinglab/UNAGI.git
 cd UNAGI
