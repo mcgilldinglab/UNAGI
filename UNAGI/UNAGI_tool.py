@@ -340,7 +340,10 @@ class UNAGI:
         analysts.perturbation_analyse_customized_pathway(customized_pathway,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
         return analysts.adata
         
-
+    def customize_drug_perturbation(self,data_path,iteration,customized_drug,bound,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',show=False,top_n=None,cut_off=None):
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug)
+        analysts.perturbation_analyse_customized_drug(customized_drug,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
+        return analysts.adata
         
 
 

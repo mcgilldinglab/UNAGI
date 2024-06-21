@@ -896,7 +896,7 @@ class perturbation:
                 import time
                 t1 = time.time()
                 outs[i] += self.perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, bound,impactFactor,CUDA,device=device)
-                print(time.time()-t1)
+                # print(time.time()-t1)
             for od, each in enumerate(outs[i]):
                 if written == True:
                     # with open('./'+self.target_directory+'/tsdg2_%s_%s.csv'%(mode,bound),"a+") as f:

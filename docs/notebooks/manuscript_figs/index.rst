@@ -5,6 +5,5 @@ This section contains scirpts to generate the figures and tables used in the man
 
 .. toctree::
    :maxdepth: 2
-
-   manuscript/index
+   
    supplementary/index

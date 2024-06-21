@@ -229,9 +229,9 @@ def merge_drugs_with_sametarget_samedirection(adata, overlapped_drug_direction_p
 
 
 def assign_drug_direction(adata, cmap_df=None, customized_drug_direction=None):
-    data_path = get_data_file_path('brdID2cmapName.npy')
-    brdID2cmapName = dict(
-        np.load(data_path, allow_pickle=True).tolist())
+    if cmap_df is not None:
+        data_path = get_data_file_path('brdID2cmapName.npy')
+        brdID2cmapName = dict(np.load(data_path, allow_pickle=True).tolist())
     target_file = adata.uns['data_drug_overlap_genes']
     # assign direciton of drugs to regulate genes based on CMAP direction profile
     if customized_drug_direction is not None:
@@ -280,7 +280,38 @@ def assign_drug_direction(adata, cmap_df=None, customized_drug_direction=None):
         adata = merge_drugs_with_sametarget_samedirection(adata, out)
         return adata
 
+def process_customized_drug_database(data, customized_drug):
+    drug = dict(np.load(customized_drug, allow_pickle=True).tolist())
+    
+    out = {}
+    for each in list(drug.keys()):
+        temp = []
+        for gene in drug[each]:
+            gene1 = gene.split(':')[0]
+            if gene1 in data.var.index.tolist() and gene not in temp:
+                temp.append(gene)
+        if len(temp) > 0:
+            out[each] = temp
 
+    tmp = {}
+    for key, value in out.items():
+        value = '!'.join(value)
+        if value in tmp:
+            tmp[value].append(key)
+        else:
+            tmp[value] = [key]
+    out = {}
+    for value, keys in tmp.items():
+        out[','.join(keys)] = value.split('!')
+    specific_gene_len_dict = {}
+    data_pathway_overlap_genes = out
+    for each in list(data_pathway_overlap_genes.keys()):
+        specific_gene_len_dict[each] = len(data_pathway_overlap_genes[each])
+
+    data.uns['data_drug_overlap_genes'] = out
+    data.uns['drug-gene_len_dict'] = specific_gene_len_dict
+    return data
+                                     
 def find_overlap_and_assign_direction(adata, customized_direction=None, customized_drug=None,cmap_dir=None):
     if customized_drug is None or customized_direction is None:
 
@@ -315,7 +346,7 @@ def find_overlap_and_assign_direction(adata, customized_direction=None, customiz
             adata = calculateDrugOverlapGene(adata, cmap_df=cmap_df)
 
         if (customized_direction != None):
-            print("using cutomized drug profile:", customized_direction)
+            print("using cutomized drug dirction:", customized_direction)
             adata = assign_drug_direction(
                 adata, customized_drug_direction=customized_direction)
         else:
