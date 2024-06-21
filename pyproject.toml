@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel", "flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "UNAGI"
+name = "scUNAGI"
 description = "A Python package for UNAGI"
 version = "0.3.0"
 authors = [{name = "Yumin Zheng", email = "yumin.zheng@mail.mcgill.ca"}]
