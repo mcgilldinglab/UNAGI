@@ -9,7 +9,24 @@ Running UNAGI on the example dataset
     dataset_preparation
     run_UNAGI_using_example_dataset
     visualize_UNAGI_results_example_dataset
-    PCLS_data_post_treatment_prediction
+
+    
+
+UNAGI ablations
+------------------------------------
+
+.. toctree::
     ablation_study
+
+Using UNAGI to predict post-treatment gene expressions
+------------------------------------
+
+.. toctree::
+    PCLS_data_post_treatment_prediction
+
+Using UNAGI with a customized pathway or drug database for in-silico perturbation
+------------------------------------
+
+.. toctree::
     Customize_pathway_database_for_perturbation
     Customize_drug_database_for_perturbation

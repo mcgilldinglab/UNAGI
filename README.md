@@ -93,6 +93,14 @@ Install the iDREM to the source folder of UNAGI
 
 [Visualization on an example dataset.](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/visualize_UNAGI_results_example_dataset.ipynb)
 
+### Using UNAGI with a customized pathway or drug database for in-silico perturbation
+
+[Customized drug/compound database](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/Customize_drug_database_for_perturbation.ipynb) and [Customized pathway database.](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/Customize_pathway_database_for_perturbation.ipynb)
+
+### Predicting post-treatment gene expressions
+
+[Predict the post-treatment gene expression changes using the PCLS data.](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/PCLS_data_post_treatment_prediction.ipynb)
+
 Please visit [UNAGI-docs](https://unagi-docs.readthedocs.io/en/latest/index.html) for more examples and tutorials.
 
 ## Contact
