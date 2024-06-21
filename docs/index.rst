@@ -1,7 +1,7 @@
 UNAGI documentations
 ===================================
 
-**UNAGI** is a Python package for end-to-end deciphering single-cell temporal dynamics and *in-silico* drug perturbations. This tool is built on top of `pyro <https://pyro.ai/>`_, `PyTorch <https://pytorch.org/>`_ and `scanpy <https://scanpy.readthedocs.io/en/stable/index.html>`_. It is developed and maintained by the `Ding Lab <https://junding.lab.mcgill.ca/>`_  at McGill University. 
+**UNAGI** is a Python package for end-to-end deciphering single-cell temporal dynamics and *in-silico* drug perturbations. This tool is built on top of `PyTorch <https://pytorch.org/>`_ and `scanpy <https://scanpy.readthedocs.io/en/stable/index.html>`_. It is developed and maintained by the `Ding Lab <https://junding.lab.mcgill.ca/>`_  at McGill University. 
 
 .. image:: _static/UNAGI_overview.png
    :width: 800
