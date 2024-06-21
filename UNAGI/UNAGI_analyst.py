@@ -5,7 +5,7 @@ import pickle
 import scanpy as sc
 import subprocess
 import numpy as np
-from .utils.analysis_helper import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking
+from .utils.analysis_helper import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking,process_customized_drug_database
 from .marker_discovery.hierachical_static_markers import get_dataset_hcmarkers
 from .perturbations.speedup_perturbation import perturbation
 from .marker_discovery.dynamic_markers_helper import get_progressionmarker_background
@@ -43,7 +43,7 @@ class analyst:
             self.target_dir = target_dir
         train_params = json.load(open(os.path.join(self.target_dir,'model_save/training_parameters.json'),'r'))
         self.model_name = train_params['task']+'_'+str(self.iteration)+'.pth'
-    def perturbation_analyse_customized_pathway(self,customized_pathway,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu'):
+    def perturbation_analyse_customized_pathway(self,customized_pathway,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu',random_genes=5,random_times=100):
         '''
         Perform perturbation on customized pathway.
         '''
@@ -54,7 +54,7 @@ class analyst:
         gc.collect()
         a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
         a.run('pathway',bound,inplace=True,CUDA=CUDA,device=device)
-        a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device)
+        a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times)
         print('random background done')
         a.analysis('pathway',bound)
         print('Finish results analysis')
@@ -62,7 +62,25 @@ class analyst:
             a.uns['pathway_perturbation'].to_csv(save_csv)
         if save_adata is not None:
             a.adata.write(save_adata,compression='gzip', compression_opts=9)
+    def perturbation_analyse_customized_drug(self,customized_drug,bound=0.5,save_csv = None,save_adata = None,CUDA=True,device='cuda:0',advanced=False,random_genes=2,random_times=100):
+        '''
+        Perform perturbation on customized drug.
+        '''
 
+        self.adata = process_customized_drug_database(self.adata, customized_drug=customized_drug)
+        print('Start perturbation....')
+        gc.collect()
+        a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        a.run('drug',bound,inplace=True,CUDA=CUDA,device=device)
+        print('drug perturabtion done')
+        a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times)
+        print('random background done')
+        a.analysis('drug',bound)
+        print('Finish results analysis')
+        if save_csv is not None:
+            a.uns['drug_perturbation'].to_csv(save_csv)
+        if save_adata is not None:
+            a.adata.write(save_adata,compression='gzip', compression_opts=9)
     def start_analyse(self,progressionmarker_background_sampling):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.

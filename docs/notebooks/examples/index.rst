@@ -12,3 +12,4 @@ Running UNAGI on the example dataset
     PCLS_data_post_treatment_prediction
     ablation_study
     Customize_pathway_database_for_perturbation
+    Customize_drug_database_for_perturbation
