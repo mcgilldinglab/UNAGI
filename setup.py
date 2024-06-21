@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='scUNAGI',
-    version='0.2.2',
+    version='0.3.0',
     
     long_description=open('README.md').read(),
     packages=find_packages(),
@@ -15,7 +15,6 @@ setup(
     'igraph<=0.11',
     'networkx>=3.1',
     'numba>=0.57.1',
-    'numpy>=1.24.4',
     'pandas>=2.1.0',
     'parso>=0.8.3',
     'pillow>=9.4.0',
@@ -37,12 +36,16 @@ setup(
     'lightning==2.0.8',
     'numpyro==0.13.0',
     'requests>=2.31.0',
+    'anndata==0.8.0',
     'scanpy>=1.9.5',
+    'jax==0.4.20',
+    'jaxlib==0.4.20',
     'scikit-learn>=1.3.0',
     'scipy>=1.9.3',
     'seaborn>=0.12.2',
     'setuptools>=68.0.0',
     'six>=1.16.0',
+    'numpy==1.24.4',
     'stack_data>=0.6.2',
     'statsmodels>=0.14.0',
     'stdlib-list>=0.8.0',
