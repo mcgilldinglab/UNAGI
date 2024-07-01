@@ -68,7 +68,7 @@ class UNAGI:
         
         self.ns = total_stage
         #data folder is the folder that contains all the h5ad files
-        self.data_folder = os.path.dirname(data_path)
+        self.data_folder = os.path.dirname(self.data_path)
 
         if os.path.exists(os.path.join(self.data_folder , '0')):
             raise ValueError('The iteration 0 folder is already existed, please remove the folder and rerun the code')
