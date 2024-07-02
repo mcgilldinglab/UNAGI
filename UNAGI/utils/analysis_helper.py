@@ -8,7 +8,7 @@ def calculateDataPathwayOverlapGene(adata, customized_pathway=None):
     if customized_pathway is None:
         data_path = get_data_file_path('gesa_pathways.npy')
     else:
-        data_path = get_data_file_path(customized_pathway)
+        data_path = customized_pathway
 
     pathways = dict(np.load(data_path,allow_pickle=True).tolist())
     # read_path = os.path.join(source_folder,str(ITERATION),'stagedata/dataset.h5ad')

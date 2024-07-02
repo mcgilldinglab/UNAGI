@@ -65,7 +65,6 @@ class UNAGI:
             gcn_connectivities = False
             
         self.data_path = os.path.join(data_path,'0.h5ad')
-        
         self.ns = total_stage
         #data folder is the folder that contains all the h5ad files
         self.data_folder = os.path.dirname(self.data_path)
@@ -313,7 +312,7 @@ class UNAGI:
         unagi_runner.load_stage_data()
         unagi_runner.update_gene_weights_table()
 
-    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,target_dir=None,customized_drug=None,cmap_dir=None):
+    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,run_pertubration,target_dir=None,customized_drug=None,cmap_dir=None):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -333,15 +332,15 @@ class UNAGI:
             the directory to the cmap database. Default is None.
         '''
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir)
-        analysts.start_analyse(progressionmarker_background_sampling_times)
+        analysts.start_analyse(progressionmarker_background_sampling_times,run_pertubration=run_pertubration)
         print('The analysis has been done, please check the outputs!')
     def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',show=False,top_n=None,cut_off=None):
-        analysts = analyst(data_path,iteration,target_dir=target_dir)
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True)
         analysts.perturbation_analyse_customized_pathway(customized_pathway,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
         return analysts.adata
         
     def customize_drug_perturbation(self,data_path,iteration,customized_drug,bound,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',show=False,top_n=None,cut_off=None):
-        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug)
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,customized_mode=True)
         analysts.perturbation_analyse_customized_drug(customized_drug,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
         return analysts.adata
         

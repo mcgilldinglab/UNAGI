@@ -27,7 +27,7 @@ class analyst:
     cmap_dir: str
         the directory to the cmap database. Default is None.
     '''
-    def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None):
+    def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None,customized_mode = False):
         self.adata = sc.read(data_path)
         self.data_folder = os.path.dirname(data_path)
         self.adata.uns = pickle.load(open(self.data_folder+'/attribute.pkl', 'rb'))
@@ -41,7 +41,10 @@ class analyst:
             p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
         else:
             self.target_dir = target_dir
-        train_params = json.load(open(os.path.join(self.target_dir,'model_save/training_parameters.json'),'r'))
+        if customized_mode:
+            train_params = json.load(open(os.path.join(os.path.dirname(data_path),'model_save/training_parameters.json'),'r'))
+        else:
+            train_params = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(data_path))),'model_save/training_parameters.json'),'r'))
         self.model_name = train_params['task']+'_'+str(self.iteration)+'.pth'
     def perturbation_analyse_customized_pathway(self,customized_pathway,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu',random_genes=5,random_times=100):
         '''
@@ -81,7 +84,7 @@ class analyst:
             a.uns['drug_perturbation'].to_csv(save_csv)
         if save_adata is not None:
             a.adata.write(save_adata,compression='gzip', compression_opts=9)
-    def start_analyse(self,progressionmarker_background_sampling):
+    def start_analyse(self,progressionmarker_background_sampling,run_pertubration):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -100,12 +103,9 @@ class analyst:
         if not os.path.exists(os.path.join(self.target_dir,'idrem')):
             initalcommand = 'cp -r ' + os.path.join(os.path.dirname(self.data_folder),'idremResults') +' '+self.target_dir+'/idrem'
             p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
-        initalcommand = 'mkdir '+self.target_dir+'/model_save'+'&& cp ' + os.path.join(os.path.dirname(os.path.dirname(self.data_folder)),'model_save',self.model_name)+' '+self.target_dir+'/model_save/'+self.model_name
+        initalcommand = 'mkdir '+self.target_dir+'/model_save'+'&& cp ' + os.path.join(os.path.dirname(os.path.dirname(self.data_folder)),'model_save',self.model_name)+' '+self.target_dir+'/model_save/'+self.model_name +'&& cp ' + os.path.join(os.path.dirname(os.path.dirname(self.data_folder)),'model_save/training_parameters.json')+' '+self.target_dir+'/model_save/training_parameters.json'
         p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
-        if self.customized_drug is not None:
-            self.adata = find_overlap_and_assign_direction(self.adata, customized_drug=self.customized_drug,cmap_dir=self.cmap_dir)
-        else:
-            self.adata = find_overlap_and_assign_direction(self.adata,cmap_dir=self.cmap_dir)
+
         if os.path.exists(os.path.join(self.target_dir,str(progressionmarker_background_sampling)+'progressionmarker_background.npy')):
             progressionmarker_background = np.load(os.path.join(self.target_dir,str(progressionmarker_background_sampling)+'progressionmarker_background.npy'),allow_pickle=True)
             progressionmarker_background = dict(progressionmarker_background.tolist())
@@ -114,21 +114,26 @@ class analyst:
             np.save(os.path.join(self.target_dir,str(progressionmarker_background_sampling)+'progressionmarker_background.npy'),progressionmarker_background)
         self.adata.uns['progressionMarkers'] = runGetProgressionMarker_one_dist(os.path.join(os.path.dirname(self.data_folder),'idremResults'),progressionmarker_background,self.adata.shape[1],cutoff=0.05)
         print('Dynamic markers discovery.....done....')
-        print('Start perturbation....')
-        gc.collect()
         a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
-        a.run('pathway',0.5,inplace=True,CUDA=True)
-        print('pathway perturbatnion done')
-        a.run('drug',0.5,inplace=True)
-        print('drug perturabtion done')
-        a.run('random_background',0.5,inplace=True)
-        print('random background done')
-        a.run('online_random_background',0.5,inplace=True)
-        print('online random background done')
-        a.analysis('pathway',0.5)
-        print('analysis of pathway perturbation')
-        a.analysis('drug',0.5)
-        print('analysis of drug perturbation')
+        if run_pertubration:
+            if self.customized_drug is not None:
+                self.adata = find_overlap_and_assign_direction(self.adata, customized_drug=self.customized_drug,cmap_dir=self.cmap_dir)
+            else:
+                self.adata = find_overlap_and_assign_direction(self.adata,cmap_dir=self.cmap_dir)
+            print('Start perturbation....')
+            gc.collect()
+            a.run('pathway',0.5,inplace=True,CUDA=True)
+            print('pathway perturbatnion done')
+            a.run('drug',0.5,inplace=True)
+            print('drug perturabtion done')
+            a.run('random_background',0.5,inplace=True)
+            print('random background done')
+            a.run('online_random_background',0.5,inplace=True)
+            print('online random background done')
+            a.analysis('pathway',0.5)
+            print('analysis of pathway perturbation')
+            a.analysis('drug',0.5)
+            print('analysis of drug perturbation')
         a.adata.uns['hcmarkers'] = hcmarkers #get_dataset_hcmarkers(self.adata,stage_key='stage',cluster_key='leiden',use_rep='umaps')
         with open(os.path.join(self.target_dir,'attribute.pkl'),'wb') as f:
             pickle.dump(a.adata.uns,f)

@@ -39,7 +39,6 @@ def get_progressionmarker_background(times, adata,total_stage):
         temp = adata[adata.obs[adata.obs['stage']==str(i)].index.tolist()]
         stage_data.append(temp)
     for time in range(times):
-        print('shuffled times:',time)
         # results.append([])
         #shuffle the gene expression for each stage data and each gene
         avg_expression_val = []
