@@ -30,3 +30,9 @@ Using UNAGI with a customized pathway or drug database for in-silico perturbatio
 .. toctree::
     Customize_pathway_database_for_perturbation
     Customize_drug_database_for_perturbation
+
+UNAGI walkthrough
+------------------------------------
+
+.. toctree::
+    walkthrough_example
