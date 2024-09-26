@@ -56,6 +56,8 @@ def run_metrics_subsample(adatas, cell_type_key, stage_key,portion,random_state=
     isolated_asws = 0
     cell_type_asws = 0
     isolated_labels_f1s = 0
+    clisi_graphs = 0
+    overall_scibs = 0
     for i,stage in enumerate(stage_keys):
         
         temp_count = 0
@@ -81,6 +83,7 @@ def run_metrics_subsample(adatas, cell_type_key, stage_key,portion,random_state=
         isolated_asw = scib.metrics.isolated_labels_asw(adata,label_key = 'name.simple', batch_key = 'stage', embed='z')
         celltype_asw = silhouette_score(adata.obsm['z'], adata.obs['name.simple'])
         isolated_f1 = scib.metrics.isolated_labels_f1(adata,label_key = 'name.simple', batch_key = 'stage', embed='z')
+        clisi_graph = scib.metrics.clisi_graph(adata, label_key='name.simple', batch_key='stage', embed='z')
         print('ARI: ', ari)
         print('NMIs: ', nmi)
         print('DBI:',dbi)
@@ -89,6 +92,8 @@ def run_metrics_subsample(adatas, cell_type_key, stage_key,portion,random_state=
         print('isolated_asw: ', isolated_asw)
         print('isolated_f1: ', isolated_f1)
         print('celltype_asw: ', celltype_asw)
+        print('clisi_graph:', clisi_graph)
+        clisi_graphs += clisi_graph
         isolated_asws += isolated_asw
         isolated_labels_f1s += isolated_f1
         NMI += nmi
@@ -97,7 +102,7 @@ def run_metrics_subsample(adatas, cell_type_key, stage_key,portion,random_state=
         silhouettes += silhouette
         aris += ari
         cell_type_asws += celltype_asw
-
+        overall_scibs += (clisi_graphs+isolated_asws+ari+nmi+celltype_asw+isolated_f1)/6
 
     print('ARIs: ', aris/total_stage)
     print('NMI: ', NMI/total_stage)
@@ -107,7 +112,9 @@ def run_metrics_subsample(adatas, cell_type_key, stage_key,portion,random_state=
     print('isolated_asw: ', isolated_asws/total_stage)
     print('celltype_asw: ', cell_type_asws/total_stage)
     print('isolated_f1: ', isolated_labels_f1s/total_stage)
-    return aris/total_stage, NMI/total_stage,DBI/total_stage,label_scores/total_stage, silhouettes/total_stage, isolated_asws/total_stage, cell_type_asws/total_stage, isolated_labels_f1s/total_stage
+    print('clisi_graph: ', clisi_graphs/total_stage)
+    print('overall_scib: ', overall_scibs/total_stage)
+    return aris/total_stage, NMI/total_stage,DBI/total_stage,label_scores/total_stage, silhouettes/total_stage, isolated_asws/total_stage, cell_type_asws/total_stage, isolated_labels_f1s/total_stage, clisi_graphs/total_stage, overall_scibs/total_stage
 def run_metrics(adatas, cell_type_key, stage_key):
     '''
     Evaluation metrics.
@@ -144,6 +151,8 @@ def run_metrics(adatas, cell_type_key, stage_key):
     isolated_asws = 0
     cell_type_asws = 0
     isolated_labels_f1s = 0
+    clisi_graphs = 0
+    overall_scibs = 0
     for i,stage in enumerate(stage_keys):
         
         temp_count = 0
@@ -168,6 +177,7 @@ def run_metrics(adatas, cell_type_key, stage_key):
         isolated_asw = scib.metrics.isolated_labels_asw(adata,label_key = 'name.simple', batch_key = 'stage', embed='z')
         celltype_asw = silhouette_score(adata.obsm['z'], adata.obs['name.simple'])
         isolated_f1 = scib.metrics.isolated_labels_f1(adata,label_key = 'name.simple', batch_key = 'stage', embed='z')
+        clisi_graph = scib.metrics.clisi_graph(adata, label_key='name.simple', batch_key='stage', embed='z')
         print('ARI: ', ari)
         print('NMIs: ', nmi)
         print('DBI:',dbi)
@@ -176,6 +186,8 @@ def run_metrics(adatas, cell_type_key, stage_key):
         print('isolated_asw: ', isolated_asw)
         print('isolated_f1: ', isolated_f1)
         print('celltype_asw: ', celltype_asw)
+        print('clisi_graph:', clisi_graph)
+        clisi_graphs += clisi_graph
         isolated_asws += isolated_asw
         isolated_labels_f1s += isolated_f1
         NMI += nmi
@@ -184,6 +196,7 @@ def run_metrics(adatas, cell_type_key, stage_key):
         silhouettes += silhouette
         aris += ari
         cell_type_asws += celltype_asw
+        overall_scibs += (clisi_graphs+isolated_asws+ari+nmi+celltype_asw+isolated_f1)/6
 
 
     print('ARIs: ', aris/total_stage)
@@ -194,4 +207,6 @@ def run_metrics(adatas, cell_type_key, stage_key):
     print('isolated_asw: ', isolated_asws/total_stage)
     print('celltype_asw: ', cell_type_asws/total_stage)
     print('isolated_f1: ', isolated_labels_f1s/total_stage)
-    return aris/total_stage, NMI/total_stage,DBI/total_stage,label_scores/total_stage, silhouettes/total_stage, isolated_asws/total_stage, cell_type_asws/total_stage, isolated_labels_f1s/total_stage
+    print('clisi_graph: ', clisi_graphs/total_stage)
+    print('overall_scib: ', overall_scibs/total_stage)
+    return aris/total_stage, NMI/total_stage,DBI/total_stage,label_scores/total_stage, silhouettes/total_stage, isolated_asws/total_stage, cell_type_asws/total_stage, isolated_labels_f1s/total_stage, clisi_graphs/total_stage, overall_scibs/total_stage
