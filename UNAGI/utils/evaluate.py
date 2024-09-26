@@ -83,7 +83,7 @@ def run_metrics_subsample(adatas, cell_type_key, stage_key,portion,random_state=
         isolated_asw = scib.metrics.isolated_labels_asw(adata,label_key = 'name.simple', batch_key = 'stage', embed='z')
         celltype_asw = silhouette_score(adata.obsm['z'], adata.obs['name.simple'])
         isolated_f1 = scib.metrics.isolated_labels_f1(adata,label_key = 'name.simple', batch_key = 'stage', embed='z')
-        clisi_graph = scib.metrics.clisi_graph(adata, label_key='name.simple', batch_key='stage', use_rep='z')
+        clisi_graph = scib.metrics.clisi_graph(adata, type_='embed', label_key='name.simple', batch_key='stage', use_rep='z')
         print('ARI: ', ari)
         print('NMIs: ', nmi)
         print('DBI:',dbi)
