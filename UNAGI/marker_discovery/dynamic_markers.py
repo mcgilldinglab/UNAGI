@@ -58,10 +58,9 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
     for i in range(0,stages):
         stage_values.append(temp[1:,i+1].astype(float))
 
-    stage0 = temp[1:,1].astype(float)
-    stage1 = temp[1:,2].astype(float)
-    stage2 = temp[1:,3].astype(float)
-    stage3 = temp[1:,4].astype(float)
+    stages_list = []
+    for i in range(0,stages):
+        stages_list.append(temp[1:,i+1].astype(float))
     
     change[index] = 0
     if cutoff is not None:
@@ -71,10 +70,9 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
         decreasing_stop = np.where(change < 0)[0]
         temp_change = change[increasing_stop]
         temp_names = idrem_genes[increasing_stop]
-        temp_stage0 = stage0[increasing_stop]
-        temp_stage1 = stage1[increasing_stop]
-        temp_stage2 = stage2[increasing_stop]
-        temp_stage3 = stage3[increasing_stop]
+        temp_stages = []
+        for i in range(0,stages):
+            temp_stages.append(stages_list[i][increasing_stop])
         temp_background = background[:,increasing_stop]
 
         
@@ -84,10 +82,8 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
         topMarkers['increasing']['gene'] = {}
         topMarkers['increasing']['log2fc'] = {}
         topMarkers['increasing']['rank'] = {}
-        topMarkers['increasing']['stage0'] = {}
-        topMarkers['increasing']['stage1'] = {}
-        topMarkers['increasing']['stage2'] = {}
-        topMarkers['increasing']['stage3'] = {}
+        for i in range(0,stages):
+            topMarkers['increasing']['stage'+str(i)] = {} 
         topMarkers['increasing']['qval'] = {}
         count = 0
         pvals = []
@@ -108,14 +104,6 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
                 continue
             in_pvals.append(each)
             pvals.append(1-increasing_pval)
-            # topMarkers['increasing']['gene'][str(count)] = temp_names[each]
-            # topMarkers['increasing']['stage0'][str(count)] = temp_stage0[each]
-            # topMarkers['increasing']['stage1'][str(count)] = temp_stage1[each]
-            # topMarkers['increasing']['stage2'][str(count)] = temp_stage2[each]
-            # topMarkers['increasing']['stage3'][str(count)] = temp_stage3[each]
-            # topMarkers['increasing']['log2fc'][str(count)] = temp_change[each]
-            # topMarkers['increasing']['rank'][str(count)] = count+1
-            # topMarkers['increasing']['pval'][str(count)] = 1-increasing_pval#[each]
             count+=1
         count_1 = 0
         #sort pvals by sorted
@@ -132,20 +120,17 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
                 continue
             each = in_pvals[i]
             topMarkers['increasing']['gene'][str(count_1)] = temp_names[each]
-            topMarkers['increasing']['stage0'][str(count_1)] = temp_stage0[each]
-            topMarkers['increasing']['stage1'][str(count_1)] = temp_stage1[each]
-            topMarkers['increasing']['stage2'][str(count_1)] = temp_stage2[each]
-            topMarkers['increasing']['stage3'][str(count_1)] = temp_stage3[each]
+            for i in range(0,stages):
+                topMarkers['increasing']['stage'+str(i)][str(count_1)] = temp_stages[i][each]
             topMarkers['increasing']['log2fc'][str(count_1)] = temp_change[each]
             topMarkers['increasing']['rank'][str(count_1)] = count_1+1
             topMarkers['increasing']['qval'][str(count_1)] = q_val
             count_1+=1
         temp_change = change[decreasing_stop]
         temp_names = idrem_genes[decreasing_stop]
-        temp_stage0 = stage0[decreasing_stop]
-        temp_stage1 = stage1[decreasing_stop]
-        temp_stage2 = stage2[decreasing_stop]
-        temp_stage3 = stage3[decreasing_stop]
+        temp_stages = []
+        for i in range(0,stages):
+            temp_stages.append(stages_list[i][decreasing_stop]) 
         temp_background = background[:,decreasing_stop]
         decreasing_stop = temp_change.argsort()
         # decreasing_pval = scoreAgainstBackground(background[:,decreasing_stop],temp_change)
@@ -153,10 +138,8 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
         topMarkers['decreasing']['gene'] = {}
         topMarkers['decreasing']['log2fc'] = {}
         topMarkers['decreasing']['rank'] = {}
-        topMarkers['decreasing']['stage0'] = {}
-        topMarkers['decreasing']['stage1'] = {}
-        topMarkers['decreasing']['stage2'] = {}
-        topMarkers['decreasing']['stage3'] = {}
+        for i in range(0,stages):
+            topMarkers['decreasing']['stage'+str(i)] = {}
         topMarkers['decreasing']['qval'] = {}
         count = 0
         pvals = []
@@ -177,14 +160,6 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
                 continue
             in_pvals.append(each)
             pvals.append(decreasing_pval)
-            # topMarkers['decreasing']['gene'][str(count)] = temp_names[each]
-            # topMarkers['decreasing']['log2fc'][str(count)] = temp_change[each]
-            # topMarkers['decreasing']['rank'][str(count)] = count+1 
-            # topMarkers['decreasing']['stage0'][str(count)] = temp_stage0[each]
-            # topMarkers['decreasing']['stage1'][str(count)] = temp_stage1[each]
-            # topMarkers['decreasing']['stage2'][str(count)] = temp_stage2[each]
-            # topMarkers['decreasing']['stage3'][str(count)] = temp_stage3[each]
-            # topMarkers['decreasing']['pval'][str(count)] = decreasing_pval#[each]
             count+=1
         count_1 = 0
         
@@ -201,10 +176,8 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
             topMarkers['decreasing']['gene'][str(count_1)] = temp_names[each]
             topMarkers['decreasing']['log2fc'][str(count_1)] = temp_change[each]
             topMarkers['decreasing']['rank'][str(count_1)] = count_1+1 
-            topMarkers['decreasing']['stage0'][str(count_1)] = temp_stage0[each]
-            topMarkers['decreasing']['stage1'][str(count_1)] = temp_stage1[each]
-            topMarkers['decreasing']['stage2'][str(count_1)] = temp_stage2[each]
-            topMarkers['decreasing']['stage3'][str(count_1)] = temp_stage3[each]
+            for i in range(0,stages):
+                topMarkers['decreasing']['stage'+str(i)][str(count_1)] = temp_stages[i][each]
             topMarkers['decreasing']['qval'][str(count_1)] = q_val
             count_1+=1
     else: # if cutoff is not given, return ranked list
@@ -214,58 +187,46 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
         decreasing_stop = np.where(change < 0)[0]
         temp_change = change[increasing_stop]
         temp_names = idrem_genes[increasing_stop]
-        temp_stage0 = stage0[increasing_stop]
-        temp_stage1 = stage1[increasing_stop]
-        temp_stage2 = stage2[increasing_stop]
-        temp_stage3 = stage3[increasing_stop]
+        temp_stages = []
+        for i in range(0,stages):
+            temp_stages.append(stages_list[i][increasing_stop])
         increasing_stop = temp_change.argsort()[::-1]
         topMarkers['increasing']['gene'] = {}
         topMarkers['increasing']['log2fc'] = {}
         topMarkers['increasing']['rank'] = {}
-        topMarkers['increasing']['stage0'] = {}
-        topMarkers['increasing']['stage1'] = {}
-        topMarkers['increasing']['stage2'] = {}
-        topMarkers['increasing']['stage3'] = {}
+        for i in range(0,stages):
+            topMarkers['increasing']['stage'+str(i)] = {}
         if topN is not None:
             for i, each in enumerate(increasing_stop[:topN]):
                 topMarkers['increasing']['gene'][str(i)] = temp_names[each]
-                topMarkers['increasing']['stage0'][str(i)] = temp_stage0[each]
-                topMarkers['increasing']['stage1'][str(i)] = temp_stage1[each]
-                topMarkers['increasing']['stage2'][str(i)] = temp_stage2[each]
-                topMarkers['increasing']['stage3'][str(i)] = temp_stage3[each]
+                for i in range(0,stages):
+                    topMarkers['increasing']['stage'+str(i)][str(i)] = temp_stages[i][each]
                 topMarkers['increasing']['log2fc'][str(i)] = temp_change[each]
                 topMarkers['increasing']['rank'][str(i)] = i+1
         else:
             for i, each in enumerate(increasing_stop):
                 topMarkers['increasing']['gene'][str(i)] = temp_names[each]
-                topMarkers['increasing']['stage0'][str(i)] = temp_stage0[each]
-                topMarkers['increasing']['stage1'][str(i)] = temp_stage1[each]
-                topMarkers['increasing']['stage2'][str(i)] = temp_stage2[each]
-                topMarkers['increasing']['stage3'][str(i)] = temp_stage3[each]
+                for i in range(0,stages):
+                    topMarkers['increasing']['stage'+str(i)][str(i)] = temp_stages[i][each]
                 topMarkers['increasing']['log2fc'][str(i)] = temp_change[each]
                 topMarkers['increasing']['rank'][str(i)] = i+1
         temp_change = change[decreasing_stop]
         temp_names = idrem_genes[decreasing_stop]
-        temp_stage0 = stage0[decreasing_stop]
-        temp_stage1 = stage1[decreasing_stop]
-        temp_stage2 = stage2[decreasing_stop]
-        temp_stage3 = stage3[decreasing_stop]
+        temp_stages = []
+        for i in range(0,stages):
+            temp_stages.append(stages_list[i][decreasing_stop])
         decreasing_stop = temp_change.argsort()
         topMarkers['decreasing']['gene'] = {}
         topMarkers['decreasing']['log2fc'] = {}
         topMarkers['decreasing']['rank'] = {}
-        topMarkers['decreasing']['stage0'] = {}
-        topMarkers['decreasing']['stage1'] = {}
-        topMarkers['decreasing']['stage2'] = {}
-        topMarkers['decreasing']['stage3'] = {}
+        for i in range(0,stages):
+            topMarkers['decreasing']['stage'+str(i)] = {}
         if topN is not None:
             for i, each in enumerate(decreasing_stop[:topN]):
                 topMarkers['decreasing']['gene'][str(i)] = temp_names[each]
                 topMarkers['decreasing']['log2fc'][str(i)] = temp_change[each]
-                topMarkers['decreasing']['stage0'][str(i)] = temp_stage0[each]
-                topMarkers['decreasing']['stage1'][str(i)] = temp_stage1[each]
-                topMarkers['decreasing']['stage2'][str(i)] = temp_stage2[each]
-                topMarkers['decreasing']['stage3'][str(i)] = temp_stage3[each]
+                for i in range(0,stages):
+                    topMarkers['decreasing']['stage'+str(i)][str(i)] = temp_stages[i][each]
                 topMarkers['decreasing']['rank'][str(i)] = i+1
 
         else:
@@ -273,10 +234,8 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
                 topMarkers['decreasing']['gene'][str(i)] = temp_names[each]
                 topMarkers['decreasing']['log2fc'][str(i)] = temp_change[each]
                 topMarkers['decreasing']['rank'][str(i)] = i+1 
-                topMarkers['decreasing']['stage0'][str(i)] = temp_stage0[each]
-                topMarkers['decreasing']['stage1'][str(i)] = temp_stage1[each]
-                topMarkers['decreasing']['stage2'][str(i)] = temp_stage2[each]
-                topMarkers['decreasing']['stage3'][str(i)] = temp_stage3[each]
+                for i in range(0,stages):
+                    topMarkers['decreasing']['stage'+str(i)][str(i)] = temp_stages[i][each]
 
 
     return topMarkers
