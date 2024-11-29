@@ -282,13 +282,17 @@ def assign_drug_direction(adata, cmap_df=None, customized_drug_direction=None):
 
 def process_customized_drug_database(data, customized_drug):
     drug = dict(np.load(customized_drug, allow_pickle=True).tolist())
-    
+    gene_names = data.var.index.tolist()
+   # upper case gene names
+    gene_names = [gene.upper() for gene in gene_names]
     out = {}
     for each in list(drug.keys()):
         temp = []
         for gene in drug[each]:
             gene1 = gene.split(':')[0]
-            if gene1 in data.var.index.tolist() and gene not in temp:
+            #upper case
+            gene1 = gene1.upper()
+            if gene1 in gene_names and gene not in temp:
                 temp.append(gene)
         if len(temp) > 0:
             out[each] = temp

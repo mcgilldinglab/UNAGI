@@ -325,7 +325,11 @@ def get_all_adj_adata(adatas):
     
     obs = pd.concat(obs)
     variable = adatas[0].var 
+
     adata = anndata.AnnData(X=X,obs=obs,var=variable)
+    #anndata var upper case
+    tt = adata.var.index.tolist()
+    adata.var.index = [each.upper() for each in tt]
     gcn = csr_matrix((gcn_data, (row,col)), shape=(adata.X.shape[0],adata.X.shape[0]))
 
     if 'geneWeight' in each.layers.keys():
