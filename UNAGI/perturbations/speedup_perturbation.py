@@ -10,7 +10,7 @@ from scipy.sparse import issparse
 from torch.utils.data import DataLoader
 from ..utils.gcn_utils import setup_graph
 import threading
-from ..model.models import VAE
+from ..model.models import VAE, Plain_VAE
 from .analysis_perturbation import perturbationAnalysis
 
 class perturbation:
@@ -163,7 +163,11 @@ class perturbation:
         with open(model_dir+'/training_parameters.json', 'r') as json_file:
             training_parameters = json.load(json_file)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
-        vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=1,distribution=training_parameters['dist'])#torch.load(loadModelDict)
+        if training_parameters['GCN'] == True:
+
+            vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=training_parameters['beta'],distribution=training_parameters['dist'])#torch.load(loadModelDict)
+        else:
+            vae = Plain_VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=training_parameters['beta'],distribution=training_parameters['dist'])
         if CUDA:
 
             vae.load_state_dict(torch.load(loadModelDict,map_location=torch.device(device)))
@@ -436,7 +440,11 @@ class perturbation:
         model_dir = os.path.dirname(self.model_name)
         with open(model_dir+'/training_parameters.json', 'r') as json_file:
             training_parameters = json.load(json_file)
-        vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=1,distribution=training_parameters['dist'])#torch.load(loadModelDict)
+        print(training_parameters)
+        if training_parameters['GCN'] == True:
+            vae = VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=training_parameters['beta'],distribution=training_parameters['dist'])#torch.load(loadModelDict)
+        else:
+            vae = Plain_VAE(training_parameters['input_dim'], training_parameters['hidden_dim'], training_parameters['graph_dim'], training_parameters['latent_dim'],beta=training_parameters['beta'],distribution=training_parameters['dist'])
         if CUDA:
             
             vae.load_state_dict(torch.load(loadModelDict,map_location='cuda:0'))
