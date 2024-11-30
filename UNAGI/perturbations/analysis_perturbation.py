@@ -892,6 +892,7 @@ class perturbationAnalysis:
             The tendency of the gene expression change.
         '''
         genenames = self.adata.var.index.tolist()
+        genenames = [each.upper() for each in genenames]
         tendency_dict = self.getTendencyFromIDREM()
         tendency = None
         for each in list(track_percentage.keys()):
@@ -959,7 +960,6 @@ class perturbationAnalysis:
 
         direction_dict = self.getTendencyDict(track_percentage)
         objectdic = self.load(items,track_percentage,all=all)
-        
         topdownpathways = self.getTopDownObjects(objectdic,track_percentage,track_to_analysis,all=all)
         results = self.getSummarizedResults(track_to_analysis,topdownpathways,objectdic,track_percentage,items,score,direction_dict,all=all)
         return  results

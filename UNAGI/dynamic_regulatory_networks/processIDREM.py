@@ -164,18 +164,30 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
                             f.write('%s\t%s\n' % ('TF-gene_Interaction_Source', 'human_encode.txt.gz'))
                             
                             continue
+                        elif species =='Mouse':
+                            f.write('%s\t%s\n' % ('TF-gene_Interaction_Source', 'mouse_predicted.txt.gz'))
+                            continue
                     elif k == 2:
                         if species == 'Human':
                             f.write('%s\t%s\n' % ('TF-gene_Interactions_File', 'TFInput/human_encode.txt.gz'))
+                            continue
+                        elif species == 'Mouse':
+                            f.write('%s\t%s\n' % ('TF-gene_Interactions_File', 'TFInput/mouse_predicted.txt.gz'))
                             continue
                     elif k == 5:
                         if species == 'Human':
                             f.write('%s\t%s\n' % ('Gene_Annotation_Source', 'Human (EBI)'))
                             continue
+                        elif species == 'Mouse':
+                            f.write('%s\t%s\n' % ('Gene_Annotation_Source', 'Mouse (EBI)'))
+                            continue
                     elif k == 6:
                         if species == 'Human':
                             f.write('%s\t%s\n' % ('Gene_Annotation_File', 'goa_human.gaf.gz'))
                             continue 
+                        elif species == 'Mouse':
+                            f.write('%s\t%s\n' % ('Gene_Annotation_File', 'goa_mouse.gaf.gz'))
+                            continue
                     elif k== 17:
                         f.write('%s\n' % ('miRNA-gene_Interaction_Source'))
                         continue

@@ -237,8 +237,12 @@ class UNAGI:
         species: str
             the species of the single-cell data.
         '''
-        if species not in ['human','mouse']:
+        if species not in ['human','mouse', 'Human', 'Mouse']:
             raise ValueError('species should be either human or mouse')
+        if species == 'human':
+            species = 'Human'
+        if species == 'mouse':
+            species = 'Mouse'
         self.species = species
 
     def register_iDREM_parameters(self,Normalize_data = 'Log_normalize_data', Minimum_Absolute_Log_Ratio_Expression = 0.5, Convergence_Likelihood = 0.001, Minimum_Standard_Deviation = 0.5):
