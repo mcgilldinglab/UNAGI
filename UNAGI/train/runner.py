@@ -247,7 +247,10 @@ class UNAGI_runner:
         scope = getTargetGenes(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),topN)
         np.save('test_scope.npy',np.array(scope,dtype=object))
         self.averageValues = np.load(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),allow_pickle=True)
-        p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames,self.total_stage)
+        if self.species == 'Human':
+            p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames,self.total_stage)
+        elif self.species == 'Mouse':
+            p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('mouse_predicted.txt'),self.genenames,self.total_stage)
         np.save('test_p.npy',np.array(p,dtype=object))
         #np.save('../data/mes/'+str(iteration)+'/tfinfo.npy',np.array(p))
         updateLoss = updataGeneTablesWithDecay(self.data_path,str(self.iteration),p,self.total_stage)
