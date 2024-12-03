@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='scUNAGI',
-    version='0.4.0',
+    version='0.5.1',
     
     long_description=open('README.md').read(),
     packages=find_packages(),
@@ -53,6 +53,7 @@ setup(
     'tbb>=2021.8.0',
     'texttable>=1.6.7',
     'threadpoolctl>=3.2.0',
+    'torch==2.0.0',
     'torchaudio>=2.0.0',
     'torchvision>=0.15.0',
     'tornado>=6.3.3',
