@@ -339,11 +339,15 @@ class UNAGI:
         analysts.start_analyse(progressionmarker_background_sampling_times,run_pertubration=run_pertubration)
         print('The analysis has been done, please check the outputs!')
     def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',show=False,top_n=None,cut_off=None):
+        if bound == 1:
+            raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True)
         analysts.perturbation_analyse_customized_pathway(customized_pathway,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
         return analysts.adata
         
     def customize_drug_perturbation(self,data_path,iteration,customized_drug,bound,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',show=False,top_n=None,cut_off=None):
+        if bound == 1:
+            raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,customized_mode=True)
         analysts.perturbation_analyse_customized_drug(customized_drug,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)    
         return analysts.adata

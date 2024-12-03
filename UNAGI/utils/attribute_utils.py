@@ -426,6 +426,7 @@ def mergeAdata(path,total_stages):
     clusterType = clustertype
     #build new anndata and assign attribtues and write dataset
     adata = anndata.AnnData(X=X,obs=obs,var=variable)
+    adata.var.index = [each.upper() for each in adata.var.index.tolist()]
     adata.layers['geneWeight'] = csr_matrix(geneWeight)
     adata.uns['clusterType']=clusterType
     adata.uns['edges']=edges

@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "UNAGI"
 description = "A Python package for UNAGI"
-version = "0.3.0"
+version = "0.4.0"
 authors = [{name = "Yumin Zheng", email = "yumin.zheng@mail.mcgill.ca"}]
 requires-python = ">=3.9"
 license = {file = "LICENSE.txt"}
@@ -21,6 +21,7 @@ dependencies = [
     'networkx>=3.1',
     'numba>=0.57.1',
     'numpy==1.24.4',
+    'anndata==0.8.0',
     'pandas==1.5.3',
     'parso>=0.8.3',
     'pillow>=9.4.0',
@@ -56,6 +57,7 @@ dependencies = [
     'tbb>=2021.8.0',
     'texttable>=1.6.7',
     'threadpoolctl>=3.2.0',
+    'torch>=2.0.0',
     'torchaudio>=2.0.0',
     'torchvision>=0.15.0',
     'tornado>=6.3.3',

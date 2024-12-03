@@ -100,7 +100,9 @@ class perturbation:
         # cluster = cluster.repeat(rep.shape[0],axis=0)
         
     def matchSingleClusterGeneDict(self,goadata,gotop):
+        gotop = [each.upper() for each in gotop]
         gene_dict={}
+        goadata.var.index = goadata.var.index.str.upper()
         for i,each in enumerate(goadata.var.index.tolist()):
             gene_dict[each]=i
         results=[]
@@ -1117,10 +1119,7 @@ class perturbation:
             out1,out2 = self.startAutoPerturbation_online_speed(last_clusters,[perturbated_gene,perturbated_gene_reversed],track_names,CUDA=CUDA)
             # out2 = self.startAutoPerturbation_online_speed(last_clusters,perturbated_gene_reversed,track_names,CUDA=CUDA)
                
-            step6_start = time.time()
             perturbation_score, pval,out_deltaD = online_analyst.online_analysis([out1,out2])
-            step6_end = time.time()
-            print('step6 time: ', step6_end - step6_start)
         return perturbation_score, pval,out_deltaD
     def run_online(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,stage = None, lastCluster=None,CUDA=False):
         '''
@@ -1189,10 +1188,7 @@ class perturbation:
                 out2 = self.startAutoPerturbation_online(track[-1][0],perturbated_gene_reversed,CUDA=CUDA)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
-            step6_start = time.time()
             perturbation_score, pval,out_deltaD = online_analyst.online_analysis([out1,out2])
-            step6_end = time.time()
-            print('step6 time: ', step6_end - step6_start)
         return perturbation_score, pval,out_deltaD
     def analysis(self,mode,log2fc,all=True,stage=None):
         '''
