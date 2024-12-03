@@ -358,3 +358,95 @@ def find_overlap_and_assign_direction(adata, customized_direction=None, customiz
             adata = assign_drug_direction(adata, cmap_df=cmap_df)
 
     return adata
+import numpy as np
+import scanpy as sc
+import pickle as pkl
+class TreeNode:
+    def __init__(self, name):
+        self.name = name
+        self.children = []
+
+    def add_child(self, child):
+        self.children.append(child)
+
+def print_tree(node, level=0):
+    print(" " * (4 * level) + "Stage %d|-- "%(level) + node.name)
+    for child in node.children:
+        # print(child.name)
+        print_tree(child, level + 1)
+
+def getClusterPaths_with_cell_types(edges, total_stages,cell_types):
+    '''
+    Obtain the paths of each cluster for multiple stages with cell type information.
+    
+    parameters
+    -----------
+    edges: list
+        A list of lists, where each sublist contains edges between consecutive stages.
+    total_stages: int
+        Total number of stages.
+    cell_types: dict
+        A dictionary containing cell types for each stage.
+
+    return
+    -----------
+    paths: list
+        A collection of paths of clusters.
+    '''
+    if len(edges) != total_stages - 1:
+        raise ValueError("Number of edges must be one less than total stages")
+
+    paths = {}
+    for key in list(edges.keys()):
+        edges[int(key)] = edges[key]
+    # Initialize paths with the first set of edges
+    for each in edges[0]:
+        if str(each[0]) not in paths:
+            root_name = cell_types[str(0)][int(each[0])]
+            leaf_name = cell_types[str(1)][int(each[1])]
+            root = TreeNode(str(each[0])+'_'+root_name)
+            tree_node = TreeNode(str(each[1])+'_'+leaf_name)
+            root.add_child(tree_node)
+            paths[str(each[0])] = [[root], {str(each[1]):tree_node}]
+        else:
+            leaf_name = cell_types[str(1)][int(each[1])]
+            tree_node = TreeNode(str(each[1])+'_'+leaf_name)
+            paths[str(each[0])][0][0].add_child(tree_node)
+            paths[str(each[0])][1][str(each[1])] = tree_node
+    
+    # Iterate through remaining stages
+    for stage in range(1, total_stages - 1):
+        for each in edges[stage]:
+            for item in paths.keys():
+                if len(paths[item]) == stage:
+                    continue
+                if str(each[0]) in list(paths[item][stage].keys()):
+                    leaf_name = cell_types[str(stage+1)][int(each[1])]
+                    tree_node = TreeNode(str(each[1])+'_'+leaf_name)
+                    paths[item][stage][str(each[0])].add_child(tree_node)
+                    if len(paths[item]) == stage + 1:
+                        paths[item].append({})
+                        paths[item][stage + 1][str(each[1])] = tree_node
+                    else:
+                        paths[item][stage + 1][str(each[1])] = tree_node
+    return paths
+
+def visualize_dynamic_graphs_by_text(edges,cell_types):
+    '''
+    Visualize the dynamic graphs by text.
+
+    parameters
+    -----------
+    edges: list
+        A list of lists, where each sublist contains edges between consecutive stages.
+    cell_types: dict
+        A dictionary containing cell types for each stage.
+
+    return
+    -----------
+    None
+    '''
+    paths = getClusterPaths_with_cell_types(edges,len(edges)+1,cell_types)
+    for each in list(paths.keys()):
+        print('Track '+each+' :')
+        print_tree(paths[each][0][0])
