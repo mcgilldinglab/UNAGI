@@ -15,19 +15,48 @@ def get_top_compounds(adata, intensity, top_n=None, cutoff=None):
         P-value cutoff. The default is None.
     '''
     if top_n is not None:
-        if 'top_compounds'not in adata.uns['drug_perturbation_score'][str(intensity)]['total'].keys():
-            if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['total'].keys():
-                print('All pertubred compounds are not statistically significant!')
-                print('Here are the top %s compounds that are not statistically significant:'%(str(top_n)))
-                return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['total']['down_compounds'])[:top_n]
-        return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['total']['top_compounds'])[:top_n]
+        if 'overall' not in adata.uns['drug_perturbation_score'][str(intensity)].keys():
+            dict_results = {}
+            for each_track in adata.uns['drug_perturbation_score'][str(intensity)].keys():
+                if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)][each_track].keys():
+                    print('All pertubred compounds are not statistically significant in track %s!'%(each_track))
+                    dict_results[each_track] = {}
+                else:
+                    dict_results[each_track] = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][each_track]['top_compounds'])[:top_n]
+            print('You are checking the perturbation results for individual tracks, the returning results are stored in the dictionary.\n You can access the results by using the track name as the key.')
+            print('Here are the keys for the dictionary:')
+            for key in dict_results.keys():
+                print(key)
+            return dict_results
+        else:
+            if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                    print('All pertubred compounds are not statistically significant!')
+                    print('Here are some top insiginifcant compounds that are not statistically significant:')
+                    return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['down_compounds'])[:top_n]
+            return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['top_compounds'])[:top_n]
     elif cutoff is not None:
-        if 'top_compounds'not in adata.uns['drug_perturbation_score'][str(intensity)]['total'].keys():
-            if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['total'].keys():
-                print('All pertubred compounds are not statistically significant!')
-                print('Here are the compounds that are not statistically significant:')
-                return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['total']['down_compounds'])
-        temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['total']['top_compounds'])
-        return temp[temp['pval_adjusted'] < cutoff]
+        if 'overall' not in adata.uns['drug_perturbation_score'][str(intensity)].keys():
+            dict_results = {}
+            for each_track in adata.uns['drug_perturbation_score'][str(intensity)].keys():
+                if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)][each_track].keys():
+                    print('All pertubred compounds are not statistically significant in track %s!'%(each_track))
+                    dict_results[each_track] = {}
+                else:
+                    temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][each_track]['top_compounds'])
+                    dict_results[each_track] = temp[temp['pval_adjusted'] < cutoff]
+            print('You are checking the perturbation results for individual tracks, the returning results are stored in the dictionary.\n You can access the results by using the track name as the key.')
+            print('Here are the keys for the dictionary:')
+            for key in dict_results.keys():
+                print(key)
+            return dict_results
+        else:
+            if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                    print('All pertubred compounds are not statistically significant!')
+                    print('Here are some top insiginifcant compounds that are not statistically significant:')
+                    return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['down_compounds'])
+            temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['top_compounds'])
+            return temp[temp['pval_adjusted'] < cutoff]
     else:
         print('Please specify top_n or cutoff')
