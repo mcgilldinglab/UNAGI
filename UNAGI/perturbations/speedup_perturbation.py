@@ -764,10 +764,10 @@ class perturbation:
             The perturbation mode, can be 'drug', 'pathway', 'perfect', 'random_background', 'online_random_background'
         CUDA: bool
             Whether to use GPU
-        random_genes: list
-            A list of random genes
-        random_times: int
+        random_genes: int
             The number of random genes
+        random_times: int
+            The number of random pertubrations
         written: bool
             Whether to write the results to disk
 
@@ -1049,7 +1049,7 @@ class perturbation:
                 self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
-    def run_online_speed(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,stage = None, lastCluster=None,CUDA=False):
+    def run_online_speed(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,perturbed_tracks='all',stage = None, lastCluster=None,CUDA=False):
         '''
         Perform online perturbation.
         
@@ -1099,7 +1099,7 @@ class perturbation:
             out2[track_name] = self.startAutoPerturbation_online(lastCluster,perturbated_gene_reversed,CUDA=CUDA)
             track = self.getTrack(len(self.stageadata)-1,lastCluster)
 
-            perturbation_score, pval,out_deltaD = online_analyst.online_analysis([track_name,[out1,out2]])
+            perturbation_score, pval,out_deltaD = online_analyst.online_analysis([track_name,[out1,out2]],perturbed_tracks)
             self.hiddenReps = []
             self.perturb_stage_data_mean = []
         else:
@@ -1190,7 +1190,7 @@ class perturbation:
                 self.perturb_stage_data_mean = []
             perturbation_score, pval,out_deltaD = online_analyst.online_analysis([out1,out2])
         return perturbation_score, pval,out_deltaD
-    def analysis(self,mode,log2fc,all=True,stage=None):
+    def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None):
         '''
         Analysis of perturbation results
         
@@ -1200,8 +1200,8 @@ class perturbation:
             The mode is choosing from ['drug', 'pathway', 'online']
         log2fc: float
             log2fc is the log2 fold change of perturbation
-        all: bool
-            all is whether to analysis all tracks or one track
+        overall_perturbation_analysis: bool
+            overall_perturbation_analysis is whether to calculate perturbation score for all tracks as a whole or individually. True: all tracks. False: one track.
         stage: int
             stage is the stage to be analysis, if all is True, stage is None
         '''
@@ -1211,7 +1211,7 @@ class perturbation:
         analyst = perturbationAnalysis(self.adata,self.idrem_dir, stage=stage,log2fc = log2fc, mode = mode)
        
         
-        temp = analyst.main_analysis(track_to_analysis = 'all', all=all, score='avg_backScore', items=None)#read item from disk for now
+        temp = analyst.main_analysis(perturbed_tracks = perturbed_tracks, overall_perturbation_analysis=overall_perturbation_analysis, score='avg_backScore', items=None)#read item from disk for now
         if '%s_perturbation_score'%mode not in self.adata.uns.keys():
             self.adata.uns['%s_perturbation_score'%mode] = {}
         

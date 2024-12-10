@@ -15,7 +15,7 @@ setup(
     'igraph<=0.11',
     'networkx>=3.1',
     'numba>=0.57.1',
-    'pandas<2',
+    'pandas>2.0.0',
     'parso>=0.8.3',
     'pillow>=9.4.0',
     'pip>=23.2.1',
