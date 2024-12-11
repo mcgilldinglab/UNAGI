@@ -317,10 +317,14 @@ def process_customized_drug_database(data, customized_drug):
     return data
                                      
 def find_overlap_and_assign_direction(adata, customized_direction=None, customized_drug=None,cmap_dir=None):
+    load_cmap = False
     if customized_drug is None or customized_direction is None:
-
+        if cmap_dir is None:
+            raise ValueError("cmap_dir must be provided! Please download the CMAPDirectionalDf.npy provided in the GitHub repo.")
         arr = np.load(cmap_dir, allow_pickle=True)
         cmap_df = pd.DataFrame(arr[0], index=arr[1], columns=arr[2])
+        load_cmap = True
+
 
     if customized_drug is None and customized_direction is None:
         print("using cmap drug profile & direction")
@@ -345,6 +349,12 @@ def find_overlap_and_assign_direction(adata, customized_direction=None, customiz
                 adata, drug_profile_directory=customized_drug)
         else:
             print("using cmap drug profile")
+            if cmap_dir is None:
+                raise ValueError("cmap_dir must be provided! Please download the CMAPDirectionalDf.npy provided in the GitHub repo.")
+            if load_cmap == False:
+                arr = np.load(cmap_dir, allow_pickle=True)
+                cmap_df = pd.DataFrame(arr[0], index=arr[1], columns=arr[2])
+                load_cmap = True
             genenames = adata.var.index.tolist()
             cmap_df = cmap_df[cmap_df.columns.intersection(genenames)]
             adata = calculateDrugOverlapGene(adata, cmap_df=cmap_df)
