@@ -31,6 +31,7 @@ class perturbationAnalysis:
     def __init__(self,adata,target_directory,log2fc,stage=None,mode=None,allTracks=None):
         self.adata = adata
         self.log2fc = log2fc
+        self.adata.var.index = self.adata.var.index.str.upper()
         self.mode = mode
         self.target_directory = target_directory
         self.stage = stage
@@ -903,6 +904,7 @@ class perturbationAnalysis:
                     written_gene = []
                     for eachgene in gene_in_object[eachpathway]:
                         eachgene = eachgene.split(':')[0]
+                        eachgene = eachgene.upper()
                         temp = direction_dict[eachgene]
                         if temp > 0: #increasing tendency decrease gene expression
                             written_gene.append(eachgene+':-')
