@@ -91,6 +91,8 @@ def buildEdges(stage1,stage2,cutoff = 0.05):
     topgene2 = adata2.uns['topGene']
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
     edges = connectNodes(distance,cutoff)
+    if len(edges) == 0:
+        raise RuntimeError('No edges found between stage %d and stage %d. Please adjust the number of neighbors or using a smaller clustering resolution.'%(stage1,stage2))
     return edges
 def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     '''
@@ -127,6 +129,8 @@ def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     topgene2 = adata2.uns['topGene']
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
     edges = connectNodes(distance,cutoff)
+        if len(edges) == 0:
+        raise RuntimeError('No edges found between stage %d and stage %d. Please adjust the number of neighbors or using a smaller clustering resolution.'%(stage1,stage2))
     return edges
 def getandUpadateEdges(total_stage,midpath,iteration,cutoff = 0.05):
     '''
