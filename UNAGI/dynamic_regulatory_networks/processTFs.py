@@ -461,7 +461,7 @@ def mergeTFs(TFs,total_stage):
     out: list
          a list of up or down regulators of each stage
     '''
-    upAndDownset= [set(),set(),set()]
+    upAndDownset= [set() for _ in range(total_stage-1)]
     out = [[] for _ in range(total_stage-1)]
     for i, each in enumerate(TFs):
         for item in each:

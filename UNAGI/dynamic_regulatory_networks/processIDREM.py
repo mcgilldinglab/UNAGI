@@ -36,7 +36,7 @@ def getClusterPaths(edges, total_stages):
     for stage in range(1, total_stages - 1):
         for each in edges[stage]:
             for item in paths.keys():
-                if len(paths[item]) == stage:
+                if len(paths[item]) <= stage:
                     continue
                 if each[0] in paths[item][stage]:
                     if len(paths[item]) == stage + 1:

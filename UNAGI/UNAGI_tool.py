@@ -23,6 +23,9 @@ class UNAGI:
         self.iDREM_parameters = None
         self.species = 'Human'
         self.input_dim = None
+        #set up random seed
+        np.random.seed(8848)
+        torch.manual_seed(8848)
     def setup_data(self,data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
@@ -63,12 +66,14 @@ class UNAGI:
             self.data_path = data_path
             self.input_dim = split_dataset_into_stage(self.data_path, self.data_folder, self.stage_key)
             gcn_connectivities = False
-            
-        self.data_path = os.path.join(data_path,'0.h5ad')
+        if os.path.isfile(data_path):
+            self.data_path = os.path.dirname(data_path)
+        else:
+            self.data_path = data_path
+        self.data_path = os.path.join(self.data_path,'0.h5ad')
         self.ns = total_stage
         #data folder is the folder that contains all the h5ad files
         self.data_folder = os.path.dirname(self.data_path)
-
         if os.path.exists(os.path.join(self.data_folder , '0')):
             raise ValueError('The iteration 0 folder is already existed, please remove the folder and rerun the code')
         if os.path.exists(os.path.join(self.data_folder , '0/stagedata')):
@@ -269,7 +274,7 @@ class UNAGI:
         self.iDREM_parameters['Convergence_Likelihood'] = Convergence_Likelihood
         self.iDREM_parameters['Minimum_Standard_Deviation'] = Minimum_Standard_Deviation
 
-    def run_UNAGI(self,idrem_dir,CPO=True,resume=False,resume_iteration=None):
+    def run_UNAGI(self,idrem_dir,CPO=True,resume=False,resume_iteration=None,connect_edges_cutoff=0.05):
         '''
         The function to launch the model training. The model will be trained iteratively. The number of iterations is specified by the `max_iter` parameter in the `setup_training` function.
         
@@ -295,7 +300,7 @@ class UNAGI:
                 dir3 = os.path.join(self.data_folder , 'model_save')
                 initalcommand = 'mkdir '+ dir1 +' && mkdir '+dir2
                 p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
-            unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,idrem_dir,adversarial=self.adversarial,GCN = self.GCN)
+            unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,idrem_dir,adversarial=self.adversarial,GCN = self.GCN,connect_edges_cutoff=connect_edges_cutoff)
             unagi_runner.set_up_species(self.species)
             if self.CPO_parameters is not None:
                 if type (self.CPO_parameters) != dict:
