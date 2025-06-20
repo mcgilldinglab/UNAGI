@@ -25,7 +25,7 @@ conda create -n unagi python=3.9
 conda activate unagi
 ```
 
-UNAGI installation
+<!-- UNAGI installation
 
 ### Option 1: Install from pip
 
@@ -33,7 +33,7 @@ UNAGI installation
 pip install scUNAGI
 ```
 
-### Option 2: Install from Github
+### Option 2: Install from Github -->
 
 Installing UNAGI directly from GitHub ensures you have the latest version. **(Please install directly from GitHub to use the provided Jupyter notebooks for tutorials and walkthrough examples.)**
 
@@ -54,7 +54,7 @@ pip install .
 **Required files**
 
 Preprocessed CMAP database ([Link](https://zenodo.org/records/15692608)) provides drug-gene pairs data to run UNAGI drug perturbation function.
--    Option 1 : 'cmap_drug_traget.npy' uses the direct drug traget genes provided in CMAP LINCS 2020.
+-    Option 1 : 'cmap_drug_target.npy' uses the direct drug target genes provided in CMAP LINCS 2020.
 -    Option 2: 'cmap_drug_treated_res_cutoff.npy' uses genes that are up/down-regulated significantly after individual drug treatments in CMAP LINCS 2020. We kept the top 5% drug-gene pairs based on level 5 MODZ score.
 -    'cmap_direction_df.npy' indicates the direction of gene regulated by drugs after treatments. The drug regulation direction of gene is based on level 5 MODZ score.
 -    Use your own drug-target pairs, please see [this tutorial](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/Customize_drug_database_for_perturbation.ipynb).
