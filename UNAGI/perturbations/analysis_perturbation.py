@@ -126,134 +126,8 @@ class perturbationAnalysis:
 
         return list(set(tracks))
     
-    def load_online(self,deltaD=None,sanity=False,track_percentage= None):
-        '''
-        Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset.
-
-        parameters
-        -----------
-        deltaD: dict
-            The perturbation results.
-        sanity: bool
-            If sanity is True, the perturbation results are from the random background perturbation. Otherwise, the perturbation results are from the in-silico perturbation.
-        track_percentage: dict
-            The percentage of cells in each track. If track_percentage is None, the perturbation scores will be calculated for each track. Otherwise, the perturbation scores will be calculated for the whole dataset.
-
-        return
-        --------
-        out: dict
-            The perturbation scores.
-        '''
-        out = {}
-        if sanity == True:
-            k1 = self.adata.uns['online_random_background_perturbation_deltaD']['A'] #track name, times, i
-            k2 = self.adata.uns['online_random_background_perturbation_deltaD']['B']
-        else:
-            k1 = deltaD[0]#{trackname, 'online', 'i'}
-            k2 = deltaD[1]
-        pathwaydic1= {}
-
-        for each in list(k1.keys()):
-
-            if each not in pathwaydic1.keys():
-                
-                for each1 in list(k1[each].keys()):
-                    if each1 not in pathwaydic1.keys():
-                        pathwaydic1[each1] = {}
-                    
-                    if each not in pathwaydic1[each1].keys():
-                        pathwaydic1[each1][each] = []
-                    total_len = len(k1[each][each1])
-                    if track_percentage is not None:
-                        pathwaydic1[each1][each] = [np.array(k1[each][each1][str(i)]) for i in range(total_len)]*np.array(track_percentage[each])
-                    else:
-                        pathwaydic1[each1][each] = [np.array(k1[each][each1][str(i)]) for i in range(total_len)]
-        pathwaydic2= {}
-        for each in list(k2.keys()):
-
-            if each not in pathwaydic2.keys():
-                
-                for each1 in list(k2[each].keys()):
-                    if each1 not in pathwaydic2.keys():
-                        pathwaydic2[each1] = {}
-                    
-                    if each not in pathwaydic2[each1].keys():
-                        pathwaydic2[each1][each] = []
-                    total_len = len(k2[each][each1])
-                    if track_percentage is not None:
-                        pathwaydic2[each1][each] = [np.array(k2[each][each1][str(i)]) for i in range(total_len)]*np.array(track_percentage[each]) #each is track, each1 is item name
-                    else:
-                        pathwaydic2[each1][each] = [np.array(k2[each][each1][str(i)]) for i in range(total_len)]
-        if sanity == False:
-            for each in list(pathwaydic1.keys()):
-                temp1 = []
-                temp2 = []
-                out_delta = []
-                for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
-                    if self.stage is None:
-                        out_delta.append(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i])
-                        temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                        temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                    else:
-                        if i != self.stage:
-                            continue
-                        else:
-                            self.out_delta = np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i]
-                            temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                            temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                temp1 = np.array(temp1)
-                temp2 = np.array(temp2)
-                # out[each] =(np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2
-                out[each] =np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2))
-                if self.stage is None:
-                    self.out_delta = np.mean(out_delta,axis=0)
-                # out[each] = (np.abs(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))+np.abs(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)))/2 #total item-delta
-        if track_percentage is None and sanity == True:
-            out = {}
-            
-            for each in list(k1.keys()):
-                out[each] = []
-                for item in list(k1[each].keys()):
-                    temp1 = []
-                    temp2 = []
-                    for i in range(len(np.sum(np.array(list(k1[each][item].values())),axis=0))):
-                        if self.stage is None:
-                            temp1.append(self.calculateScore(np.array(list(k1[each][item].values()))[i],i))
-                            temp2.append(self.calculateScore(np.array(list(k2[each][item].values()))[i],i))
-                        else:
-                            if i != self.stage:
-                                continue
-                            else:
-                                temp1.append(self.calculateScore(np.array(list(k1[each][item].values()))[i],i))
-                                temp2.append(self.calculateScore(np.array(list(k2[each][item].values()))[i],i))
-                    temp1 = np.array(temp1)
-                    temp2 = np.array(temp2)
-                    # out[each].append((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) 
-                    out[each].append(np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)))
-                    # out[each].append((np.abs(np.array(list(k1[each][item].values())))+np.abs(np.array(list(k2[each][item].values()))))/2)) 
-        elif track_percentage is not None and sanity == True:
-            out = {}
-            for each in list(pathwaydic1.keys()):
-                temp1 = []
-                temp2 = []
-                for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
-                    if self.stage is None:
-                        temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                        temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                    else:
-                        if i != self.stage:
-                            continue
-                        else:
-                            temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                            temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                temp1 = np.array(temp1)
-                temp2 = np.array(temp2)
-                # out[each] = (np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2
-                out[each] =np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2))
-                # out[each] = (np.abs(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))+np.abs(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)))/2
-        return out
     
-    def load(self,data_pathway_overlap_genes,track_percentage,overall_perturbation_analysis=True,sanity=False):
+    def load(self,data_pathway_overlap_genes,track_percentage,score_weight,overall_perturbation_analysis=True,sanity=False):
         '''
         Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset. 
 
@@ -277,6 +151,7 @@ class perturbationAnalysis:
         if sanity == True:
             k1 = self.adata.uns['random_background_perturbation_deltaD'][str(self.log2fc)]
             k2 = self.adata.uns['random_background_perturbation_deltaD'][str(1/self.log2fc)]
+            records_to_adjust_weight = []
         else:
             k1 = self.adata.uns['%s_perturbation_deltaD'%self.mode][str(self.log2fc)]
             k2 = self.adata.uns['%s_perturbation_deltaD'%self.mode][str(1/self.log2fc)]
@@ -296,10 +171,10 @@ class perturbationAnalysis:
                     if overall_perturbation_analysis == True:
                         if each not in track_percentage.keys():
                             continue
-                        pathwaydic1[each1][each] = [np.array(k1[each][each1][str(i)]) for i in range(total_len)]*np.array(track_percentage[each])
+                        pathwaydic1[each1][each] = [np.array(k1[each][each1][i]) for i in range(total_len)]
                     else:
-                        pathwaydic1[each1][each] = [np.array(k1[each][each1][str(i)]) for i in range(total_len)]
-       
+                        pathwaydic1[each1][each] = [np.array(k1[each][each1][i]) for i in range(total_len)]
+  
         pathwaydic2= {}
     #each 1 is the item name, each is the track name
         for each in list(k2.keys()):
@@ -316,9 +191,9 @@ class perturbationAnalysis:
                     if overall_perturbation_analysis == True:
                         if each not in track_percentage.keys():
                             continue
-                        pathwaydic2[each1][each]= [np.array(k2[each][each1][str(i)]) for i in range(total_len)]*np.array(track_percentage[each])
+                        pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
                     else:
-                        pathwaydic2[each1][each]= [np.array(k2[each][each1][str(i)]) for i in range(total_len)]
+                        pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
         if overall_perturbation_analysis:
             out = {}
             for each in list(pathwaydic1.keys()):
@@ -326,28 +201,42 @@ class perturbationAnalysis:
                 temp1 = []
                 temp2 = []
                 temp = []
+                unit_score = []
                 for each_track in list(pathwaydic1[each].keys()):
                     if len(list(pathwaydic1[each][each_track])) == 0:
                         del pathwaydic1[each][each_track]
                         del pathwaydic2[each][each_track]
 
-                for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
-                    if self.stage is None:
-                        temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                        temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                    else:
-                        if i != self.stage:
-                            continue
-                        elif i == self.stage:
-                            temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                            temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                temp1 = np.array(temp1)
-                temp2 = np.array(temp2)
+                    # temp_track_score.append(0)
+                    # temp_track_score_2.append(0)
+                    temp_track_score = []
+                    for i in range(len(np.array(list(pathwaydic1[each][each_track])))):
+                        if self.stage is None:
+                            temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
+                        else:
+                            if i != self.stage:
+                                continue
+                            elif i == self.stage:
+                                temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
+                    unit_score.append(np.mean(temp_track_score))
+                # for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
+                #     if self.stage is None:
+                #         temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
+                #         temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
+                #     else:
+                #         if i != self.stage:
+                #             continue
+                #         elif i == self.stage:
+                #             temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
+                #             temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
+                # temp1 = np.array(temp1)
+                # temp2 = np.array(temp2)
 
-                temp.append(np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)))
-                # temp.append((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) 
-                # temp.append((np.mean(temp1[:,0])-np.mean(temp2[:,0]))/2 * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)) 
-                out[each]['overall'] = np.array(temp)
+                # temp.append(np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)))
+                    
+                out[each]['overall'] = np.sum(np.array(unit_score))
+                if sanity:
+                    records_to_adjust_weight+=unit_score
         else:
             out = {}
             for each in list(pathwaydic1.keys()): #each is the pathway name
@@ -357,30 +246,28 @@ class perturbationAnalysis:
                     temp1 = []
                     temp2 = []
                     temp = []
+
                     for i in range(len(np.array(list(pathwaydic1[each][item])))):
                         if self.stage is None:
-                            temp1.append(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i))
-                            temp2.append(self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i))
+                            temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,weight=score_weight)[0])/2)
                         else:
                             if i != self.stage:
                                 continue
                             else:
-                                temp1.append(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i))
-                                temp2.append(self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i))
-                    temp1_copy = np.array(temp1)
-                    temp2_copy = np.array(temp2)
-
-                    # temp.append((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2 )
+                                temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,weight=score_weight)[0])/2)
+                    temp = np.sum(temp)
                     
-                    temp.append(np.sqrt(((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2) * ((np.abs(np.mean(temp1_copy[:,1]))+np.abs(np.mean(temp2_copy[:,1])))/2)))
-                    # temp.append((np.mean(temp1[:,0])-np.mean(temp2[:,0]))/2* ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)) 
+                    # temp.append(np.sqrt(((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2) * ((np.abs(np.mean(temp1_copy[:,1]))+np.abs(np.mean(temp2_copy[:,1])))/2)))
+                    
                     out[each][item] = np.array(temp)
         if sanity == False:
-
+    
             for each in list(out.keys()):
                 if each not in data_pathway_overlap_genes:
                     del out[each]
-        return out
+            return out
+        else:
+            return out, records_to_adjust_weight
     
     #convert distance to scores and some statistics
 
@@ -451,7 +338,7 @@ class perturbationAnalysis:
 
 
         return percentage
-    def calculateScore(self,delta,flag,weight=100):
+    def calculateScore(self,delta,flag,weight=1):
         '''
         Calculate the perturbation score.
 
@@ -522,12 +409,12 @@ class perturbationAnalysis:
                             continue
                 perturbationresultdic[each][track] = {}
                 perturbationresultdic[each][track]['backScore'] = []
-                for flag, each_perturbation in enumerate(pathwaydic[each][track]):
-                    out = each_perturbation
-                    perturbationresultdic[each][track]['backScore'] = out
+                # for flag, each_perturbation in enumerate(pathwaydic[each][track]):
+                #     out = each_perturbation
+                #     perturbationresultdic[each][track]['backScore'] = out
                     
                 
-                perturbationresultdic[each][track]['avg_backScore'] = perturbationresultdic[each][track]['backScore']
+                perturbationresultdic[each][track]['avg_backScore'] = pathwaydic[each][track]
         return perturbationresultdic
 
 
@@ -649,7 +536,7 @@ class perturbationAnalysis:
                 # print('down compound:',down_compounds[i])
                 final_down_compounds.append(down_compounds[i])
         return top_compounds,down_compounds
-    def getTopDownObjects(self,pathwaydic,track_percentage,track,overall_perturbation_analysis=True, flag=0):
+    def getTopDownObjects(self,pathwaydic,sanity_pathwaydic,track_percentage,track,overall_perturbation_analysis=True, flag=0):
         '''
         get top and down objects in a track
 
@@ -657,6 +544,8 @@ class perturbationAnalysis:
         ------------
         pathwaydic: list 
             perturbation statistic results
+        sanity_pathwaydic: list
+            sanity perturbation statistic results
         track_percentage: list
             percentage of cells in each track
         track: list
@@ -674,7 +563,6 @@ class perturbationAnalysis:
         '''
 
         perturbationresultdic = self.calculateAvg(pathwaydic,tracklist=track)
-        sanity_pathwaydic = self.load( None ,track_percentage,overall_perturbation_analysis=overall_perturbation_analysis,sanity=True)
         sanity_perturbationresultdic = self.calculateAvg(sanity_pathwaydic,sanity=True,tracklist=track)
         
 
@@ -810,7 +698,7 @@ class perturbationAnalysis:
         cdf=norm.cdf(perturbationresultdic[object][path][scoreindex],sanity_pathdic[path].mean(),sanity_pathdic[path].std())    
         pval = 1.0000000-cdf
         return score, pval
-    def getSummarizedResults(self,perturbed_tracks,objectranking, objectdic,track_percentage,gene_in_object,scoreindex,direction_dict,overall_perturbation_analysis):#(pathwayranking,perturbationresultdic,pathdic,sanity_pathdic,gene_in_object,score):
+    def getSummarizedResults(self,perturbed_tracks,objectranking, objectdic,sanity_objectdic,track_percentage,gene_in_object,scoreindex,direction_dict,overall_perturbation_analysis):#(pathwayranking,perturbationresultdic,pathdic,sanity_pathdic,gene_in_object,score):
         '''
         Get the perturbation score.
 
@@ -839,7 +727,6 @@ class perturbationAnalysis:
             The perturbation scores.
         '''
 
-        sanity_objectdic = self.load(gene_in_object,track_percentage,overall_perturbation_analysis=overall_perturbation_analysis,sanity=True)
         sanity_perturbationresultdic = self.calculateAvg(sanity_objectdic,sanity=True,tracklist=perturbed_tracks)
         perturbationresultdic = self.calculateAvg(objectdic,tracklist=perturbed_tracks)
         pathways = list(objectdic.keys())
@@ -941,26 +828,6 @@ class perturbationAnalysis:
             if  each not in output.keys():
                 output[each] = tendency[i]
         return output
-    def get_online_results(self, score, random_score):
-        '''
-        Calculate the p-value of the perturbation score for an online perturbation.
-
-        parameters
-        -----------
-        score: float
-            The perturbation score.
-        random_score: float
-            The perturbation score of the random background perturbation.
-
-        return
-        -----------
-        pval: float
-            The p-value of the perturbation score.
-
-        ''' 
-
-        cdf=norm.cdf(score,np.array(random_score).mean(),np.array(random_score).std())
-        return 1.00 - cdf
 
 
     def main_analysis(self,perturbed_tracks, overall_perturbation_analysis,score=None,items=None):
@@ -994,51 +861,27 @@ class perturbationAnalysis:
             items = self.adata.uns['data_drug_overlap_genes']
 
         direction_dict = self.getTendencyDict(track_percentage)
-        objectdic = self.load(items,track_percentage,overall_perturbation_analysis=overall_perturbation_analysis)
-        topdownpathways = self.getTopDownObjects(objectdic,track_percentage,perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis)
-        results = self.getSummarizedResults(perturbed_tracks,topdownpathways,objectdic,track_percentage,items,score,direction_dict,overall_perturbation_analysis=overall_perturbation_analysis)
+        candidates_wegiht = [0.01,0.1,0.5,1,10,100]
+        sanity_scores = []
+        sanity_pathwaydics = {}
+        for weight in candidates_wegiht:
+            sanity_pathwaydic,temp_sanity_score = self.load( None ,track_percentage,weight,overall_perturbation_analysis=overall_perturbation_analysis,sanity=True)
+            sanity_scores.append(temp_sanity_score)
+            sanity_pathwaydics[weight] = sanity_pathwaydic
+        sanity_scores = np.array(sanity_scores)
+        # print(np.mean(sanity_scores,axis=1))
+        differences = np.abs(sanity_scores-0.05) + np.abs(sanity_scores-0.1)
+        differences = np.mean(differences,axis=1)
+        # print('differences:',differences)
+        min_index = np.argmin(differences)
+        weight = candidates_wegiht[min_index]
+        print('score weight:',weight)
+        sanity_pathwaydic = sanity_pathwaydics[weight]
+        objectdic = self.load(items,track_percentage,weight,overall_perturbation_analysis=overall_perturbation_analysis)
+        # print('loaded objectdic')
+        topdownpathways = self.getTopDownObjects(objectdic,sanity_pathwaydic,track_percentage,perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis)
+        
+        # print('got topdownpathways')
+        results = self.getSummarizedResults(perturbed_tracks,topdownpathways,objectdic,sanity_pathwaydic,track_percentage,items,score,direction_dict,overall_perturbation_analysis=overall_perturbation_analysis)
         return  results
-    def online_analysis(self,deltaD,perturbed_tracks):
-        '''
-        Analyse the online perturbation results.
-
-        parameters
-        -----------
-        deltaD: list
-            The online perturbation results.
-
-        return
-        -----------
-        perturbation_score: float
-            The perturbation score.
-        pval: float
-            The p-value of the perturbation score.
-        '''
-        import time
-
-        self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
-        if self.allTracks == True:
-            tracks = self.get_tracks()
-            
-            track_percentage = self.get_track_percentage(tracks,perturbed_tracks)
-            
-            
-            perturbation_scores = self.load_online(deltaD,track_percentage=track_percentage)
-            
-            random_scores = self.load_online(sanity=True,track_percentage=track_percentage)
-            
-        elif self.allTracks == False:
-            track = deltaD[0]
-            perturbation_scores =  self.load_online(deltaD[1]) # if one track mode, delta = [track,[deltaDA,deltaDB]]
-            random_scores =self.load_online(sanity=True)
-        
-       
-        perturbation_score = np.array(list(perturbation_scores.values()))#.mean()
-        random_score = np.array(list(random_scores.values()))
-        
-        pval = self.get_online_results(perturbation_score, random_score)
-        
-        
-        print(perturbation_score, pval, self.out_delta)
-        
-        return perturbation_score, pval, self.out_delta
+   

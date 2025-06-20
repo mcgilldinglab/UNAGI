@@ -321,7 +321,7 @@ class UNAGI:
         unagi_runner.load_stage_data()
         unagi_runner.update_gene_weights_table()
 
-    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,run_pertubration,target_dir=None,customized_drug=None,cmap_dir=None,defulat_perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all'):
+    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,run_pertubration,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,defulat_perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -341,8 +341,9 @@ class UNAGI:
             the directory to the cmap database. Default is None.
         '''
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir)
-        analysts.start_analyse(progressionmarker_background_sampling_times,run_pertubration=run_pertubration,defulat_perturb_change=defulat_perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks)
+        analysts.start_analyse(progressionmarker_background_sampling_times,customized_pathway=customized_pathway, run_pertubration=run_pertubration,random_times=progressionmarker_background_sampling_times,defulat_perturb_change=defulat_perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
         print('The analysis has been done, please check the outputs!')
+    
     def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,show=False,top_n=None,cut_off=None):
         if bound == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')

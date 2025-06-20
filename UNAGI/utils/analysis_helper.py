@@ -11,7 +11,6 @@ def calculateDataPathwayOverlapGene(adata, customized_pathway=None):
         data_path = customized_pathway
 
     pathways = dict(np.load(data_path,allow_pickle=True).tolist())
-    # read_path = os.path.join(source_folder,str(ITERATION),'stagedata/dataset.h5ad')
     adata = adata
     genenames = adata.var.index.tolist()
     out = {}
@@ -162,9 +161,15 @@ def calculateDrugOverlapGene(adata, cmap_df=None, drug_profile_directory=None):
         out = {}
         for each in list(drug.keys()):
             temp = []
-            for gene in drug[each]:
-                if gene in genenames and gene not in temp:
-                    temp.append(gene)
+            temp_genes = []
+            # for gene in drug[each]:
+                # gene = gene.split(':')[0]
+                # if gene in genenames and gene not in temp:
+                #     temp.append(gene)
+            temp_genes = [s.partition(':')[0] for s in drug[each]]
+                
+            temp = list(set(temp_genes) & set(genenames))
+
             if len(temp) > 0:
                 out[each] = temp
     
@@ -229,9 +234,9 @@ def merge_drugs_with_sametarget_samedirection(adata, overlapped_drug_direction_p
 
 
 def assign_drug_direction(adata, cmap_df=None, customized_drug_direction=None):
-    if cmap_df is not None:
-        data_path = get_data_file_path('brdID2cmapName.npy')
-        brdID2cmapName = dict(np.load(data_path, allow_pickle=True).tolist())
+    # if cmap_df is not None:
+    data_path = get_data_file_path('brdID2cmapName.npy')
+    brdID2cmapName = dict(np.load(data_path, allow_pickle=True).tolist())
     target_file = adata.uns['data_drug_overlap_genes']
     # assign direciton of drugs to regulate genes based on CMAP direction profile
     if customized_drug_direction is not None:
@@ -335,7 +340,7 @@ def find_overlap_and_assign_direction(adata, customized_direction=None, customiz
 
         out = {row: cols+':'+cmap_df.loc[row]
                for row in cmap_df.index.tolist()}
-
+        print('len(cmap_df.columns)', len(cmap_df.columns))
         nGenes = len(cmap_df.columns)
         drug_len = {row: nGenes for row in cmap_df.index.tolist()}
         adata.uns['drug-gene_len_dict'] = drug_len
