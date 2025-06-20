@@ -3,6 +3,7 @@ import os
 import threading
 import subprocess
 import gc
+from ..utils.idrem_helper import run_certrain_Idrem, test_idrem_results
 def getClusterPaths(edges, total_stages):
     '''
     Obtain the paths of each cluster for multiple stages.
@@ -133,6 +134,8 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
     p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
     print(p.stdout.read()) 
     print(paths)
+    if len(paths) == 0:
+        raise ValueError("No paths found in the input data.")
     for i, each in enumerate(paths):
         each_processed = []
         for e in each:
@@ -250,6 +253,23 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
         for each in command:
             p = subprocess.Popen(each, stdout=subprocess.PIPE, shell=True)
             print(p.stdout.read())
+    
+    idrem_inputs = os.listdir(os.path.join(midpath, str(iteration)+'/idremInput'))
+    for each_input in idrem_inputs:
+        each_input = each_input+'_viz'
+        print('checking IDREM results for ',each_input)
+        count = 0
+        candidates = [[0.05,0.1,0.04],[0.05,0.1,0.03],[0.05,0.1,0.02],[0.01,0.1,0.04],[0.01,0.1,0.03],[0.01,0.05,0.03],[0.01,0.05,0.02],[0.01,0.1,0.02],[0.01,0.05,0.01],[0.1,0.05,0.2],[0.2,0.1,0.3]]
+
+        while not test_idrem_results(dir1, each_input):
+            if count >= len(candidates):
+                print('all candidates parameters are tested')
+                break
+            run_certrain_Idrem(dir1, each_input, idrem_dir, species='Human', Minimum_Standard_Deviation = candidates[count][0],Convergence_Likelihood=candidates[count][1],Minimum_Absolute_Log_Ratio_Expression=candidates[count][2],trained=False)
+            count += 1
+        print('IDREM results for %s are checked'%each_input)
+                
+
     print('idrem Done')
 
 def averageNode(nodes,state):

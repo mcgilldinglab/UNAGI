@@ -530,21 +530,31 @@ class perturbation:
         # print(delta1.shape)
         # print(delta2.shape)
         return delta1, delta2
-        
-        # out = []
-        # for i in range(impactFactor.shape[0]):
-        #     temp = []
-        #     temp.append(perturbated_genes[i])
-        #     for kk in range(len(track)):
-        #         temp.append(track[kk][0])
-        #     for kk in range(len(track)):
-        #         temp.append(delta[kk][i])
-        #     out.append(temp)
 
-        return out
+
+    def get_cmap_random_genes(self,bound):
+        random_cmap_target = self.adata.uns['cmap_random_genes']#this should be an attribute of adata object later on
+        drug_names = list(i for i in range(len(random_cmap_target)))
+
+
+        temp_random_cmap_genes = random_cmap_target.copy()
+        perturbed_genes = []
+        
+        for temp in temp_random_cmap_genes:
+            
+            out_temp = []
+            for each in temp:
+                each = each.split(':')
+                if each[1] == '+':
+                    each = each[0]+':'+str(bound)
+                elif each[1] == '-':
+                    each = each[0]+':'+str(1/bound)
+                out_temp.append(each)
+            perturbed_genes.append(out_temp)
+        return drug_names, perturbed_genes
+
     def get_drug_genes(self,bound):
         drug_target = self.adata.uns['data_drug_overlap_genes']#this should be an attribute of adata object later on
-        #drug_target = dict(np.load(drug_cell_type_target,allow_pickle=True).tolist()) #this should be an attribute of adata object later on
         drug_names = list(drug_target.keys())
 
         drug_target_genes = list(drug_target.values())
@@ -799,6 +809,9 @@ class perturbation:
         elif mode == 'perfect':
             perturbed_items, perturbed_genes = self.get_drug_genes(bound)
 
+        elif mode == 'random_background_cmap':
+             perturbed_items, perturbed_genes = self.get_cmap_random_genes(bound)
+
         elif mode == 'random_background':
         
             perturbated_genes = []
@@ -860,11 +873,14 @@ class perturbation:
             if mode == 'random_background':
                 perturbed_genes = []
                 perturbed_items = []
-                for each in range(random_times):
-                    perturbed_items.append(str(each))
-                    random.shuffle(shuffled_gene_id)
-                    shuffled_gene = genenames[shuffled_gene_id[:random_genes]]
-                    perturbed_genes.append(shuffled_gene.tolist())
+                if type(random_genes) != list:
+                    for each in range(random_times):
+                        perturbed_items.append(str(each))
+                        random.shuffle(shuffled_gene_id)
+                        shuffled_gene = genenames[shuffled_gene_id[:int(random_genes)]]
+                        perturbed_genes.append(shuffled_gene.tolist())
+                else:
+                    perturbed_genes = random_genes
                 impactFactor = []
                 perturbated_gene_ids = []
                 for perturbated_gene in perturbed_genes:
@@ -930,7 +946,7 @@ class perturbation:
                         #         bound = 1/bound
                         #     self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]+str(bound)][str(i)] = tempout
                         # else:
-                        self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][str(i)] = tempout
+                        self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][i] = tempout
         if mode == 'online_random_background':
             bound = 'B'
             self.hiddenReps = []
@@ -1032,6 +1048,19 @@ class perturbation:
                 print('time:',end-start)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
+        elif mode == 'random_pathway_background':
+            for i in self.tracks.keys():
+                self.startAutoPerturbation(i,log2fc,'random_background',written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,'random_background', written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                self.hiddenReps = []
+                self.perturb_stage_data_mean = []
+        elif mode == 'random_drug_background':
+            for i in self.tracks.keys():
+                self.startAutoPerturbation(i,log2fc,'random_background',written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,'random_background', written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                self.hiddenReps = []
+                self.perturb_stage_data_mean = []
+
         elif mode == 'random_background':
             for i in self.tracks.keys():
                 self.startAutoPerturbation(i,log2fc,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
@@ -1044,6 +1073,13 @@ class perturbation:
         elif mode == 'perfect':
             for i in self.tracks.keys():
 
+                print(i)
+                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
+                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
+                self.hiddenReps = []
+                self.perturb_stage_data_mean = []
+        elif mode == 'random_background_cmap':
+            for i in self.tracks.keys():
                 print(i)
                 self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)

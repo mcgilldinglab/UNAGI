@@ -298,7 +298,10 @@ def matchTFandTGWithFoldChange(TFs,scopes,avgCluster,filename,genenames,total_st
             TFTG[i][j] = np.zeros(shape=len(genenames))
             for tf in stage:
                 
-                targetGenes = TG[tf[0].split(' ')[0]]
+                try:
+                    targetGenes = TG[tf[0].split(' ')[0]]
+                except:
+                    continue
                 for each in scopes[i][j]:
                     foldChange = abs(np.log2(avgCluster[j+1][j][genedict[each]]+1) - np.log2(avgCluster[j][i][genedict[each]]+1))
                     TFTG[i][j][genedict[each]] = 1*foldChange+1
