@@ -1,0 +1,3 @@
+[submodule "idrem"]
+	path = idrem
+	url = https://github.com/phoenixding/idrem.git
