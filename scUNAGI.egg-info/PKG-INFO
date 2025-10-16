@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: scUNAGI
 Version: 0.5.1
 Summary: UNAGI: Deep Generative Model for Deciphering Cellular Dynamics and In-Silico Drug Discovery in Complex Diseases
@@ -7,65 +7,18 @@ Author: Yumin Zheng
 Author-email: yumin.zheng@mail.mcgill.ca
 Description-Content-Type: text/markdown
 License-File: LICENSE.txt
-Requires-Dist: h5py>=3.9.0
-Requires-Dist: idna>=3.4
-Requires-Dist: igraph>=0.10.7
-Requires-Dist: igraph<=0.11
-Requires-Dist: networkx>=3.1
-Requires-Dist: numba>=0.57.1
-Requires-Dist: pandas>2.0.0
-Requires-Dist: parso>=0.8.3
-Requires-Dist: pillow>=9.4.0
-Requires-Dist: pip>=23.2.1
-Requires-Dist: psutil>=5.9.5
-Requires-Dist: ptyprocess>=0.7.0
-Requires-Dist: pure_eval>=0.2.2
-Requires-Dist: pycparser>=2.21
-Requires-Dist: pygments>=2.16.1
-Requires-Dist: pynndescent>=0.5.10
-Requires-Dist: pyopenssl>=23.2.0
-Requires-Dist: pyparsing>=3.1.1
-Requires-Dist: pysocks>=1.7.1
-Requires-Dist: sphinx>=5.0
-Requires-Dist: python-dateutil>=2.8.2
-Requires-Dist: python-igraph>=0.10.8
-Requires-Dist: pytz>=2023.3.post1
-Requires-Dist: pyzmq>=25.1.1
-Requires-Dist: lightning==2.0.8
-Requires-Dist: numpyro==0.13.0
-Requires-Dist: requests>=2.31.0
-Requires-Dist: anndata==0.8.0
-Requires-Dist: scanpy>=1.9.5
-Requires-Dist: jax==0.4.20
-Requires-Dist: jaxlib==0.4.20
-Requires-Dist: scikit-learn>=1.3.0
-Requires-Dist: scipy>=1.9.3
-Requires-Dist: seaborn>=0.12.2
-Requires-Dist: setuptools>=68.0.0
-Requires-Dist: six>=1.16.0
-Requires-Dist: numpy==1.24.4
-Requires-Dist: stack_data>=0.6.2
-Requires-Dist: statsmodels>=0.14.0
-Requires-Dist: stdlib-list>=0.8.0
-Requires-Dist: sympy>=1.11.1
-Requires-Dist: tbb>=2021.8.0
-Requires-Dist: texttable>=1.6.7
-Requires-Dist: threadpoolctl>=3.2.0
-Requires-Dist: torch==2.0.0
-Requires-Dist: torchaudio>=2.0.0
-Requires-Dist: torchvision>=0.15.0
-Requires-Dist: tornado>=6.3.3
-Requires-Dist: tqdm>=4.66.1
-Requires-Dist: traitlets>=5.9.0
-Requires-Dist: typing_extensions>=4.7.1
-Requires-Dist: tzdata>=2023c
-Requires-Dist: umap-learn>=0.5.3
-Requires-Dist: wcwidth>=0.2.6
-Requires-Dist: wheel>=0.38.4
 Requires-Dist: pyro-ppl>=1.8.6
-Requires-Dist: scvi-tools>=1.0.3
-Requires-Dist: leidenalg>=0.10.1
-Requires-Dist: recommonmark
+Requires-Dist: scanpy>=1.9.5
+Requires-Dist: anndata==0.8.0
+Requires-Dist: matplotlib>=3.7.1
+Dynamic: author
+Dynamic: author-email
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
 
 # UNAGI
 
@@ -94,7 +47,7 @@ conda create -n unagi python=3.9
 conda activate unagi
 ```
 
-UNAGI installation
+<!-- UNAGI installation
 
 ### Option 1: Install from pip
 
@@ -102,7 +55,7 @@ UNAGI installation
 pip install scUNAGI
 ```
 
-### Option 2: Install from Github
+### Option 2: Install from Github -->
 
 Installing UNAGI directly from GitHub ensures you have the latest version. **(Please install directly from GitHub to use the provided Jupyter notebooks for tutorials and walkthrough examples.)**
 
@@ -123,7 +76,7 @@ pip install .
 **Required files**
 
 Preprocessed CMAP database ([Link](https://zenodo.org/records/15692608)) provides drug-gene pairs data to run UNAGI drug perturbation function.
--    Option 1 : 'cmap_drug_traget.npy' uses the direct drug traget genes provided in CMAP LINCS 2020.
+-    Option 1 : 'cmap_drug_target.npy' uses the direct drug target genes provided in CMAP LINCS 2020.
 -    Option 2: 'cmap_drug_treated_res_cutoff.npy' uses genes that are up/down-regulated significantly after individual drug treatments in CMAP LINCS 2020. We kept the top 5% drug-gene pairs based on level 5 MODZ score.
 -    'cmap_direction_df.npy' indicates the direction of gene regulated by drugs after treatments. The drug regulation direction of gene is based on level 5 MODZ score.
 -    Use your own drug-target pairs, please see [this tutorial](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/Customize_drug_database_for_perturbation.ipynb).

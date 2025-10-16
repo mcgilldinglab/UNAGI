@@ -5,9 +5,7 @@ setup.py
 UNAGI/UNAGI_analyst.py
 UNAGI/UNAGI_tool.py
 UNAGI/__init__.py
-UNAGI/updated_UNAGI_analyst.py
 UNAGI/data/brdID2cmapName.npy
-UNAGI/data/cmap_drug_target_genes.npy
 UNAGI/data/gesa_pathways.npy
 UNAGI/data/human_encode.txt
 UNAGI/data/jasper_target_pair.npy
@@ -28,12 +26,9 @@ UNAGI/model/models.py
 UNAGI/perturbations/__init__.py
 UNAGI/perturbations/analysis_perturbation.py
 UNAGI/perturbations/compounds.py
-UNAGI/perturbations/new_perturbation_strategy.py
 UNAGI/perturbations/pathways.py
 UNAGI/perturbations/perturbation.py
 UNAGI/perturbations/perturbation_centroid.py
-UNAGI/perturbations/updated_analysis_perturbation.py
-UNAGI/perturbations/updated_speedup_perturbation.py
 UNAGI/plotting/__init__.py
 UNAGI/plotting/plot_cell_embeddings.py
 UNAGI/plotting/plot_cell_type_composition.py
