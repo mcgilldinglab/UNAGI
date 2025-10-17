@@ -5,7 +5,7 @@ setup(
     version='0.5.1',
     long_description=open('README.md').read(),
     packages=find_packages(),
-    package_data={'UNAGI': ['data/*.npy','data/*.txt']},
+    package_data={'UNAGI': ['data/*.npy', 'data/*.txt']},
     long_description_content_type='text/markdown',
     install_requires=[
         'pyro-ppl>=1.8.6',
