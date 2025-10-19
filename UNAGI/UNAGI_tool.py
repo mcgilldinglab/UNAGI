@@ -1,9 +1,25 @@
 '''
-This is the main module of UNAGI. It contains the UNAGI class, which is the main class of UNAGI. It also contains the functions to prepare the data, start the model training and start analysing the perturbation results. Initially, `setup_data` function should be used to prepare the data. Then, `setup_training`` function should be used to setup the training parameters. Finally, `run_UNAGI` function should be used to start the model training. After the model training is done, `analyse_UNAGI` function should be used to start the perturbation analysis.
+This is the main module of UNAGI.
+
+It contains the UNAGI class, which is the main class of UNAGI.
+
+It also contains the functions to prepare the data, start the 
+model training and start analysing the perturbation results.
+
+Initially, `setup_data` function should be used to prepare the data.
+
+Then, `setup_training`` function should be used to setup the 
+training parameters.
+
+Finally, `run_UNAGI` function should be used to start the model training.
+
+After the model training is done, `analyse_UNAGI` function should 
+be used to start the perturbation analysis.
 '''
 import subprocess
 from tracemalloc import start
 import numpy as np
+import json
 from .utils.attribute_utils import split_dataset_into_stage, get_all_adj_adata
 import os
 import scanpy as sc
@@ -18,7 +34,10 @@ from .train.trainer import UNAGI_trainer
 
 class UNAGI:
     '''
-    The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
+    The UNAGI class is the main class of UNAGI.
+    
+    It contains the function to prepare the data, start the 
+    model training and start analysing the perturbation results.
     '''
 
     def __init__(self,):
@@ -39,7 +58,26 @@ class UNAGI:
             neighbors=25,
             threads=20):
         '''
-        The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
+        The function to specify the data directory, the attribute name 
+        of the stage information and the total number of time stages 
+        of the time-series single-cell data. If the input data is a 
+        single h5ad file, then the data will be split into multiple 
+        h5ad files based on the stage information.
+        
+        The function can take either the h5ad file or the directory 
+        as the input.
+        
+        The function will check weather the data is already splited 
+        into stages or not. If the data is already splited into stages, 
+        the data will be directly used for training.
+        
+        Otherwise, the data will be split into multiple h5ad files 
+        based on the stage information.
+        
+        The function will also calculate the cell graphs for each stage.
+        
+        The cell graphs will be used for the graph convolutional network 
+        (GCN) based cell graph construction.
 
         parameters
         --------------
@@ -52,7 +90,8 @@ class UNAGI:
         gcn_connectivities: bool
             whether the cell graphs are already calculated. Default is False.
         neighbors: int
-            the number of neighbors for each cell used to construct the cell neighbors graph, default is 25.
+            the number of neighbors for each cell used to construct the cell
+            neighbors graph, default is 25.
         threads: int
             the number of threads for the cell graph construction, default is 20.
         '''
@@ -74,7 +113,9 @@ class UNAGI:
             else:
                 gcn_connectivities = True
         else:
-            print('The dataset is not splited into stages, please use setup_data function to split the dataset into stages first')
+            print(
+                'The dataset is not splited into stages, please ' \
+                'use setup_data function to split the dataset into stages first')
             self.data_path = data_path
             self.input_dim = split_dataset_into_stage(
                 self.data_path, self.data_folder, self.stage_key)
@@ -89,13 +130,16 @@ class UNAGI:
         self.data_folder = os.path.dirname(self.data_path)
         if os.path.exists(os.path.join(self.data_folder, '0')):
             raise ValueError(
-                'The iteration 0 folder is already existed, please remove the folder and rerun the code')
+                'The iteration 0 folder is already existed, ' \
+                'please remove the folder and rerun the code')
         if os.path.exists(os.path.join(self.data_folder, '0/stagedata')):
             raise ValueError(
-                'The iteration 0/stagedata folder is already existed, please remove the folder and rerun the code')
+                'The iteration 0/stagedata folder is already existed, ' \
+                'please remove the folder and rerun the code')
         if os.path.exists(os.path.join(self.data_folder, 'model_save')):
             raise ValueError(
-                'The iteration model_save folder is already existed, please remove the folder and rerun the code')
+                'The iteration model_save folder is already existed, ' \
+                'please remove the folder and rerun the code')
         dir1 = os.path.join(self.data_folder, '0')
         dir2 = os.path.join(self.data_folder, '0/stagedata')
         dir3 = os.path.join(self.data_folder, 'model_save')
@@ -104,15 +148,21 @@ class UNAGI:
 
         if not gcn_connectivities:
             print(
-                'Cell graphs not found, calculating cell graphs for individual stages! Using K=%d and threads=%d for cell graph construction' %
-                (neighbors, threads))
+                (
+                    "Cell graphs not found, calculating cell graphs for individual "
+                    "stages! Using K=%d and threads=%d for cell graph construction"
+                )
+                % (neighbors, threads)
+            )
             self.calculate_neighbor_graph(neighbors, threads)
         else:
-            print('Cell graphs found, skipping cell graph construction!')
+            print("Cell graphs found, skipping cell graph construction!")
 
     def calculate_neighbor_graph(self, neighbors=25, threads=20):
         '''
-        The function to calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
+        The function to calculate the cell graphs for each stage.
+        The cell graphs will be used for the graph convolutional network (GCN) 
+        based cell graph construction.
 
         parameters
         --------------
@@ -149,9 +199,14 @@ class UNAGI:
         task: str
             the name of this task. It is used to name the output folder.
         dist: str
-            the distribution of the single-cell data. Chosen from 'ziln' (zero-inflated log normal), 'zinb' (zero-inflated negative binomial), 'zig' (zero-inflated gamma), and 'nb' (negative binomial).
+            the distribution of the single-cell data.
+            Chosen from 'ziln' (zero-inflated log normal),
+            'zinb' (zero-inflated negative binomial),
+            'zig' (zero-inflated gamma),
+            or 'nb' (negative binomial).
         device: str
-            the device to run the model. If GPU is enabled, the device should be specified. Default is None.
+            the device to run the model.
+            If GPU is enabled, the device should be specified. Default is None.
         epoch_iter: int
             the number of epochs for the iterative training process. Default is 10.
         epoch_initial: int
@@ -262,7 +317,8 @@ class UNAGI:
             resolution_min=0.8,
             resolution_max=1.5):
         '''
-        The function to register the parameters for the CPO analysis. The parameters will be used to perform the CPO analysis.
+        The function to register the parameters for the CPO analysis.
+        The parameters will be used to perform the CPO analysis.
 
         parameters
         --------------
@@ -308,12 +364,16 @@ class UNAGI:
             Convergence_Likelihood=0.001,
             Minimum_Standard_Deviation=0.5):
         '''
-        The function to register the parameters for the iDREM analysis. The parameters will be used to perform the iDREM analysis.
+        The function to register the parameters for the iDREM analysis.
+        The parameters will be used to perform the iDREM analysis.
 
         parameters
         --------------
         Normalize_data: str
-            the method to normalize the data. Chosen from 'Log_normalize_data' (log normalize the data), 'Normalize_data' (normalize the data), and 'No_normalize_data' (do not normalize the data).
+            the method to normalize the data.
+            Chosen from 'Log_normalize_data' (log normalize the data), 
+            'Normalize_data' (normalize the data), 
+            and 'No_normalize_data' (do not normalize the data).
         Minimum_Absolute_Log_Ratio_Expression: float
             the minimum absolute log ratio expression for the iDREM analysis.
         Convergence_Likelihood: float
@@ -342,18 +402,23 @@ class UNAGI:
             resume_iteration=None,
             connect_edges_cutoff=0.05):
         '''
-        The function to launch the model training. The model will be trained iteratively. The number of iterations is specified by the `max_iter` parameter in the `setup_training` function.
+        The function to launch the model training.
+        The model will be trained iteratively.
+        The number of iterations is specified by the `max_iter` parameter 
+        in the `setup_training` function.
 
         parameters
         --------------
         idrem_dir: str
-            the directory to the iDREM tool which is used to reconstruct the temporal dynamics.
+            the directory to the iDREM tool which is used to reconstruct 
+            the temporal dynamics.
         transcription_factor_file: str
-            the directory to the transcription factor file. The transcription factor file is used to perform the CPO analysis.
+            the directory to the transcription factor file.
+            The transcription factor file is used to perform the CPO analysis.
         '''
         start_iteration = 0
-        import json
-        with open(os.path.join(self.data_folder, 'model_save') + '/training_parameters.json', 'w') as json_file:
+        with open(os.path.join(self.data_folder, 'model_save') + \
+            '/training_parameters.json', 'w') as json_file:
             json.dump(self.training_parameters, json_file, indent=4)
         if resume:
             start_iteration = resume_iteration
