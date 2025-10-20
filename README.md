@@ -27,7 +27,7 @@ conda activate unagi
 
 <!-- UNAGI installation
 
-### Option 1: Install from pip
+### Option 1: Install from pip (deprecated, not recommended)
 
 ```
 pip install scUNAGI
@@ -40,6 +40,7 @@ Installing UNAGI directly from GitHub ensures you have the latest version. **(Pl
 ```
 git clone https://github.com/mcgilldinglab/UNAGI.git
 cd UNAGI
+pip install -r requirements.txt
 pip install .
 ```
 
@@ -67,8 +68,11 @@ Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/
 
 **iDREM installation:**
 
+`iDREM` is now incoporated as a git submodule of `UNAGI`.
+
+In your `UNAGI` repo folder:
 ```
-git clone https://github.com/phoenixding/idrem.git
+git submodule update --init --recursive
 ```
 
 **iDREM prerequisites:**
