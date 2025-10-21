@@ -104,7 +104,8 @@ class analyst:
         perturbed_tracks: str
             the track to perform perturbation. if 'all', all tracks will be used.
         overall_perturbation_analysis: bool
-            whether to calculate perturbation scores for all tracks. If False, perturbation scores will be calculated for each track.
+            whether to calculate perturbation scores for all tracks.
+            If False, perturbation scores will be calculated for each track.
         bound: float
             The gene expression changes after perturbation.
         save_csv: str
@@ -265,7 +266,8 @@ class analyst:
             ignore_drug_perturabtion=False,
             centroid=False):
         '''
-        Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
+        Perform downstream tasks including dynamic markers discoveries, 
+        hierarchical markers discoveries, pathway perturbations and compound perturbations.
 
         parameters
         ----------------
@@ -318,7 +320,6 @@ class analyst:
             'model_save/training_parameters.json') + ' ' + self.target_dir + '/model_save/training_parameters.json'
         p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
         if not ignore_dynamic_markers:
-
             if os.path.exists(
                 os.path.join(
                     self.target_dir,
@@ -387,7 +388,6 @@ class analyst:
                         customized_direction=customized_direction)
                 else:
                     if self.cmap_dir is not None:
-
                         self.adata = find_overlap_and_assign_direction(
                             self.adata, cmap_dir=self.cmap_dir)
                     else:

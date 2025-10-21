@@ -31,7 +31,9 @@ class UNAGI_trainer():
         self.dis_model = dis_model
         self.GCN = GCN
         self.lr_dis = lr_dis
+
     def train_model(self,adata, vae,dis, train_loader,adj, adversarial=True,geneWeights=None, use_cuda=True):
+        DEBUG = False
         # initialize loss accumulator
         epoch_loss = 0.
         criterion=nn.BCELoss().to(self.device)
@@ -45,7 +47,7 @@ class UNAGI_trainer():
         if adversarial:
             optimizer_dis = optim.Adam(lr=self.lr_dis,params=dis.parameters()) 
 
-    # do a training epoch over each mini-batch x
+        # do a training epoch over each mini-batch x
         vae_loss = 0
         dis_loss = 0
         adversarial_loss = 0
@@ -65,12 +67,18 @@ class UNAGI_trainer():
                 x = temp_x
             else:
                 neighbourhood = None
-        # if on GPU put mini-batch into CUDA memory
+            # if on GPU put mini-batch into CUDA memory
             if self.cuda:
                 x = x.to(self.device)
             if geneWeights is not None:
-                geneWeights1 = torch.tensor(transfer_to_ranking_score(geneWeights[idx].toarray()))
-                geneWeights1 = geneWeights1.to(self.device)
+                if DEBUG:
+                    print("Type of geneWeights:", type(geneWeights))
+                    print("Type of idx:", type(idx))
+                    print("idx:", idx)
+                idx_np = idx.detach().cpu().numpy()
+                geneWeights1 = torch.tensor(
+                    transfer_to_ranking_score(geneWeights[idx_np].toarray())
+                ).to(self.device)
                 if neighbourhood is not None:
                     mu, dropout_logits, mu_, logvar_,_ = vae(x,adj,idx)
                     loss =  vae.loss_function(x[idx,:], mu, dropout_logits, mu_, logvar_,gene_weights=geneWeights1)
