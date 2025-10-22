@@ -333,6 +333,8 @@ class UNAGI_trainer():
             num_workers=0,
             shuffle=True)
 
+        import pdb; pdb.set_trace()
+
         pyro.clear_param_store()
         print('...')
 
