@@ -4,10 +4,25 @@ This module analyses the perturbation results. It contains the main function to 
 import csv
 import json
 import os
+from turtle import distance
 import scanpy as sc
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+
+def get_all_distance_changes(distance_change_dict1,distance_change_dict2):
+    total_distance_changes = []
+    for item in distance_change_dict1.keys():
+        for each_track in distance_change_dict1[item].keys():
+            for i in range(len(np.array(list(distance_change_dict1[item][each_track])))):
+                temp = np.array(list(distance_change_dict1[item][each_track]))[i]
+                temp2 = np.array(list(distance_change_dict2[item][each_track]))[i]
+                for each_stage in range(len(temp)):
+                    if each_stage != i:
+                        total_distance_changes.append(temp[each_stage])
+                        total_distance_changes.append(temp2[each_stage])
+    return total_distance_changes, np.array(total_distance_changes).mean(), np.array(total_distance_changes).std()
+
 class perturbationAnalysis:
     '''
     The perturbationAnalysis class takes the adata object and the directory of the task as the input. 
@@ -127,7 +142,7 @@ class perturbationAnalysis:
         return list(set(tracks))
     
     
-    def load(self,data_pathway_overlap_genes,track_percentage,score_weight,overall_perturbation_analysis=True,sanity=False):
+    def load(self,data_pathway_overlap_genes,track_percentage,score_weight,overall_perturbation_analysis=True,sanity=False,mean_distance_change=None, std_distance_change=None):
         '''
         Load the perturbation results and calculate the perturbation scores for each track or for the whole dataset. 
 
@@ -194,6 +209,8 @@ class perturbationAnalysis:
                         pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
                     else:
                         pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
+        if sanity == True:
+            _, mean_distance_change, std_distance_change = get_all_distance_changes(pathwaydic1,pathwaydic2)
         if overall_perturbation_analysis:
             out = {}
             for each in list(pathwaydic1.keys()):
@@ -212,12 +229,12 @@ class perturbationAnalysis:
                     temp_track_score = []
                     for i in range(len(np.array(list(pathwaydic1[each][each_track])))):
                         if self.stage is None:
-                            temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
+                            temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
                         else:
                             if i != self.stage:
                                 continue
                             elif i == self.stage:
-                                temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
+                                temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
                     unit_score.append(np.mean(temp_track_score))
                 # for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
                 #     if self.stage is None:
@@ -250,12 +267,12 @@ class perturbationAnalysis:
 
                     for i in range(len(np.array(list(pathwaydic1[each][item])))):
                         if self.stage is None:
-                            temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,weight=score_weight)[0])/2)
+                            temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
                         else:
                             if i != self.stage:
                                 continue
                             else:
-                                temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,weight=score_weight)[0])/2)
+                                temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
                     temp = np.sum(temp)
                     
                     # temp.append(np.sqrt(((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2) * ((np.abs(np.mean(temp1_copy[:,1]))+np.abs(np.mean(temp2_copy[:,1])))/2)))
@@ -268,7 +285,8 @@ class perturbationAnalysis:
                     del out[each]
             return out
         else:
-            return out, records_to_adjust_weight
+            
+            return out, records_to_adjust_weight, mean_distance_change, std_distance_change
     
     #convert distance to scores and some statistics
 
@@ -339,7 +357,7 @@ class perturbationAnalysis:
 
 
         return percentage
-    def calculateScore(self,delta,flag,weight=1):
+    def calculateScore(self,delta,flag,mean_distance_change,std_distance_change,weight=1):
         '''
         Calculate the perturbation score.
 
@@ -363,13 +381,11 @@ class perturbationAnalysis:
         for i, each in enumerate(delta):
             
             if i != flag:
-                # print((1-1/(1+np.exp(weight*each*np.sign(i-flag)))-0.5)/0.5)
-                out+=(1-1/(1+np.exp(weight*each*np.sign(i-flag)))-0.5)/0.5
-                out1+=np.abs((1-1/(1+np.exp(weight*each))-0.5)/0.5)
-                # separate.append((1-1/(1+np.exp(weight*each))-0.5)/0.5)
-                # separate.append((1-1/(1+np.exp(weight*each*np.sign(i-flag)))-0.5)/0.5)
-            # separate[0] = out/3 #just for test
-            # out = separate[0]#test
+                each = (each-mean_distance_change)/std_distance_change
+           
+                out+=each/(2+np.abs(each))
+                out1+=np.abs(each/(2+np.abs(each)))
+                
    
         return out/(len(delta)-1), out1/(len(delta)-1)
 

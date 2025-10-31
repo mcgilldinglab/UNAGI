@@ -11,53 +11,17 @@ from torch.utils.data import DataLoader
 from ..utils.gcn_utils import setup_graph
 import threading
 from ..model.models import VAE, Plain_VAE
-# from .analysis_perturbation import perturbationAnalysis
-from .normalize_analysis_perturbation import perturbationAnalysis
-
-def get_random_genes(adata, n,seed):
-    '''
-    Obtain a random list of genes for perturbation based on the number of genes in each perturbation reference item. (e.g. the number of each pathway target genes)
-
-    Parameters
-    ----------
-    adata : AnnData object
-        The AnnData object containing the gene names.
-    n : int
-        The number of genes to select randomly.
-    seed : int
-        The seed for random number generation to ensure reproducibility.
-
-    Returns
-    -------
-    list
-        A list of randomly selected gene names from the AnnData object.
-    '''
-    n = int(n)
-    np.random.seed(seed)
-    genes = adata.var.index.tolist()
-    return np.random.choice(genes,n).tolist()
+from .analysis_perturbation import perturbationAnalysis
 
 class perturbation:
-    '''
-    The perturbation class is used to conduct perturbation experiments on the data.
-
-    Parameters
-    ----------
-    adata : AnnData object
-        The AnnData object containing the data to be perturbed.
-    model_name : str    
-        The name of the model to be used for perturbation.
-    idrem_dir : str
-        The directory where the IDREM results are stored.
-    '''
-    def __init__(self, adata,model_name,idrem_dir):
+    def __init__(self, target_directory,model_name,idrem_dir):
         self.model_name = model_name
-        # self.target_directory = target_directory
+        self.target_directory = target_directory
         
         self.idrem_dir = idrem_dir
         
 
-        self.adata = adata#self.read_mergeadata()
+        self.adata = self.read_mergeadata()
         self.total_stage = len(set(self.adata.obs['stage']))
         self.tracks = self.getTrackReadOrder()
         self.stageadata = self.read_stagedata()
@@ -67,11 +31,11 @@ class perturbation:
         self.perturb_stage_data_mean = []
 
         
-    # def read_mergeadata(self):
-    #     read_path = self.target_directory#os.path.join(self.target_directory,'dataset.h5ad')
-    #     mergeadata = read_path#sc.read_h5ad(read_path)
-    #     mergeadata.obs['leiden'] = mergeadata.obs['leiden'].astype('string')
-    #     return mergeadata
+    def read_mergeadata(self):
+        read_path = self.target_directory#os.path.join(self.target_directory,'dataset.h5ad')
+        mergeadata = read_path#sc.read_h5ad(read_path)
+        mergeadata.obs['leiden'] = mergeadata.obs['leiden'].astype('string')
+        return mergeadata
     def read_stagedata(self):
         stageadata = []
         self.stage_cluster = {}
@@ -137,16 +101,23 @@ class perturbation:
         
     def matchSingleClusterGeneDict(self,goadata,gotop):
         gotop = [each.upper() for each in gotop]
-        gene_dict={}
+        # gene_dict={}
         goadata.var.index = goadata.var.index.str.upper()
-        for i,each in enumerate(goadata.var.index.tolist()):
-            gene_dict[each]=i
-        results=[]
+        gene_list = goadata.var.index.tolist()
+        results = []
         for each in gotop:
-            if each not in goadata.var.index.tolist():
+            try: 
+                results.append(gene_list.index(each))
+            except:
+                pass
+        # for i,each in enumerate(goadata.var.index.tolist()):
+        #     gene_dict[each]=i
+        # results=[]
+        # for each in gotop:
+        #     if each not in goadata.var.index.tolist():
 
-                continue
-            results.append(gene_dict[each])
+        #         continue
+        #     results.append(gene_dict[each])
         return results
     def getTrack(self,stage, clusterid):
         path = self.idrem_dir#os.path.join(self.target_directory,'idremVizCluster')
@@ -566,10 +537,21 @@ class perturbation:
         # print(delta1.shape)
         # print(delta2.shape)
         return delta1, delta2
+        
+        # out = []
+        # for i in range(impactFactor.shape[0]):
+        #     temp = []
+        #     temp.append(perturbated_genes[i])
+        #     for kk in range(len(track)):
+        #         temp.append(track[kk][0])
+        #     for kk in range(len(track)):
+        #         temp.append(delta[kk][i])
+        #     out.append(temp)
 
-
+        return out
     def get_cmap_random_genes(self,bound):
         random_cmap_target = self.adata.uns['cmap_random_genes']#this should be an attribute of adata object later on
+        #drug_target = dict(np.load(drug_cell_type_target,allow_pickle=True).tolist()) #this should be an attribute of adata object later on
         drug_names = list(i for i in range(len(random_cmap_target)))
 
 
@@ -588,9 +570,9 @@ class perturbation:
                 out_temp.append(each)
             perturbed_genes.append(out_temp)
         return drug_names, perturbed_genes
-
     def get_drug_genes(self,bound):
         drug_target = self.adata.uns['data_drug_overlap_genes']#this should be an attribute of adata object later on
+        #drug_target = dict(np.load(drug_cell_type_target,allow_pickle=True).tolist()) #this should be an attribute of adata object later on
         drug_names = list(drug_target.keys())
 
         drug_target_genes = list(drug_target.values())
@@ -609,7 +591,7 @@ class perturbation:
                 out_temp.append(each)
             perturbed_genes.append(out_temp)
         return drug_names, perturbed_genes
-    def startAutoPerturbation_online(self,lastCluster,perturbed_genes,CUDA=False):
+    def startAutoPerturbation_online(self,lastCluster,perturbed_genes,CUDA=False,use_cmap=False):
         '''
         Start the perturbation analysis (online version).
 
@@ -796,7 +778,7 @@ class perturbation:
             reversed_out.append(copyout_temp)
         return out,reversed_out
    #~~~~~         
-    def startAutoPerturbation(self,lastCluster,bound,mode,CUDA = True,random_genes= None, random_times = None,written=True,device='cpu'):
+    def startAutoPerturbation(self,lastCluster,bound,mode,CUDA = True,random_genes= None, random_times = None,written=True,device='cpu',use_cmap=False):
         '''
         Start the perturbation analysis.
 
@@ -811,11 +793,15 @@ class perturbation:
         CUDA: bool
             Whether to use GPU
         random_genes: int or list
-            The number of random genes
+            If it is int, the number of random genes. If it is list, a list of cmap genes used only when 'use_cmap==True'
         random_times: int
             The number of random pertubrations
         written: bool
             Whether to write the results to disk
+        device: str
+            The device to use, can be 'cpu' or 'cuda'
+        use_cmap: bool
+            Whether used cmap genes
 
         return
         -------------------
@@ -828,6 +814,7 @@ class perturbation:
             track_name += '-' + str(track[i][0])
         outs = [[] for i in range(len(track))]
         if mode == 'drug':
+            import time
             perturbed_items, perturbed_genes = self.get_drug_genes(bound)
         elif mode == 'pathway':
             pathway_gene = self.adata.uns['data_pathway_overlap_genes']
@@ -840,13 +827,12 @@ class perturbation:
                     each = each.tolist()
 
                 perturbed_genes.append(each)
+        elif mode == 'random_background_cmap':
+             perturbed_items, perturbed_genes = self.get_cmap_random_genes(bound)
         
         ######
         elif mode == 'perfect':
             perturbed_items, perturbed_genes = self.get_drug_genes(bound)
-
-        elif mode == 'random_background_cmap':
-             perturbed_items, perturbed_genes = self.get_cmap_random_genes(bound)
 
         elif mode == 'random_background':
         
@@ -854,8 +840,6 @@ class perturbation:
             genelen = len(self.stageadata[0].var.index.tolist())
             genenames = np.array(list(self.stageadata[0].var.index.values))
             shuffled_gene_id = [j for j in range(genelen)]
-            if type(random_genes) == list:
-                random_times = len(random_genes)
         elif mode == 'online_random_background':
             bound = 'A'
             genelen = len(self.stageadata[0].var.index.tolist())
@@ -865,7 +849,7 @@ class perturbation:
             perturbed_items = []
             
             for each in range(random_times):
-                random_genes = random.randint(1,3)
+                random_genes = 1224#random.randint(1,3)
                 perturbed_items.append(str(each))
                 random.shuffle(shuffled_gene_id)
                 shuffled_gene = genenames[shuffled_gene_id[:random_genes]]
@@ -874,51 +858,64 @@ class perturbation:
         if mode != 'random_background':
             impactFactor = []
             perturbated_gene_ids = []
+            var_indices = np.zeros(len(self.stageadata[-1].var.index))
+            import time
+            tt = time.time()
+
             for perturbated_gene in perturbed_genes:
 
                 if type(perturbated_gene) != list:
                     perturbated_gene = [perturbated_gene]
                 temp_perturbated_gene = perturbated_gene.copy()
-                temp_bound = []
-                perturbated_gene = []
-                for each in temp_perturbated_gene:
-                    each = each.split(':')
-                    if len(each) > 1:
-                        temp_bound.append(float(each[1]))
-                        perturbated_gene.append(each[0])
-                    else:
-                        perturbated_gene = temp_perturbated_gene
-                        break
-
+                # temp_bound = []
+                # perturbated_gene = []
+                
+                # for each in temp_perturbated_gene:
+                #     each = each.split(':')
+                #     if len(each) > 1:
+                #         temp_bound.append(float(each[1]))
+                #         perturbated_gene.append(each[0])
+                #     else:
+                #         perturbated_gene = temp_perturbated_gene
+                #         break
+                parsed = [each.split(':') for each in perturbated_gene]
+                temp_bound = [float(each[1]) for each in parsed if len(each) > 1]
+                perturbated_gene = [each[0] for each in parsed if len(each) > 1]
                 perturbated_gene_id = self.matchSingleClusterGeneDict(self.stageadata[-1],perturbated_gene)
                 perturbated_gene_ids.append(perturbated_gene_id)
-                temp = np.zeros(shape=(len(self.stageadata[-1].var.index.tolist())))
+                
+                temp = var_indices.copy()
                 if len(temp_bound) == 0:
-                    temp[perturbated_gene_id] = 1
-                    temp = temp*(bound-1)
+                    temp[perturbated_gene_id] = bound - 1
                 else:
-                    for id_each, each in enumerate(perturbated_gene_id):
-                        temp[each] = temp_bound[id_each]-1
+                    np.put(temp, perturbated_gene_id, np.array(temp_bound) - 1)
+                    # for id_each, each in enumerate(perturbated_gene_id):
+                    #     temp[each] = temp_bound[id_each]-1
 
                 impactFactor.append(temp)
             impactFactor = np.array(impactFactor)
+
         for i, selectedcluster in enumerate(track):
-    
             if '%s_perturbation_deltaD'%mode not in self.adata.uns.keys():
                 self.adata.uns['%s_perturbation_deltaD'%mode] = {}
             threads = []
             if mode == 'random_background':
                 perturbed_genes = []
                 perturbed_items = []
-                if type(random_genes) != list:
-                    for each in range(random_times):
-                        perturbed_items.append(str(each))
+                for each in range(random_times):
+                    perturbed_items.append(str(each))
+                    if not use_cmap:
                         random.shuffle(shuffled_gene_id)
-                        shuffled_gene = genenames[shuffled_gene_id[:int(random_genes)]]
-                        perturbed_genes.append(shuffled_gene.tolist())
-                else:
-                    perturbed_genes = random_genes
-                    perturbed_items = [str(i) for i in range(len(perturbed_genes))]
+                        shuffled_gene = genenames[shuffled_gene_id[:random_genes]]
+                    else:
+                        # randomly select bound and 1/bound for each gene
+                        random.choice(shuffled_gene_id)
+                        choices = [random.choice([bound, 1/bound]) for _ in range(len(random_genes))]
+                        shuffled_gene = []
+                        for idx, kk in enumerate(range(len(random_genes))):
+                            shuffled_gene.append(random_genes[kk]+':'+str(choices[kk]))
+                        shuffled_gene = np.array(shuffled_gene)
+                    perturbed_genes.append(shuffled_gene.tolist())
                 impactFactor = []
                 perturbated_gene_ids = []
                 for perturbated_gene in perturbed_genes:
@@ -946,8 +943,8 @@ class perturbation:
                     else:
                         for id_each, each in enumerate(perturbated_gene_id):
                             temp[each] = temp_bound[id_each]-1
-                    
                     impactFactor.append(temp)
+                
                 impactFactor = np.array(impactFactor)
 
             self.stageadata[i].obs['leiden'] = self.stageadata[i].obs['leiden'].astype('string')
@@ -961,7 +958,6 @@ class perturbation:
                 t1 = time.time()
                 outs[i] += self.perturbation__auto_centroid(self.stageadata[i], self.stageadata, i, selectedcluster[0], track, bound,impactFactor,CUDA,device=device)
                 # print(time.time()-t1)
-            
             for od, each in enumerate(outs[i]):
                 if written == True:
                     # with open('./'+self.target_directory+'/tsdg2_%s_%s.csv'%(mode,bound),"a+") as f:
@@ -985,7 +981,7 @@ class perturbation:
                         #         bound = 1/bound
                         #     self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]+str(bound)][str(i)] = tempout
                         # else:
-                        self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][i] = tempout
+                        self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][str(i)] = tempout
         if mode == 'online_random_background':
             bound = 'B'
             self.hiddenReps = []
@@ -1040,7 +1036,7 @@ class perturbation:
                         for kk in range(self.total_stage):
                             tempout.append(each[len(each)-self.total_stage+kk])
                         self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][str(i)] = tempout
-    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = False,device = 'cuda:0'):
+    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = False,device = 'cuda:0', use_cmap = True):
         '''
         Perform perturbation.
 
@@ -1059,6 +1055,10 @@ class perturbation:
         CUDA: bool
             whether to use CUDA
 
+        use_cmap: bool
+            whether to use cmap for perturbation
+
+
         return
         -------------------
         None
@@ -1068,49 +1068,30 @@ class perturbation:
         else:
             written=False
         if mode == 'drug':
-            from tqdm import tqdm
-            for i in tqdm(self.tracks.keys(),desc='Running drug perturbations....'):
+            for i in self.tracks.keys():
+
+                print(i)
                 self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'pathway':
-            from tqdm import tqdm
-            for i in tqdm(self.tracks.keys(),desc='Running pathway perturbations....'):
+            for i in self.tracks.keys():
+                print('track:',i)
+                import time
+                start = time.time()
                 self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
                 self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
-                self.hiddenReps = [] 
-                self.perturb_stage_data_mean = []
-        elif mode == 'random_pathway_background':
-            from tqdm import tqdm
-            pathway_gene = self.adata.uns['data_pathway_overlap_genes']
-            temp_perturbed_genes = list(pathway_gene.values())
-            perturbed_genes = []
-            for idx, each_perturbed_item in enumerate(temp_perturbed_genes):
-                perturbed_genes.append(get_random_genes(self.adata,len(each_perturbed_item),idx))
-            for i in tqdm(self.tracks.keys(),desc='Running pathway background perturbations....'):
-                self.startAutoPerturbation(i,log2fc,'random_background',written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,'random_background', written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
+                end = time.time()
+                print('finsihed')
+                print('time:',end-start)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
-        elif mode == 'random_drug_background':
-            from tqdm import tqdm
-            perturbed_genes = []
-            drug_gene = self.adata.uns['data_drug_overlap_genes']
-            temp_perturbed_genes = list(drug_gene.values())
-            for idx, each_perturbed_item in enumerate(temp_perturbed_genes):
-                perturbed_genes.append(get_random_genes(self.adata,len(each_perturbed_item),idx))
-            self.adata.uns['random_background_perturbation_deltaD'] = {}
-            for i in tqdm(self.tracks.keys(),desc='Running drug background perturbations....'):
-                self.startAutoPerturbation(i,log2fc,'random_background',written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,'random_background', written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
-                self.hiddenReps = []
-                self.perturb_stage_data_mean = []
-
         elif mode == 'random_background':
             for i in self.tracks.keys():
-                self.startAutoPerturbation(i,log2fc,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,mode, written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                print(i,'random_background')
+                self.startAutoPerturbation(i,log2fc,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device,use_cmap=use_cmap)
+                self.startAutoPerturbation(i,1/log2fc,mode, written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device,use_cmap=use_cmap)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'online_random_background':

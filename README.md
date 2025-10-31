@@ -21,7 +21,7 @@ UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug disco
 
 Create a new conda environment
 ```
-conda create -n unagi python=3.9
+conda create -n unagi python=3.10
 conda activate unagi
 ```
 
