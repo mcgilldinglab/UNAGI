@@ -26,7 +26,7 @@ class UNAGI:
         #set up random seed
         np.random.seed(8848)
         torch.manual_seed(8848)
-    def setup_data(self,data_path,stage_key,total_stage,gcn_connectivities=False,neighbors=25,threads = 20):
+    def setup_data(self,data_path,stage_key,total_stage,label_key='name.simple',gcn_connectivities=False,neighbors=25,threads = 20):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
         
@@ -45,6 +45,7 @@ class UNAGI:
         threads: int
             the number of threads for the cell graph construction, default is 20.
         '''
+        self.label_key = label_key
         if total_stage < 2:
             raise ValueError('The total number of stages should be larger than 1')
         
@@ -300,7 +301,7 @@ class UNAGI:
                 dir3 = os.path.join(self.data_folder , 'model_save')
                 initalcommand = 'mkdir '+ dir1 +' && mkdir '+dir2
                 p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
-            unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,idrem_dir,adversarial=self.adversarial,GCN = self.GCN,connect_edges_cutoff=connect_edges_cutoff)
+            unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,self.label_key,idrem_dir,adversarial=self.adversarial,GCN = self.GCN,connect_edges_cutoff=connect_edges_cutoff)
             unagi_runner.set_up_species(self.species)
             if self.CPO_parameters is not None:
                 if type (self.CPO_parameters) != dict:
@@ -321,7 +322,7 @@ class UNAGI:
         unagi_runner.load_stage_data()
         unagi_runner.update_gene_weights_table()
 
-    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,run_pertubration,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,defulat_perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False):
+    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,run_pertubration,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,defulat_perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False,training_params = None):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -340,21 +341,21 @@ class UNAGI:
         cmap_dir: str
             the directory to the cmap database. Default is None.
         '''
-        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir)
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir,training_params=training_params)
         analysts.start_analyse(progressionmarker_background_sampling_times,customized_pathway=customized_pathway, run_pertubration=run_pertubration,random_times=progressionmarker_background_sampling_times,defulat_perturb_change=defulat_perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
         print('The analysis has been done, please check the outputs!')
     
-    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,show=False,top_n=None,cut_off=None):
+    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,show=False,top_n=None,cut_off=None,training_params = None):
         if bound == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
-        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True)
-        analysts.perturbation_analyse_customized_pathway(customized_pathway,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)    
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
+        analysts.perturbation_analyse_customized_pathway(customized_pathway,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
         return analysts.adata
-        
-    def customize_drug_perturbation(self,data_path,iteration,customized_drug,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes=1,show=False,top_n=None,cut_off=None):
+
+    def customize_drug_perturbation(self,data_path,iteration,customized_drug,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes=1,show=False,top_n=None,cut_off=None,training_params = None):
         if bound == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
-        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,customized_mode=True)
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,customized_mode=True,training_params=training_params)
         analysts.perturbation_analyse_customized_drug(customized_drug,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)    
         return analysts.adata
         

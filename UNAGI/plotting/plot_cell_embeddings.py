@@ -83,6 +83,7 @@ def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_sch
     silhouettes = []
     # ITERATION= 5
     stage_keys = adatas.obs[stage_key].unique().tolist()
+    stage_keys = [int(i) for i in stage_keys]
     stage_keys = sorted(stage_keys)
     stage_keys = stage_keys[::-1]
 
@@ -99,7 +100,7 @@ def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_sch
     silhouettes =0
     aris = 0
 
-    fig, ax = plt.subplots(4,2, figsize=(10,15))
+    fig, ax = plt.subplots(len(stage_keys),2, figsize=(10,3.5*len(stage_keys)))
     for i,stage in enumerate(stage_keys):
         
         temp_count = 0
@@ -108,8 +109,9 @@ def plot_stages_latent_representation(adatas, cell_type_key, stage_key,color_sch
             stage = str(stage)
         elif adatas.obs[stage_key].dtype == 'int':
             stage = int(stage)
-        print(len(adatas.obs[adatas.obs[stage_key] == stage].index.tolist()))
-
+        elif adatas.obs[stage_key].dtype == 'category':
+            stage = adatas.obs[stage_key].cat.categories[stage]
+       
         adata = adatas[adatas.obs[adatas.obs[stage_key] == stage].index.tolist()]
     #         print(len(adata))
         adata.obs['UNAGI'] = adata.obs[cell_type_key].astype('category')

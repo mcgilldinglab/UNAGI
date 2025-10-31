@@ -23,13 +23,14 @@ class UNAGI_runner:
     trainer: the trainer class to train the UNAGI model
     idrem_dir: the directory of the idrem software
     '''
-    def __init__(self,data_path,total_stage,iteration,trainer,idrem_dir,adversarial=True,GCN=True,connect_edges_cutoff=0.05):
+    def __init__(self,data_path,total_stage,iteration,trainer,label_key,idrem_dir,adversarial=True,GCN=True,connect_edges_cutoff=0.05):
         self.data_path = data_path
         self.total_stage = total_stage
         self.iteration = iteration
         self.trainer = trainer
         self.resolutions = None
         self.idrem_dir = idrem_dir
+        self.label_key = label_key
         self.neighbor_parameters = None
         self.setup_CPO = False
         self.species = None
@@ -49,6 +50,7 @@ class UNAGI_runner:
                 adata = sc.read(os.path.join(self.data_path, '%d.h5ad'%(i)))
             if 'leiden_colors' in adata.uns:
                 del adata.uns['leiden_colors']
+            adata.obs['name.simple'] = adata.obs[self.label_key].astype(str)
             stageadata.append(adata)
         self.all_in_one = get_all_adj_adata(stageadata)
         self.adata_stages = stageadata

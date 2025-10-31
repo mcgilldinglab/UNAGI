@@ -236,7 +236,8 @@ class perturbationAnalysis:
                     
                 out[each]['overall'] = np.sum(np.array(unit_score))
                 if sanity:
-                    records_to_adjust_weight+=unit_score
+         
+                    records_to_adjust_weight.append(np.sum(np.array(unit_score)))
         else:
             out = {}
             for each in list(pathwaydic1.keys()): #each is the pathway name
@@ -490,52 +491,50 @@ class perturbationAnalysis:
    
         
         sanity_scores = np.array(sanity_scores)
-        # print('sanity mean: ', sanity_scores.mean())
-        # print('sanity std: ', sanity_scores.std())
         top_compounds = []
-        down_compounds = []
+        # down_compounds = []
         record_top = []
-        record_down = []
+        # record_down = []
 
     
         for i,each in enumerate(scores):
 
-            if float(each) >= sanity_scores.mean()+sanity_scores.std():
+            if float(each) >= 0:#sanity_scores.mean()+sanity_scores.std():
                 top_compounds.append(names[i])
                 record_top.append(i)
-            elif  float(each) <= sanity_scores.mean()-sanity_scores.std():
+            # elif  float(each) <= sanity_scores.mean()-sanity_scores.std():
                 
-                down_compounds.append(names[i])
-                record_down.append(i)
+            #     down_compounds.append(names[i])
+            #     record_down.append(i)
         scores = np.array(scores)
         # print(down_compounds)
         filtered_top_score = scores[record_top]
-        filtered_down_score = scores[record_down]
+        # filtered_down_score = scores[record_down]
         filtered_top_index = np.argsort(filtered_top_score).tolist()
         filtered_top_index.reverse()
-        filtered_down_index = np.argsort(filtered_down_score).tolist()
+        # filtered_down_index = np.argsort(filtered_down_score).tolist()
 
         filtered_top_score = sorted(filtered_top_score,reverse=True)
-        filtered_down_score = sorted(filtered_down_score)
+        # filtered_down_score = sorted(filtered_down_score)
         
         top_compounds = np.array(top_compounds)
-        down_compounds = np.array(down_compounds)
+        # down_compounds = np.array(down_compounds)
         top_compounds = top_compounds[filtered_top_index]
-        down_compounds = down_compounds[filtered_down_index]
+        # down_compounds = down_compounds[filtered_down_index]
         
-        final_down_compounds = []
-        final_top_compounds = []
-        for i, each in enumerate(filtered_top_score):
-            cdf = norm.cdf(each, sanity_scores.mean(),sanity_scores.std())
-            # if (1.000-cdf) * len(filtered_top_score) / (i + 1)  < 0.05:
-            if (1.000-cdf) <0.05:
-                final_top_compounds.append(top_compounds[i])
-        for i, each in enumerate(filtered_down_score):
-            cdf = norm.cdf(each, sanity_scores.mean(),sanity_scores.std())
-            if cdf * len(filtered_down_score) / (i + 1) < 0.05:
-                # print('down compound:',down_compounds[i])
-                final_down_compounds.append(down_compounds[i])
-        return top_compounds,down_compounds
+        # final_down_compounds = []
+        # final_top_compounds = []
+        # for i, each in enumerate(filtered_top_score):
+        #     cdf = norm.cdf(each, sanity_scores.mean(),sanity_scores.std())
+        #     # if (1.000-cdf) * len(filtered_top_score) / (i + 1)  < 0.05:
+        #     if (1.000-cdf) <0.05:
+        #         final_top_compounds.append(top_compounds[i])
+        # for i, each in enumerate(filtered_down_score):
+        #     cdf = norm.cdf(each, sanity_scores.mean(),sanity_scores.std())
+        #     if cdf * len(filtered_down_score) / (i + 1) < 0.05:
+        #         # print('down compound:',down_compounds[i])
+        #         final_down_compounds.append(down_compounds[i])
+        return top_compounds#,down_compounds
     def getTopDownObjects(self,pathwaydic,sanity_pathwaydic,track_percentage,track,overall_perturbation_analysis=True, flag=0):
         '''
         get top and down objects in a track
@@ -580,14 +579,14 @@ class perturbationAnalysis:
             
             results[track_name[i]] = {}
             
-            top_compounds,down_compounds=self.fitlerOutNarrowPathway(each,sanity_avg_backScore[i],pathways,pathway_name_order)
+            top_compounds=self.fitlerOutNarrowPathway(each,sanity_avg_backScore[i],pathways,pathway_name_order)
             # print(down_compounds)
             results[track_name[i]]['top_compounds']={}
-            results[track_name[i]]['down_compounds']= {}
+            # results[track_name[i]]['down_compounds']= {}
             for j,each in enumerate(top_compounds):
                 results[track_name[i]]['top_compounds'][str(j)] = top_compounds[j]
-            for j,each in enumerate(down_compounds):  
-                results[track_name[i]]['down_compounds'][str(j)] = down_compounds[j]
+            # for j,each in enumerate(down_compounds):  
+            #     results[track_name[i]]['down_compounds'][str(j)] = down_compounds[j]
         results = pd.json_normalize(results)
         results.columns = results.columns.str.split(".").map(tuple)
         results = results.stack([0, 1]).reset_index(0, drop=True)
@@ -693,7 +692,7 @@ class perturbationAnalysis:
         sanity_pathdic[path]= np.array(sanity_pathdic[path])
     
         score = perturbationresultdic[object][path][scoreindex]
-
+        # np.save('sanity_pathdic.npy',sanity_pathdic)
         
         cdf=norm.cdf(perturbationresultdic[object][path][scoreindex],sanity_pathdic[path].mean(),sanity_pathdic[path].std())    
         pval = 1.0000000-cdf
@@ -756,7 +755,7 @@ class perturbationAnalysis:
         for track in list(infodict.keys()):
             # del infodict[track]['down_compounds']
             for updown in list(infodict[track].keys()):
-
+            
                 infodict[track][updown]['perturbation score'] = {}
                 infodict[track][updown]['pval_adjusted'] = {}
                 infodict[track][updown]['drug_regulation'] = {}
@@ -782,9 +781,9 @@ class perturbationAnalysis:
                         flag = 1
                 
                     score, p=self.getTrackObjectCDF(eachpathway,perturbationresultdic,track,pathdic, sanity_pathdic, gene_in_object, scoreindex)
-                    p=p*count/(count-idx)
-                    if p >1:
-                        p = 1
+                    # p=p*count/(count-idx)
+                    # if p >1:
+                    #     p = 1
                     infodict[track][updown]['perturbation score'][str(idx)] =score
                     infodict[track][updown]['pval_adjusted'][str(idx)] = p
                     infodict[track][updown]['drug_regulation'][str(idx)] = gene_in_object[eachpathway]
@@ -798,6 +797,13 @@ class perturbationAnalysis:
                         else: #decreasing tendency increase gene expression
                             written_gene.append(eachgene+':+')
                     infodict[track][updown]['idrem_suggestion'][str(idx)] = written_gene
+                # adjust p values
+                # from statsmodels.stats.multitest import multipletests
+                # pvals = list(infodict[track][updown]['pval_adjusted'].values())
+                # if len(pvals) > 0:
+                #     adjusted_pvals = multipletests(pvals, method='fdr_bh')[1]
+                #     for i, each in enumerate(adjusted_pvals):
+                #         infodict[track][updown]['pval_adjusted'][str(i)] = each
         return infodict
     def getTendencyDict(self,track_percentage):
         '''
@@ -861,7 +867,9 @@ class perturbationAnalysis:
             items = self.adata.uns['data_drug_overlap_genes']
 
         direction_dict = self.getTendencyDict(track_percentage)
-        candidates_wegiht = [0.01,0.1,0.5,1,10,100]
+        candidates_wegiht = [0.001,0.01,0.1,0.5,1,5, 10,50,100,500,1000]
+        #find a better range of candidates_wegiht
+        
         sanity_scores = []
         sanity_pathwaydics = {}
         for weight in candidates_wegiht:
@@ -869,11 +877,16 @@ class perturbationAnalysis:
             sanity_scores.append(temp_sanity_score)
             sanity_pathwaydics[weight] = sanity_pathwaydic
         sanity_scores = np.array(sanity_scores)
-        # print(np.mean(sanity_scores,axis=1))
-        differences = np.abs(sanity_scores-0.05) + np.abs(sanity_scores-0.1)
-        differences = np.mean(differences,axis=1)
-        # print('differences:',differences)
-        min_index = np.argmin(differences)
+        # differences = np.abs(sanity_scores-0.05) + np.abs(sanity_scores-0.1)
+        # differences = np.mean(differences,axis=1)
+        # # print('differences:',differences)
+        # for i, each in enumerate(np.mean(sanity_scores,axis=1)):
+        #     if each > 0.3:
+        #         differences[i] = 1000
+
+        # if np.all(differences == 1000):
+        #     differences = np.mean(sanity_scores,axis=1)
+        min_index = np.argmin(np.abs(np.percentile(sanity_scores,95,axis=1)-0.2))
         weight = candidates_wegiht[min_index]
         print('score weight:',weight)
         sanity_pathwaydic = sanity_pathwaydics[weight]

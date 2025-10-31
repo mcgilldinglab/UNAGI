@@ -428,22 +428,24 @@ def getClusterPaths_with_cell_types(edges, total_stages,cell_types):
             tree_node = TreeNode(str(each[1])+'_'+leaf_name)
             paths[str(each[0])][0][0].add_child(tree_node)
             paths[str(each[0])][1][str(each[1])] = tree_node
-    
     # Iterate through remaining stages
     for stage in range(1, total_stages - 1):
         for each in edges[stage]:
             for item in paths.keys():
                 if len(paths[item]) == stage:
                     continue
-                if str(each[0]) in list(paths[item][stage].keys()):
-                    leaf_name = cell_types[str(stage+1)][int(each[1])]
-                    tree_node = TreeNode(str(each[1])+'_'+leaf_name)
-                    paths[item][stage][str(each[0])].add_child(tree_node)
-                    if len(paths[item]) == stage + 1:
-                        paths[item].append({})
-                        paths[item][stage + 1][str(each[1])] = tree_node
-                    else:
-                        paths[item][stage + 1][str(each[1])] = tree_node
+                try:
+                    if str(each[0]) in list(paths[item][stage].keys()):
+                        leaf_name = cell_types[str(stage+1)][int(each[1])]
+                        tree_node = TreeNode(str(each[1])+'_'+leaf_name)
+                        paths[item][stage][str(each[0])].add_child(tree_node)
+                        if len(paths[item]) == stage + 1:
+                            paths[item].append({})
+                            paths[item][stage + 1][str(each[1])] = tree_node
+                        else:
+                            paths[item][stage + 1][str(each[1])] = tree_node
+                except:
+                    pass
     return paths
 
 def visualize_dynamic_graphs_by_text(edges,cell_types):
@@ -461,7 +463,16 @@ def visualize_dynamic_graphs_by_text(edges,cell_types):
     -----------
     None
     '''
-    paths = getClusterPaths_with_cell_types(edges,len(edges)+1,cell_types)
+    
+    edges_keys = list(edges.keys())
+    for k in edges_keys:
+        edges[int(k)] = edges[k]
+    # convert keys to int and sort
+    edges_keys = [int(k) for k in edges_keys]
+    # remove duplicates and sort
+    edges_keys = sorted(list(set(edges_keys)))
+    edges = {int(k): edges[k] for k in edges_keys}
+    paths = getClusterPaths_with_cell_types(edges,len(edges_keys)+1,cell_types)
     for each in list(paths.keys()):
         print('Track '+each+' :')
         print_tree(paths[each][0][0])

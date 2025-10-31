@@ -353,7 +353,7 @@ class perturbator:
         return scores[0]
 
 class perturbation:
-    def __init__(self, data,model_name,idrem_dir):
+    def __init__(self, data,model_name,idrem_dir,config_path = None):
         self.model_name = model_name
 
         self.idrem_dir = idrem_dir
@@ -367,7 +367,8 @@ class perturbation:
         self.hiddenReps = []
         self.perturb_stage_data_mean = []
         model_dir = os.path.dirname(self.model_name)
-        config_path = model_dir+'/training_parameters.json'
+        if config_path is None:
+            config_path = model_dir+'/training_parameters.json'
         self.pb = perturbator(model_path = self.model_name, data = self.adata, config_path = config_path)
     def read_stagedata(self):
         stageadata = []

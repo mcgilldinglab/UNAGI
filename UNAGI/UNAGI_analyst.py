@@ -28,7 +28,7 @@ class analyst:
     cmap_dir: str
         the directory to the cmap database. Default is None.
     '''
-    def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None,customized_mode = False):
+    def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None,customized_mode = False,training_params = None):
         self.adata = sc.read(data_path)
         self.data_folder = os.path.dirname(data_path)
         self.adata.uns = pickle.load(open(self.data_folder+'/attribute.pkl', 'rb'))
@@ -43,11 +43,15 @@ class analyst:
             p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
         else:
             self.target_dir = target_dir
-        if customized_mode:
-            train_params = json.load(open(os.path.join(os.path.dirname(data_path),'model_save/training_parameters.json'),'r'))
+        self.training_params = training_params
+        if self.training_params is not None:
+            training_params_obj = json.load(open(self.training_params, 'r'))
         else:
-            train_params = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(data_path))),'model_save/training_parameters.json'),'r'))
-        self.model_name = train_params['task']+'_'+str(self.iteration)+'.pth'
+            if customized_mode:
+                training_params_obj = json.load(open(os.path.join(os.path.dirname(data_path),'model_save/training_parameters.json'),'r'))
+            else:
+                training_params_obj = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(data_path))),'model_save/training_parameters.json'),'r'))
+        self.model_name = training_params_obj['task']+'_'+str(self.iteration)+'.pth'
     def perturbation_analyse_customized_pathway(self,customized_pathway,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu',random_genes=5,random_times=100):
         '''
         Perform perturbation on customized pathway.
@@ -80,7 +84,7 @@ class analyst:
         self.adata = calculateTopPathwayGeneRanking(self.adata)
         print('Start perturbation....')
         gc.collect()
-        a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem',config_path=self.training_params)
         a.run('pathway',bound,inplace=True,CUDA=CUDA,device=device)
         a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times)
         print('random background done')
@@ -122,7 +126,7 @@ class analyst:
         self.adata = process_customized_drug_database(self.adata, customized_drug=customized_drug)
         print('Start perturbation....')
         gc.collect()
-        a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        a = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem',config_path=self.training_params)
         a.run('drug',bound,inplace=True,CUDA=CUDA,device=device)
         print('drug perturabtion done')
         a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times)
@@ -172,12 +176,25 @@ class analyst:
             whether to use all tracks for perturbation analysis.
         perturbed_tracks: str
             the track to perform perturbation.
+        centroid: bool
+            whether to use centroid perturbation. If True, the perturbation will be performed on the centroid of each cluster. Using centroid perturbation will speed up the perturbation process, but may lose some information.
+        ignore_dynamic_markers: bool
+            whether to ignore dynamic markers discoveries.
+        ignore_hcmarkers: bool
+            whether to ignore hierarchical markers discoveries.
+        customized_pathway: str
+            the directory of the customized pathway profile (a npy file). If None, the default pathway profile (only REACTOME database) will be used.
+        ignore_pathway_perturabtion: bool
+            whether to ignore pathway perturbation.
+        ignore_drug_perturabtion: bool
+            whether to ignore drug perturbation.
         '''
         
         if not ignore_hcmarkers:
             print('calculate hierarchical markers.....')
             hcmarkers= get_dataset_hcmarkers(self.adata,stage_key='stage',cluster_key='leiden',use_rep='umaps')
             print('hierarchical static markers done')
+
         if customized_pathway is not None:
             self.adata = calculateDataPathwayOverlapGene(self.adata,customized_pathway=customized_pathway)
         else:
@@ -190,6 +207,9 @@ class analyst:
             p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
         initalcommand = 'mkdir '+self.target_dir+'/model_save'+'&& cp ' + os.path.join(os.path.dirname(os.path.dirname(self.data_folder)),'model_save',self.model_name)+' '+self.target_dir+'/model_save/'+self.model_name +'&& cp ' + os.path.join(os.path.dirname(os.path.dirname(self.data_folder)),'model_save/training_parameters.json')+' '+self.target_dir+'/model_save/training_parameters.json'
         p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
+        #stop 10 seconds to ensure the model is copied
+        import time
+        time.sleep(10)
         if not ignore_dynamic_markers:
             
             if os.path.exists(os.path.join(self.target_dir,str(progressionmarker_background_sampling)+'progressionmarker_background.npy')):
@@ -226,10 +246,8 @@ class analyst:
             print('Start perturbation....')
             gc.collect()
             if not ignore_pathway_perturabtion:
-                perturbation_runner.run('pathway',defulat_perturb_change,inplace=True,CUDA=True)
-                print('pathway perturbatnion done')
-                print('building random background for pathways....')
                 perturbation_runner.run('random_pathway_background',defulat_perturb_change,inplace=True,CUDA=True)
+                perturbation_runner.run('pathway',defulat_perturb_change,inplace=True,CUDA=True)
                 perturbation_runner.analysis('pathway',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
             else:
                 print('Ignore pathway perturbation!')
@@ -254,7 +272,8 @@ class analyst:
                 print('analysis of drug perturbation')
             else:
                 print('Ignore drug perturbation!')
-        perturbation_runner.adata.uns['hcmarkers'] = hcmarkers 
+        if not ignore_hcmarkers:
+            perturbation_runner.adata.uns['hcmarkers'] = hcmarkers 
         with open(os.path.join(self.target_dir,'attribute.pkl'),'wb') as f:
             pickle.dump(perturbation_runner.adata.uns,f)
         del perturbation_runner.adata.uns
