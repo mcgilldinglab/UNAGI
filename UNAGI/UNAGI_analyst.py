@@ -28,7 +28,7 @@ class analyst:
     cmap_dir: str
         the directory to the cmap database. Default is None.
     '''
-    def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None,customized_mode = False,training_params = None):
+    def __init__(self,data_path,iteration,target_dir=None,customized_drug=None,cmap_dir=None,customized_mode = False, training_params = None):
         self.adata = sc.read(data_path)
         self.data_folder = os.path.dirname(data_path)
         self.adata.uns = pickle.load(open(self.data_folder+'/attribute.pkl', 'rb'))
@@ -37,15 +37,16 @@ class analyst:
         self.customized_drug = customized_drug
         self.cmap_dir = cmap_dir
         self.iteration = iteration
+        self.training_params = training_params
         if target_dir is None:
             self.target_dir = './'+self.data_folder.split('/')[-3]+'_'+str(self.iteration)
             initalcommand = 'mkdir '+ self.target_dir
             p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
         else:
             self.target_dir = target_dir
-        self.training_params = training_params
-        if self.training_params is not None:
-            training_params_obj = json.load(open(self.training_params, 'r'))
+        if training_params is not None:
+            training_params_obj = json.load(open(training_params, 'r'))
+
         else:
             if customized_mode:
                 training_params_obj = json.load(open(os.path.join(os.path.dirname(data_path),'model_save/training_parameters.json'),'r'))
@@ -248,7 +249,10 @@ class analyst:
             if not ignore_pathway_perturabtion:
                 perturbation_runner.run('random_pathway_background',defulat_perturb_change,inplace=True,CUDA=True)
                 perturbation_runner.run('pathway',defulat_perturb_change,inplace=True,CUDA=True)
-                perturbation_runner.analysis('pathway',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
+                if perturbed_tracks != 'all':
+                    perturbation_runner.analysis('pathway',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis=False)
+                else:
+                    perturbation_runner.analysis('pathway',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
             else:
                 print('Ignore pathway perturbation!')
             if not ignore_drug_perturabtion:
@@ -268,7 +272,10 @@ class analyst:
                         random_genes.append([random_gene[i] + ':' + choices[i] for i in range(len(random_gene))])
                     perturbation_runner.adata.uns['cmap_random_genes'] = random_genes
                     perturbation_runner.run('random_drug_background',defulat_perturb_change,inplace=True,random_genes=random_genes)
-                perturbation_runner.analysis('drug',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
+                if perturbed_tracks!='all':
+                    perturbation_runner.analysis('drug',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis=False)
+                else:
+                    perturbation_runner.analysis('drug',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
                 print('analysis of drug perturbation')
             else:
                 print('Ignore drug perturbation!')
@@ -282,3 +289,85 @@ class analyst:
         perturbation_runner.adata.obs['ident'] = perturbation_runner.adata.obs['ident'].astype(str)
         perturbation_runner.adata.write(self.target_dir+ '/dataset.h5ad',compression='gzip', compression_opts=9)
         # return a.adata
+    def drug_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
+        key = defulat_perturb_change
+        track_results = {}
+        if not centroid:
+            perturbation_runner = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        else:
+            perturbation_runner = perturbation_centroid(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        if tracks == 'individual':
+            tracks_head = []
+            for each in list(self.adata.uns['drug_perturbation_deltaD'][str(key)].keys()):
+                each = each.split('-')[0]
+                if each not in tracks_head:
+                    tracks_head.append(each)
+            if  'overall' in self.adata.uns['drug_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['drug_perturbation_score'][str(key)]['overall'].copy()
+            for each_track in tracks_head:
+                print('Processing track %s'%(each_track))
+                perturbation_runner.analysis('drug',key,each_track,overall_perturbation_analysis=True)
+                track_results['track_'+each_track] = perturbation_runner.adata.uns['drug_perturbation_score'][str(key)]['overall'].copy()
+
+            del perturbation_runner.adata.uns['drug_perturbation_score']
+            perturbation_runner.adata.uns['drug_perturbation_score'] = {}
+            perturbation_runner.adata.uns['drug_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['drug_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['drug_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['drug_perturbation_score'][str(1/key)][each] = track_results[each]
+        else:
+            track_results = {}
+            if  'overall' in self.adata.uns['drug_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['drug_perturbation_score'][str(key)]['overall'].copy()
+            perturbation_runner.analysis('drug',key, tracks,overall_perturbation_analysis=True)
+            track_results['track_'+tracks] = perturbation_runner.adata.uns['drug_perturbation_score'][str(key)]['overall'].copy()
+            del perturbation_runner.adata.uns['drug_perturbation_score']
+            perturbation_runner.adata.uns['drug_perturbation_score'] = {}
+            perturbation_runner.adata.uns['drug_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['drug_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['drug_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['drug_perturbation_score'][str(1/key)][each] = track_results[each]
+        return perturbation_runner.adata
+    def pathway_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
+        key = defulat_perturb_change
+        track_results = {}
+        if not centroid:
+            perturbation_runner = perturbation(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        else:
+            perturbation_runner = perturbation_centroid(self.adata, self.target_dir+'/model_save/'+self.model_name,self.target_dir+'/idrem')
+        if tracks == 'individual':
+            tracks_head = []
+            for each in list(self.adata.uns['pathway_perturbation_deltaD'][str(key)].keys()):
+                each = each.split('-')[0]
+                if each not in tracks_head:
+                    tracks_head.append(each)
+            if  'overall' in self.adata.uns['pathway_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['pathway_perturbation_score'][str(key)]['overall'].copy()
+            for each_track in tracks_head:
+                print('Processing track %s'%(each_track))
+                perturbation_runner.analysis('pathway',key,each_track,overall_perturbation_analysis=True)
+                track_results['track_'+each_track] = perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)]['overall'].copy()
+
+            del perturbation_runner.adata.uns['pathway_perturbation_score']
+            perturbation_runner.adata.uns['pathway_perturbation_score'] = {}
+            perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['pathway_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['pathway_perturbation_score'][str(1/key)][each] = track_results[each]
+        else:
+            track_results = {}
+            if  'overall' in self.adata.uns['pathway_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['pathway_perturbation_score'][str(key)]['overall'].copy()
+            perturbation_runner.analysis('pathway',key, tracks,overall_perturbation_analysis=True)
+            track_results['track_'+tracks] = perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)]['overall'].copy()
+            del perturbation_runner.adata.uns['pathway_perturbation_score']
+            perturbation_runner.adata.uns['pathway_perturbation_score'] = {}
+            perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['pathway_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['pathway_perturbation_score'][str(1/key)][each] = track_results[each]
+        return perturbation_runner.adata

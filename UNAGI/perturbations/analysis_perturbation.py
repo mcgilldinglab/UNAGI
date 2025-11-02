@@ -206,6 +206,7 @@ class perturbationAnalysis:
                     if len(list(pathwaydic1[each][each_track])) == 0:
                         del pathwaydic1[each][each_track]
                         del pathwaydic2[each][each_track]
+                        continue
 
                     # temp_track_score.append(0)
                     # temp_track_score_2.append(0)
@@ -219,21 +220,6 @@ class perturbationAnalysis:
                             elif i == self.stage:
                                 temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
                     unit_score.append(np.mean(temp_track_score))
-                # for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
-                #     if self.stage is None:
-                #         temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                #         temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                #     else:
-                #         if i != self.stage:
-                #             continue
-                #         elif i == self.stage:
-                #             temp1.append(self.calculateScore(np.sum(np.array(list(pathwaydic1[each].values())),axis=0)[i],i))
-                #             temp2.append(self.calculateScore(np.sum(np.array(list(pathwaydic2[each].values())),axis=0)[i],i))
-                # temp1 = np.array(temp1)
-                # temp2 = np.array(temp2)
-
-                # temp.append(np.sqrt(((np.abs(np.mean(temp1[:,0]))+np.abs(np.mean(temp2[:,0])))/2) * ((np.abs(np.mean(temp1[:,1]))+np.abs(np.mean(temp2[:,1])))/2)))
-                    
                 out[each]['overall'] = np.sum(np.array(unit_score))
                 if sanity:
          
@@ -243,24 +229,30 @@ class perturbationAnalysis:
             for each in list(pathwaydic1.keys()): #each is the pathway name
                 out[each] = {}
                 
-                for item in list(pathwaydic1[each].keys()):#item is the track name
+                for each_track in list(pathwaydic1[each].keys()):#item is the track name
                     temp1 = []
                     temp2 = []
                     temp = []
+                    if len(list(pathwaydic1[each][each_track])) == 0:
+                        del pathwaydic1[each][each_track]
+                        del pathwaydic2[each][each_track]
+                        continue
 
-                    for i in range(len(np.array(list(pathwaydic1[each][item])))):
+                    for i in range(len(np.array(list(pathwaydic1[each][each_track])))):
                         if self.stage is None:
-                            temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,weight=score_weight)[0])/2)
+                            temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
                         else:
                             if i != self.stage:
                                 continue
                             else:
-                                temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,weight=score_weight)[0])/2)
+                                temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,weight=score_weight)[0])/2)
                     temp = np.sum(temp)
                     
                     # temp.append(np.sqrt(((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2) * ((np.abs(np.mean(temp1_copy[:,1]))+np.abs(np.mean(temp2_copy[:,1])))/2)))
                     
-                    out[each][item] = np.array(temp)
+                    out[each][each_track] = np.array(temp)
+                    if sanity:
+                        records_to_adjust_weight.append(temp)
         if sanity == False:
     
             for each in list(out.keys()):
@@ -867,12 +859,12 @@ class perturbationAnalysis:
             items = self.adata.uns['data_drug_overlap_genes']
 
         direction_dict = self.getTendencyDict(track_percentage)
-        candidates_wegiht = [0.001,0.01,0.1,0.5,1,5, 10,50,100,500,1000]
+        candidates_weight = [0.001,0.01,0.1,0.5,1,5, 10,50,100,500,1000]
         #find a better range of candidates_wegiht
         
         sanity_scores = []
         sanity_pathwaydics = {}
-        for weight in candidates_wegiht:
+        for weight in candidates_weight:
             sanity_pathwaydic,temp_sanity_score = self.load( None ,track_percentage,weight,overall_perturbation_analysis=overall_perturbation_analysis,sanity=True)
             sanity_scores.append(temp_sanity_score)
             sanity_pathwaydics[weight] = sanity_pathwaydic
@@ -887,7 +879,7 @@ class perturbationAnalysis:
         # if np.all(differences == 1000):
         #     differences = np.mean(sanity_scores,axis=1)
         min_index = np.argmin(np.abs(np.percentile(sanity_scores,95,axis=1)-0.2))
-        weight = candidates_wegiht[min_index]
+        weight = candidates_weight[min_index]
         print('score weight:',weight)
         sanity_pathwaydic = sanity_pathwaydics[weight]
         objectdic = self.load(items,track_percentage,weight,overall_perturbation_analysis=overall_perturbation_analysis)

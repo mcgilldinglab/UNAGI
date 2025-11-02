@@ -39,21 +39,39 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                 if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
                     raise ValueError('Not a valid track!')
                 else:
-                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])[:top_n]
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
                     temp.rename(columns={'compound': 'pathways'}, inplace=True)
-                    return temp
+                    temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                    return temp[:top_n]
         
         else:
-            if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)]['overall'].keys():
-                print('All pertubred pathways are not statistically significant!')
-                print('Here are the top %s pathways that are not statistically significant:'%(str(top_n)))
-                temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['down_compounds'])
-            
+            if selected_track == None:
+                if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)]['overall'].keys():
+                    print('All pertubred pathways are not statistically significant!')
+                    print('Here are the top %s pathways that are not statistically significant:'%(str(top_n)))
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['down_compounds'])
+
+                
+                else:
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['top_compounds'])
+                temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                temp.rename(columns={'compound': 'pathways'}, inplace=True)
+                temp.rename(columns={'drug_regulation': 'regulated genes'}, inplace=True)
+                return temp[:top_n]
             else:
-                temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['top_compounds'])
-            temp.rename(columns={'compound': 'pathways'}, inplace=True)
-            temp.rename(columns={'drug_regulation': 'regulated genes'}, inplace=True)
-            return temp[:top_n]
+                if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
+                    raise ValueError('Not a valid track!')
+                if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)][selected_track].keys():
+                    print('All pertubred pathways are not statistically significant!')
+                    print('Here are the top %s pathways that are not statistically significant:'%(str(top_n)))
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['down_compounds'])
+                
+                else:
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
+                temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                temp.rename(columns={'compound': 'pathways'}, inplace=True)
+                temp.rename(columns={'drug_regulation': 'regulated genes'}, inplace=True)
+                return temp[:top_n]
     elif cutoff is not None:
         if 'overall' not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
             dict_results = {}
@@ -64,6 +82,7 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                         dict_results[each_track] = {}
                     else:
                         temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][each_track]['top_compounds'])
+                        temp = temp.sort_values(by='pval_adjusted',ascending=True)
                         temp.rename(columns={'compound': 'pathways'}, inplace=True)
                         dict_results[each_track] = temp[temp['pval_adjusted'] < cutoff]
                 print('You are checking the perturbation results for individual tracks, the returning results are stored in the dictionary.\n You can access the results by using the track name as the key.')
@@ -75,22 +94,38 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                 if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
                     raise ValueError('Not a valid track!')
                 else:
-                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])[:top_n]
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
                     temp.rename(columns={'compound': 'pathways'}, inplace=True)
-
+                    temp = temp.sort_values(by='pval_adjusted',ascending=True)
                     return temp[temp['pval_adjusted'] < cutoff]
         
         else:
-            if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)]['overall'].keys():
-                print('All pertubred pathways are not statistically significant!')
-                print('Here are the pathways that are not statistically significant:')
-                temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['down_compounds'])
+            if selected_track == None:
+                if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)]['overall'].keys():
+                    print('All pertubred pathways are not statistically significant!')
+                    print('Here are the pathways that are not statistically significant:')
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['down_compounds'])
 
+                else:
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['top_compounds'])
+                temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                temp.rename(columns={'compound': 'pathways'}, inplace=True)
+                temp.rename(columns={'drug_regulation': 'regulated genes'}, inplace=True)
+                return temp[temp['pval_adjusted'] < cutoff]
             else:
-                temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)]['overall']['top_compounds'])
-            temp.rename(columns={'compound': 'pathways'}, inplace=True)
-            temp.rename(columns={'drug_regulation': 'regulated genes'}, inplace=True)
-            return temp[temp['pval_adjusted'] < cutoff]
+                if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
+                    raise ValueError('Not a valid track!')
+                if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)][selected_track].keys():
+                    print('All pertubred pathways are not statistically significant!')
+                    print('Here are the pathways that are not statistically significant:')
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['down_compounds'])
+                
+                else:
+                    temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
+                temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                temp.rename(columns={'compound': 'pathways'}, inplace=True)
+                temp.rename(columns={'drug_regulation': 'regulated genes'}, inplace=True)
+                return temp[temp['pval_adjusted'] < cutoff]
         
     else:
         print('Please specify top_n or cutoff')

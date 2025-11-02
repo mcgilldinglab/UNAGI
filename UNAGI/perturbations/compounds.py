@@ -35,14 +35,32 @@ def get_top_compounds(adata, intensity, top_n=None, cutoff=None,selected_track=N
                 if selected_track not in adata.uns['drug_perturbation_score'][str(intensity)].keys():
                     raise ValueError('Not a valid track!')
                 else:
-                    return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['top_compounds'])[:top_n]
+                    temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
+                    temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                    return temp[:top_n]
         else:
-            if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
-                if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
-                    print('All pertubred compounds are not statistically significant!')
-                    print('Here are some top insiginifcant compounds that are not statistically significant:')
-                    return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['down_compounds'])[:top_n]
-            return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['top_compounds'])[:top_n]
+            if selected_track == None:
+                if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                    if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                        print('All pertubred compounds are not statistically significant!')
+                        print('Here are some top insiginifcant compounds, but they are not statistically significant:')
+                        return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['down_compounds'])[:top_n]
+                temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['top_compounds'])
+                temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                return temp[:top_n]
+            else:
+                if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
+                    raise ValueError('Not a valid track!')
+                if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)][selected_track].keys():
+                    if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)][selected_track].keys():
+                        print('All pertubred compounds are not statistically significant!')
+                        print('Here are some top insiginifcant compounds, but they are not statistically significant:')
+                        temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['down_compounds'])
+                        temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                        return temp[:top_n]
+                temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
+                temp = temp.sort_values(by='pval_adjusted',ascending=True)
+                return temp[:top_n]
     elif cutoff is not None:
         if 'overall' not in adata.uns['drug_perturbation_score'][str(intensity)].keys():
             dict_results = {}
@@ -64,15 +82,28 @@ def get_top_compounds(adata, intensity, top_n=None, cutoff=None,selected_track=N
                     raise ValueError('Not a valid track!')
                 else:
                     temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
+                    temp = temp.sort_values(by='pval_adjusted',ascending=True)
                     return temp[temp['pval_adjusted'] < cutoff]
 
         else:
-            if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
-                if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
-                    print('All pertubred compounds are not statistically significant!')
-                    print('Here are some top insiginifcant compounds that are not statistically significant:')
-                    return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['down_compounds'])
-            temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['top_compounds'])
-            return temp[temp['pval_adjusted'] < cutoff]
+            if selected_track == None:
+                if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                    if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)]['overall'].keys():
+                        print('All pertubred compounds are not statistically significant!')
+                        print('Here are some top insiginifcant compounds that are not statistically significant:')
+                        return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['down_compounds'])
+                temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)]['overall']['top_compounds'])
+                return temp[temp['pval_adjusted'] < cutoff]
+            else:
+                if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
+                    raise ValueError('Not a valid track!')
+                if 'top_compounds' not in adata.uns['drug_perturbation_score'][str(intensity)][selected_track].keys():
+                    if 'down_compounds' in adata.uns['drug_perturbation_score'][str(intensity)][selected_track].keys():
+                        print('All pertubred compounds are not statistically significant!')
+                        print('Here are some top insiginifcant compounds that are not statistically significant:')
+                        return pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['down_compounds'])
+                temp = pd.DataFrame.from_dict(adata.uns['drug_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
+                return temp[temp['pval_adjusted'] < cutoff]
+        
     else:
         print('Please specify top_n or cutoff')
