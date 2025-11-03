@@ -4,6 +4,7 @@ import os
 import random
 import gc
 import json
+from pathlib import Path
 import torch
 from scipy.sparse import issparse
 #import DataLoader from torch
@@ -51,10 +52,10 @@ class perturbation:
         The directory where the IDREM results are stored.
     '''
     def __init__(self, adata,model_name,idrem_dir):
-        self.model_name = model_name
+        self.model_name = Path(model_name)
         # self.target_directory = target_directory
         
-        self.idrem_dir = idrem_dir
+        self.idrem_dir = Path(idrem_dir)
         
 
         self.adata = adata#self.read_mergeadata()
@@ -196,9 +197,9 @@ class perturbation:
             adj = clusterAdata.obsp['gcn_connectivities']
             data = clusterAdata.X
 
-        
-        model_dir = os.path.dirname(self.model_name)
-        with open(model_dir+'/training_parameters.json', 'r') as json_file:
+
+        model_dir = self.model_name.parent
+        with open(model_dir/'training_parameters.json', 'r') as json_file:
             training_parameters = json.load(json_file)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
         if training_parameters['GCN'] == True:
@@ -474,9 +475,8 @@ class perturbation:
         input_adj = input_adj.reshape(input_adj[0]*input_adj[1],input_adj[2],-1)
         loadModelDict = self.model_name#'./'+self.target_directory+'/model_save/'+self.model_name+'.pth'
         import json
-        import os
-        model_dir = os.path.dirname(self.model_name)
-        with open(model_dir+'/training_parameters.json', 'r') as json_file:
+        model_dir = self.model_name.parent
+        with open(model_dir/'training_parameters.json', 'r') as json_file:
             training_parameters = json.load(json_file)
         print(training_parameters)
         if training_parameters['GCN'] == True:

@@ -260,18 +260,17 @@ if __name__ == '__main__':
     parser.add_argument('--DATA_PATH', type=str, help='path of the adata file')
     parser.add_argument('--MODEL_CONF', type=str, help='the path of the model config file')
     parser.add_argument('--PERTURB_CONF', type=str, help='the path of the perturbation config file')
-    args = parser.parse_args()
     perturbation_conf = json.load(open(args.PERTURB_CONF))
-    # MODEL_PATH = 'model.pth'
-    # DATA_PATH = 'dataset.h5ad'
-    # CONFIG_PATH = '/data/model_save/training_parameters.json'
+    args = parser.parse_args()
+    # MODEL_PATH = '/mnt/md0/jiahui/sex_chimeric/WT_mdx/data/model_save/WT_mdx_2.pth'
+    # DATA_PATH = '/mnt/md0/jiahui/sex_chimeric/WT_mdx/data/2/stagedata/dataset.h5ad'
+    # CONFIG_PATH = '/mnt/md0/jiahui/sex_chimeric/WT_mdx/data/model_save/training_parameters.json'
     df = {}
     pb = perturbator(args.MODEL_PATH, args.DATA_PATH, args.CONFIG_PATH)
     subset_adata = pb.data
     subset_adata = subset_adata[subset_adata.obs[perturbation_conf.identification]=='WT_mdx']
     perturb_cells = subset_adata.obs.index
-
-    #combined_pathways is a dictionary. The format is the same as the customized pathway perturbation
+    a = combined_pathways
 
     #non_lung_cells_adata_idx is your stage 0, lung_cells_adata_idx is your stage 1.
     lung_cells_adata = pb.data[pb.data.obs[perturbation_conf.identification].isin(['WT_WT'])]
@@ -279,7 +278,7 @@ if __name__ == '__main__':
 
 
 
-    for pathway in tqdm(list(combined_pathways.keys()),desc='perturbating pathways...'):
+    for pathway in tqdm(list(a.keys()),desc='perturbating pathways...'):
         genes = get_overlap_genes_pathway(subset_adata,a[pathway])
         if RANDOM_BACKGROUND:
             genes = get_random_genes(subset_adata, len(genes))

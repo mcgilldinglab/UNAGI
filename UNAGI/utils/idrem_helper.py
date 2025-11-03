@@ -3,6 +3,7 @@ import os
 import subprocess
 import shutil
 import threading
+from pathlib import Path
 def readIdremJson(path, filename):
     '''
     Parse the IDREM json file
@@ -73,27 +74,27 @@ def run_certrain_Idrem(path, file_name, idrem_dir, species='Human', Minimum_Stan
     trained: if the model is trained, use saved model
     
     '''
-
+    path = Path(path)
     prefix_filename = file_name.split('.')[0]
     print('?')
-    if os.path.exists(os.path.join(path, file_name)):
-        shutil.rmtree(os.path.join(path, file_name))
+    if os.path.exists(path / file_name):
+        shutil.rmtree(path / file_name)
     
     # fidn the parent directory of path
-    midpath = os.path.dirname(path)
-    if os.path.exists(os.path.join(midpath, 'idremInput', file_name)):
-        os.remove(os.path.join(midpath+'/idremsetting', prefix_filename+'.txt'))
-    if os.path.exists(os.path.join(midpath, 'idremModel', file_name)):
-        os.remove(os.path.join(midpath+'/idremModel', prefix_filename+'.txt'))
-    
-    dir1 = os.path.join(midpath, 'idremInput')
-    dir2 = os.path.join(midpath, 'idremsetting')
-    dir3 = os.path.join(midpath, 'idremModel')
+    midpath = path.parent
+    if os.path.exists(midpath / 'idremInput' / file_name):
+        os.remove(midpath / 'idremsetting' / f'{prefix_filename}.txt')
+    if os.path.exists(midpath / 'idremModel' / file_name):
+        os.remove(midpath / 'idremModel' / f'{prefix_filename}.txt')
+
+    dir1 = midpath / 'idremInput'
+    dir2 = midpath / 'idremsetting'
+    dir3 = midpath / 'idremModel'
 
 
 
-    examplefile_path = os.path.join(idrem_dir, 'example_settings.txt')
-    settings_file_path = os.path.join(midpath, 'idremsetting', f'{prefix_filename}.txt')
+    examplefile_path = idrem_dir / 'example_settings.txt'
+    settings_file_path = midpath / 'idremsetting' / f'{prefix_filename}.txt'
 
     with open(examplefile_path, 'r') as examplefile:
     # Open settings_file_path for writing
@@ -164,7 +165,7 @@ def run_certrain_Idrem(path, file_name, idrem_dir, species='Human', Minimum_Stan
     
     
     indir = settings_file_path
-    outdir = os.path.join(midpath, 'idremModel', f'{prefix_filename}.txt')
+    outdir = midpath / 'idremModel' / f'{prefix_filename}.txt'
 
     threads = []
 

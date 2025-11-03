@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 from ..utils.gcn_utils import setup_graph
 import pyro
+from pathlib import Path
 import numpy as np
 from ..utils.trainer_utils import transfer_to_ranking_score
 import scipy.sparse as sp
@@ -145,6 +146,7 @@ class UNAGI_trainer():
         '''
         find out the best groups of resolution for clustering
         '''
+        target_dir = Path(target_dir)
         if 'X_pca' not in adata.obsm.keys():
             sc.pp.pca(adata)
     
@@ -158,7 +160,7 @@ class UNAGI_trainer():
         num_genes=cell.num_genes()
         placeholder = torch.zeros(adata.X.shape,dtype=torch.float32)
         cell_loader=DataLoader(cell,batch_size=self.batch_size,num_workers=0)
-        self.model.load_state_dict(torch.load(os.path.join(target_dir,'model_save/'+self.modelName+'_'+str(iteration)+'.pth'),map_location=self.device))
+        self.model.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth'),map_location=self.device))
         TZ=[]
         z_locs = []
         z_scales = []
@@ -199,6 +201,7 @@ class UNAGI_trainer():
         '''
         retrieve the reconstructed data
         '''
+        target_dir = Path(target_dir)
         if 'X_pca' not in adata.obsm.keys():
             sc.pp.pca(adata)
     
@@ -209,7 +212,7 @@ class UNAGI_trainer():
         num_genes=cell.num_genes()
         placeholder = torch.zeros(adata.X.shape,dtype=torch.float32)
         cell_loader=DataLoader(cell,batch_size=self.batch_size,num_workers=0)
-        self.model.load_state_dict(torch.load(os.path.join(target_dir,'model_save/'+self.modelName+'_'+str(iteration)+'.pth'),map_location=self.device))
+        self.model.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth'),map_location=self.device))
         self.model = self.model.to(self.device)
         recons = []
         adj = setup_graph(adj)
@@ -242,7 +245,7 @@ class UNAGI_trainer():
 
         return recons
     def train(self, adata, iteration, target_dir, adversarial=True,is_iterative=False):
-        
+        target_dir = Path(target_dir)
         assert 'X_pca' in adata.obsm.keys(), 'PCA is not performed'
         if 'X_pca' not in adata.obsm.keys():
             sc.tl.pca(adata, svd_solver='arpack')
@@ -267,20 +270,20 @@ class UNAGI_trainer():
         pyro.clear_param_store()
         print('...')  
 
-        if os.path.exists(os.path.join(target_dir, 'model_save', self.modelName + '_' + str(iteration-1) + '.pth')):
+        if os.path.exists(target_dir / 'model_save' / (self.modelName + '_' + str(iteration-1) + '.pth')):
             vae = self.model
             dis = self.dis_model
             # dis = self.discriminator
-            if os.path.exists(os.path.join(target_dir, 'model_save', self.modelName + '_' + str(iteration) + '.pth')):
+            if os.path.exists(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth')):
                 print('load current iteration model....')
                 if adversarial:
-                    dis.load_state_dict(torch.load(os.path.join(target_dir, 'model_save/' + self.modelName + '_dis_' + str(iteration) + '.pth')))
-                vae.load_state_dict(torch.load(os.path.join(target_dir, 'model_save/' + self.modelName + '_' + str(iteration) + '.pth')))
+                    dis.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_dis_' + str(iteration) + '.pth')))
+                vae.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth')))
             else:
                 print('load last iteration model.....')
                 if adversarial:
-                    dis.load_state_dict(torch.load(os.path.join(target_dir, 'model_save/' + self.modelName + '_dis_' + str(iteration-1) + '.pth')))
-                vae.load_state_dict(torch.load(os.path.join(target_dir, 'model_save/' + self.modelName + '_' + str(iteration-1) + '.pth')))
+                    dis.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_dis_' + str(iteration-1) + '.pth')))
+                vae.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration-1) + '.pth')))
         else:
             vae = self.model
             dis = self.dis_model
@@ -302,12 +305,11 @@ class UNAGI_trainer():
             total_epoch_loss_train = self.train_model(adata, vae,dis, cell_loader, adj, adversarial=adversarial,geneWeights=geneWeights if is_iterative else None, use_cuda=self.cuda)
             train_elbo.append(-total_epoch_loss_train)
             print("[epoch %03d]  average training loss: %.4f" % (epoch, total_epoch_loss_train))
-            with open(os.path.join(target_dir, '%d/loss.txt' % (int(iteration))), "a+") as f:
+            with open(target_dir / f'{int(iteration)}' / 'loss.txt', "a+") as f:
                 f.write("[epoch %03d]  average training loss: %.4f\n" % (epoch, total_epoch_loss_train))
                 f.close()
-        torch.save(vae.state_dict(), os.path.join(target_dir, 'model_save/' + self.modelName + '_' + str(iteration) + '.pth'))
-        # torch.save(dis, os.path.join(target_dir, 'model_save/' + self.modelName + '_dis_' + str(iteration) + '.pth'))
-        # torch.save(vae.state_dict(), os.path.join(target_dir, 'model_save/' + self.modelName + '_' + str(iteration) + '.pth'))
+        torch.save(vae.state_dict(), target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth'))
+        # torch.save(dis, target_dir / 'model_save' / (self.modelName + '_dis_' + str(iteration) + '.pth'))
+        # torch.save(vae.state_dict(), target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth'))
         if adversarial:
-            torch.save(dis.state_dict(), os.path.join(target_dir, 'model_save/' + self.modelName + '_dis_' + str(iteration) + '.pth'))
-    
+            torch.save(dis.state_dict(), target_dir / 'model_save' / (self.modelName + '_dis_' + str(iteration) + '.pth'))

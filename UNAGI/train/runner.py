@@ -11,13 +11,14 @@ from ..dynamic_regulatory_networks.processIDREM import getClusterPaths, getClust
 from ..dynamic_regulatory_networks.processTFs import getTFs, getTargetGenes, matchTFandTGWithFoldChange, updataGeneTablesWithDecay
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import csr_matrix
+from pathlib import Path
 class UNAGI_runner:
     '''
     The UNAGI_runner class is used to set up the hyperparameters to run iDREM, find clustering optimal parameters and run the UNAGI model . It takes the following 
     
     parameters
     ------------
-    data_path: the path to the data
+    data_path: the path to the data, Path object 
     total_stage: the total number of time-series stages
     iteration: the total iteration to run the UNAGI model
     trainer: the trainer class to train the UNAGI model
@@ -29,7 +30,7 @@ class UNAGI_runner:
         self.iteration = iteration
         self.trainer = trainer
         self.resolutions = None
-        self.idrem_dir = idrem_dir
+        self.idrem_dir = Path(idrem_dir)
         self.label_key = label_key
         self.neighbor_parameters = None
         self.setup_CPO = False
@@ -45,9 +46,9 @@ class UNAGI_runner:
         stageadata = []
         for i in range(self.total_stage):
             if self.iteration != 0:
-                adata = sc.read(os.path.join(self.data_path, '%d/stagedata/%d.h5ad'%(self.iteration-1,i)))
+                adata = sc.read(self.data_path / f'{self.iteration-1}' / 'stagedata' / f'{i}.h5ad')
             elif self.iteration == 0:
-                adata = sc.read(os.path.join(self.data_path, '%d.h5ad'%(i)))
+                adata = sc.read(self.data_path / f'{i}.h5ad')
             if 'leiden_colors' in adata.uns:
                 del adata.uns['leiden_colors']
             adata.obs['name.simple'] = adata.obs[self.label_key].astype(str)
@@ -105,7 +106,7 @@ class UNAGI_runner:
             allzeros = csr_matrix(allzeros)
             adata.layers['geneWeight'] = allzeros
         sc.pl.umap(adata,color='ident',show=False)
-        adata.write(os.path.join(self.data_path,str(self.iteration)+'/stagedata/%d.h5ad'%stage),compression='gzip',compression_opts=9)
+        adata.write(self.data_path / f'{self.iteration}'/'stagedata'/f'{stage}.h5ad',compression='gzip',compression_opts=9)
         return adata,averageValue,reps
     
     def set_up_CPO(self, anchor_neighbors, max_neighbors, min_neighbors, resolution_min, resolution_max):
@@ -172,7 +173,7 @@ class UNAGI_runner:
             averageValue = np.array(averageValue)
             self.averageValues.append(averageValue)
         self.averageValues = np.array(self.averageValues,dtype=object)
-        np.save(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),self.averageValues)
+        np.save(self.data_path / f'{self.iteration}' / 'averageValues.npy', self.averageValues)
         saveRep(reps,self.data_path,self.iteration)
     def build_temporal_dynamics_graph(self):
         '''
@@ -212,7 +213,7 @@ class UNAGI_runner:
         '''
         Run the iDREM software.
         '''
-        averageValues = np.load(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),allow_pickle=True)
+        averageValues = np.load(self.data_path / f'{self.iteration}' / 'averageValues.npy',allow_pickle=True)
         paths = getClusterPaths(self.edges,self.total_stage)
         idrem= getClusterIdrem(paths,averageValues,self.total_stage)
         paths = [each for each in paths.values() if len(each) == self.total_stage]
@@ -234,7 +235,7 @@ class UNAGI_runner:
             else:
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
             
-    def update_gene_weights_table(self,topN=100):
+    def update_gene_weights_table(self,topN=100,debug=False):
         '''
         Update the gene weights table.
 
@@ -244,23 +245,24 @@ class UNAGI_runner:
             the number of top genes to be selected.
         
         '''
-        TFs = getTFs(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),total_stage=self.total_stage)
-        np.save('test_TFs.npy',np.array(TFs,dtype=object))
-        scope = getTargetGenes(os.path.join(self.data_path,str(self.iteration)+'/'+'idremResults'+'/'),topN)
-        np.save('test_scope.npy',np.array(scope,dtype=object))
-        self.averageValues = np.load(os.path.join(self.data_path, '%d/averageValues.npy'%self.iteration),allow_pickle=True)
+        TFs = getTFs(self.data_path / f'{self.iteration}' / 'idremResults', total_stage=self.total_stage)
+        scope = getTargetGenes(self.data_path / f'{self.iteration}' / 'idremResults' / '', topN)
+        if debug:
+            np.save('test_TFs.npy', np.array(TFs, dtype=object))
+            np.save('test_scope.npy', np.array(scope, dtype=object))
+        self.averageValues = np.load(self.data_path / f'{self.iteration}' / 'averageValues.npy', allow_pickle=True)
         if self.species == 'Human':
             p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('human_encode.txt'),self.genenames,self.total_stage)
         elif self.species == 'Mouse':
             p = matchTFandTGWithFoldChange(TFs,scope,self.averageValues,get_data_file_path('mouse_predicted.txt'),self.genenames,self.total_stage)
-        np.save('test_p.npy',np.array(p,dtype=object))
+        # np.save('test_p.npy',np.array(p,dtype=object))
         #np.save('../data/mes/'+str(iteration)+'/tfinfo.npy',np.array(p))
         updateLoss = updataGeneTablesWithDecay(self.data_path,str(self.iteration),p,self.total_stage)
     def build_iteration_dataset(self):
         '''
         Build the iteration dataset.
         '''
-        mergeAdata(os.path.join(self.data_path,str(self.iteration)),total_stages=self.total_stage)
+        mergeAdata(self.data_path / str(self.iteration),total_stages=self.total_stage)
        
     def run(self,CPO):
         '''
@@ -283,5 +285,3 @@ class UNAGI_runner:
         self.run_IDREM()
         self.update_gene_weights_table()
         self.build_iteration_dataset()
-
-
