@@ -7,6 +7,7 @@ import os
 import json
 import pandas as pd
 import scanpy as sc
+from pathlib import Path
 from scipy.sparse import lil_matrix
 from scipy.sparse import csr_matrix
 import gc
@@ -193,7 +194,7 @@ def readIdremJson(path, filename):
     tt: the parsed IDREM json file
     '''
     print('getting Target genes from ', filename)
-    path = os.path.join(path,filename,'DREM.json')
+    path = path / filename / 'DREM.json'
     f=open(path,"r")
     lf=f.readlines()
     f.close()
@@ -243,7 +244,7 @@ def listTracks(mid, iteration,total_stage):
     -----------
     tempTrack: a list of tracks
     '''
-    filenames= os.listdir(os.path.join(mid,str(iteration)+'/idremResults/'))
+    filenames= os.listdir(mid / str(iteration) / 'idremResults/')
     #filenames = os.listdir('./reresult/idremVizCluster0.1-nov14/') #defalut path
     tempTrack = [[] for _ in range(total_stage)]
     for each in filenames:
@@ -398,12 +399,13 @@ def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate
     difference: np.float
         the average difference of gene weights between stages
     '''
+    mid = Path(mid)
     tracks = listTracks(mid,iteration,total_stage)
     difference = 0
     for i, stage in enumerate(tracks):
         if i != 0:
             gc.collect()
-            adata = sc.read_h5ad(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%(i)))
+            adata = sc.read_h5ad(mid / str(iteration) / 'stagedata' / f'{i}.h5ad')
             temppreviousMySigmoidGeneWeight = adata.layers['geneWeight']
             adata.layers['geneWeight'] = adata.layers['geneWeight'].multiply(decayRate) #sep8 change to all decrease for all cell
             #adata = sc.read_h5ad('./stagedata/%d.h5ad'%(i))
@@ -418,13 +420,13 @@ def updataGeneTablesWithDecay(mid, iteration, geneFactors,total_stage, decayRate
             currentMySigmoidGeneWeight = mySigmoid(adata.layers['geneWeight'].toarray())
             difference += np.mean(np.absolute(currentMySigmoidGeneWeight - previousMySigmoidGeneWeight))
             adata.layers['geneWeight'] = adata.layers['geneWeight'].tocsr()
-            adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
+            adata.write(mid / str(iteration) / 'stagedata' / f'{i}.h5ad', compression='gzip')
         else:
             if int(iteration) == 0:
-                adata = sc.read_h5ad(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%(i)))
+                adata = sc.read_h5ad(mid / str(iteration) / 'stagedata' / f'{i}.h5ad')
                 if 'geneWeight' not in adata.layers.keys():
-                    adata.layers['geneWeight'] = csr_matrix(np.zeros(adata.X.shape)) 
-                    adata.write(os.path.join(mid,str(iteration)+'/stagedata/%d.h5ad'%i),compression='gzip' )
+                    adata.layers['geneWeight'] = csr_matrix(np.zeros(adata.X.shape))
+                    adata.write(mid / str(iteration) / 'stagedata' / f'{i}.h5ad', compression='gzip')
     return difference/(total_stage-1)
 def checkupDown(idrem, genename):
     '''
@@ -515,7 +517,7 @@ def extractTFs(path,filename,total_stage,topN=20):
         top N up or down TFs of a certain path
     '''
     print('getting TFs from ', filename)
-    path = os.path.join(path,filename,'DREM.json')
+    path = path / filename / 'DREM.json'
 
     extractedTFs = [[] for _ in range(total_stage-1)]
     f=open(path,"r")

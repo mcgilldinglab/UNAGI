@@ -3,6 +3,7 @@ import os
 import threading
 import subprocess
 import gc
+from pathlib import Path
 from ..utils.idrem_helper import run_certrain_Idrem, test_idrem_results
 def getClusterPaths(edges, total_stages):
     '''
@@ -126,11 +127,13 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
     trained: if the model is trained, use saved model
     
     '''
-    dir1 = os.path.join(midpath, str(iteration)+'/idremInput')
-    dir2 = os.path.join(midpath, str(iteration)+'/idremsetting')
-    dir3 = os.path.join(midpath, str(iteration)+'/idremModel')
+    midpath = Path(midpath)
+    idrem_dir = Path(idrem_dir)
+    dir1 = midpath / str(iteration) / 'idremInput'
+    dir2 = midpath / str(iteration) / 'idremsetting'
+    dir3 = midpath / str(iteration) / 'idremModel'
 
-    initalcommand = 'mkdir '+dir1+' && mkdir '+dir2+' && mkdir '+dir3
+    initalcommand = 'mkdir '+str(dir1)+' && mkdir '+str(dir2)+' && mkdir '+str(dir3)
     p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
     print(p.stdout.read()) 
     print(paths)
@@ -145,15 +148,15 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
         # each_processed = [str(e).strip('[]').replace(', ', 'n') for e in each]
         print(each_processed)
         file_name = '-'.join(each_processed)
-        file_path = os.path.join(midpath, str(iteration), 'idremInput', f'{file_name}.txt')
+        file_path = midpath / str(iteration) / 'idremInput' / f'{file_name}.txt'
         header = ['gene'] + [f'stage{j}' for j in range(len(each))]
         with open(file_path, 'w') as f:
             f.write('\t'.join(header) + '\n')
             for j, row in enumerate(idremInput[i]):
                 row_data = '\t'.join(str(r) for r in row)
                 f.write("%s\t%s\n" % (genenames[j], row_data))
-        examplefile_path = os.path.join(idrem_dir, 'example_settings.txt')#open(os.path.join(idrem_dir, 'example_settings.txt'), 'r')
-        settings_file_path = os.path.join(midpath, str(iteration), 'idremsetting', f'{file_name}.txt')
+        examplefile_path = idrem_dir / 'example_settings.txt'
+        settings_file_path = midpath / str(iteration) / 'idremsetting' / f'{file_name}.txt'
         with open(examplefile_path, 'r') as examplefile:
         # Open settings_file_path for writing
             with open(settings_file_path, 'w') as f:
@@ -220,17 +223,16 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
                     else:
                         f.write('%s\t%s\n' % ('Expression_Data_File', os.path.join(os.path.abspath(os.path.join(midpath, str(iteration), 'idremInput')), f'{file_name}.txt')))
 
-        settinglist = os.listdir(os.path.join(midpath,str(iteration)+'/idremsetting/'))
+        settinglist = os.listdir(midpath / str(iteration) / 'idremsetting')
     
     print(settinglist)
     threads = []
     for each in settinglist:
         if each[0] != '.':
-            
-            indir = os.path.abspath(os.path.join(midpath,str(iteration)+'/idremsetting/',each))
-            outdir =os.path.join(os.path.abspath(os.path.join(midpath,str(iteration))+'/idremModel/'),each)
-            
-            threads.append(IDREMthread(indir, outdir, each,idrem_dir))
+            indir = os.path.abspath(midpath / str(iteration) / 'idremsetting' / each)
+            outdir = os.path.join(os.path.abspath(midpath / str(iteration) / 'idremModel'), each)
+
+            threads.append(IDREMthread(indir, outdir, each, idrem_dir))
     count = 0
     while True:
         if count<len(threads) and count +2 > len(threads):
@@ -247,14 +249,14 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
             count+=2
     if not trained:
         print(os.getcwd())
-        dir1 = os.path.join(midpath, str(iteration)+'/idremResults')
-        dir2 = os.path.join(midpath, str(iteration)+'/idremInput/*.txt_viz')
-        command = [['rm -r '+dir1],[ ' mkdir '+dir1], [' mv '+dir2+ ' '+dir1]]
+        dir1 = midpath / str(iteration) / 'idremResults'
+        dir2 = midpath / str(iteration) / 'idremInput' / '*.txt_viz'
+        command = [['rm -r '+str(dir1)],[ ' mkdir '+str(dir1)], [' mv '+str(dir2)+ ' '+str(dir1)]]
         for each in command:
             p = subprocess.Popen(each, stdout=subprocess.PIPE, shell=True)
             print(p.stdout.read())
-    
-    idrem_inputs = os.listdir(os.path.join(midpath, str(iteration)+'/idremInput'))
+
+    idrem_inputs = os.listdir(midpath / str(iteration) / 'idremInput')
     for each_input in idrem_inputs:
         each_input = each_input+'_viz'
         print('checking IDREM results for ',each_input)

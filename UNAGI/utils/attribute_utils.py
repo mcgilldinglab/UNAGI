@@ -8,6 +8,7 @@ import scipy.sparse as sp
 from scipy.sparse import csr_matrix
 import anndata
 import os
+from pathlib import Path
 from ..dynamic_graphs.distDistance import getClusterRepresentation
 
 def get_data_file_path(filename):
@@ -24,7 +25,7 @@ def get_data_file_path(filename):
     file_path: str
         path of the file
     '''
-    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', filename)
+    file_path = Path(__file__).resolve().parent.parent / 'data' / filename
     return file_path
 
 def split_dataset_into_stage(adata_path, folder, key):
@@ -274,7 +275,8 @@ def saveRep(rep,midpath,iteration):
     iteration: int
         iteration number
     '''
-    np.save(os.path.join(midpath,str(iteration)+'/stagedata/rep.npy'),np.array(rep,dtype=object))
+
+    np.save(Path(midpath) / str(iteration) / 'stagedata' / 'rep.npy', np.array(rep, dtype=object))
 
 def get_all_adj_adata(adatas):
     '''
@@ -351,10 +353,11 @@ def mergeAdata(path,total_stages):
     total_stages: int
         total number of stages
     '''
+    path = Path(path)
     #read stage datasets
     adatas = []
     for i in range(total_stages):
-        adata = sc.read_h5ad(os.path.join(path, 'stagedata/%d.h5ad'%i))
+        adata = sc.read_h5ad(path / f'stagedata/{i}.h5ad')
         adata.obs['stage'] = i
         adatas.append(adata)
     for i, each in enumerate(adatas):
@@ -422,7 +425,7 @@ def mergeAdata(path,total_stages):
             adatas[i].uns['top_gene_pvals_adj'].append(adatas[i].uns['rank_genes_groups']['pvals_adj'][str(j)])
 
     #get uns.edges
-    edges = eval(open(os.path.join(path,'edges.txt')).read())
+    edges = eval(open(path / 'edges.txt').read())
     clusterType = clustertype
     #build new anndata and assign attribtues and write dataset
     adata = anndata.AnnData(X=X,obs=obs,var=variable)
@@ -442,7 +445,7 @@ def mergeAdata(path,total_stages):
     gcn = csr_matrix((gcn_data, (row,col)), shape=(adata.X.shape[0],adata.X.shape[0]))
     adata.obsp['gcn_connectivities'] = gcn 
     attribute = adata.uns
-    with open(os.path.join(path,'stagedata/attribute.pkl'),'wb') as f:
+    with open(path / 'stagedata' / 'attribute.pkl', 'wb') as f:
         pickle.dump(attribute, f)
     del adata.uns
-    adata.write_h5ad(os.path.join(path,'stagedata/dataset.h5ad'),compression='gzip',compression_opts=9)
+    adata.write_h5ad(path / 'stagedata' / 'dataset.h5ad', compression='gzip', compression_opts=9)

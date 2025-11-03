@@ -2,6 +2,7 @@ import numpy as np
 import scanpy as sc
 import gc
 import os
+from pathlib import Path
 from .distDistance import *
 def nodesDistance(rep1,rep2,topgene1,topgene2):
     '''
@@ -81,9 +82,9 @@ def buildEdges(stage1,stage2,cutoff = 0.05):
     edges: list
         The edges between two stages
     '''
-    adata1 = sc.read_h5ad('./stagedata/%d.h5ad'%stage1)
-    adata2 = sc.read_h5ad('./stagedata/%d.h5ad'%stage2)
-    reps = np.load('./stagedata/rep.npy',allow_pickle=True)
+    adata1 = sc.read_h5ad(Path('stagedata') / f'{stage1}.h5ad')
+    adata2 = sc.read_h5ad(Path('stagedata') / f'{stage2}.h5ad')
+    reps = np.load(Path('stagedata') / 'rep.npy', allow_pickle=True)
     
     rep1 = reps[stage1]
     rep2 = reps[stage2]
@@ -117,11 +118,12 @@ def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     edges: list
         The edges between two stages
     '''
+    midpath = Path(midpath)
     # print(stage1,stage2)
-    adata1 = sc.read_h5ad(os.path.join(midpath,str(iteration)+'/stagedata/%d.h5ad'%stage1))
-    adata2 = sc.read_h5ad(os.path.join(midpath,str(iteration)+'/stagedata/%d.h5ad'%stage2))
-    reps = np.load(os.path.join(midpath,str(iteration)+'/stagedata/rep.npy'),allow_pickle=True)
-    
+    adata1 = sc.read_h5ad(midpath / str(iteration) / 'stagedata' / f'{stage1}.h5ad')
+    adata2 = sc.read_h5ad(midpath / str(iteration) / 'stagedata' / f'{stage2}.h5ad')
+    reps = np.load(midpath / str(iteration) / 'stagedata' / 'rep.npy', allow_pickle=True)
+
     rep1 = reps[stage1]
     rep2 = reps[stage2]
     topgene1 = adata1.uns['topGene']
@@ -177,11 +179,12 @@ def updateEdges(edges,midpath,iteration):
         The edges between two stages
 
     '''
+    midpath = Path(midpath)
     newEdges = {}
     for i in range(len(edges)):
         newEdges[str(i)] = edges[i]
     #adata.uns['edges'] = newEdges
-    f = open(os.path.join(midpath,str(iteration)+'/edges.txt'),'w')
+    f = open(midpath / str(iteration) / 'edges.txt','w')
     f.write(str(newEdges))
     f.close()
     return newEdges

@@ -1,6 +1,7 @@
 import scanpy as sc
 import argparse
 import numpy as np
+from pathlib import Path
 def parse_gmt(file_path):
     """
     Parses a GMT file and returns a dictionary of gene sets.
@@ -13,7 +14,7 @@ def parse_gmt(file_path):
         dict: A dictionary where keys are gene set names and values are lists of genes.
     """
     gene_sets = {}
-
+    file_path = Path(file_path)
     with open(file_path, 'r') as file:
         for line in file:
             # Split the line by tabs

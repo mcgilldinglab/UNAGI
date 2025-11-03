@@ -142,14 +142,14 @@ import gc
 from scipy.sparse import csr_matrix
 def alterative(source_directory):
     for i in range(4):
-        temp1 = sc.read_h5ad(source_directory+'/stagedata/%d.h5ad'%i)
-        temp2 = sc.read_h5ad(source_directory+'/stagedata/concat_%d.h5ad'%i)
+        temp1 = sc.read_h5ad(source_directory / 'stagedata' / '%d.h5ad'%i)
+        temp2 = sc.read_h5ad(source_directory / 'stagedata' / 'concat_%d.h5ad'%i)
         temp1.obsp['gcn_connectivities'] = temp2.obsp['gcn_connectivities'].copy()
         temp1.layers['concat'] = csr_matrix(temp2.layers['concat'].copy())
         
         temp2 = None
         gc.collect()
-        temp1.write(source_directory+'/stagedata/%d.h5ad'%i, compression='gzip', compression_opts=9)
+        temp1.write(source_directory / 'stagedata' / '%d.h5ad'%i, compression='gzip', compression_opts=9)
         
 
 def calculateDrugOverlapGene(adata, cmap_df=None, drug_profile_directory=None):
@@ -448,7 +448,7 @@ def getClusterPaths_with_cell_types(edges, total_stages,cell_types):
                     pass
     return paths
 
-def visualize_dynamic_graphs_by_text(edges,cell_types):
+def visualize_dynamic_graphs_by_text(edges,cell_types, write=False):
     '''
     Visualize the dynamic graphs by text.
 
@@ -458,6 +458,8 @@ def visualize_dynamic_graphs_by_text(edges,cell_types):
         A list of lists, where each sublist contains edges between consecutive stages.
     cell_types: dict
         A dictionary containing cell types for each stage.
+    write: bool
+        Whether to save the results to a file.
 
     return
     -----------
@@ -473,6 +475,16 @@ def visualize_dynamic_graphs_by_text(edges,cell_types):
     edges_keys = sorted(list(set(edges_keys)))
     edges = {int(k): edges[k] for k in edges_keys}
     paths = getClusterPaths_with_cell_types(edges,len(edges_keys)+1,cell_types)
-    for each in list(paths.keys()):
-        print('Track '+each+' :')
-        print_tree(paths[each][0][0])
+    if not write:
+        for each in list(paths.keys()):
+            print('Track '+each+' :')
+            print_tree(paths[each][0][0])
+    if write:
+        from contextlib import redirect_stdout
+
+        with open("temp_dynamic_graphs.txt", "a+", encoding="utf-8") as f:
+            for each in list(paths.keys()):
+                f.write('Track '+each+' :\n')
+                with redirect_stdout(f):
+                    print_tree(paths[each][0][0]) 
+        print('Please check the temp_dynamic_graphs.txt!') 

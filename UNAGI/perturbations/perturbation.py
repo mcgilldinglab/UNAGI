@@ -4,6 +4,7 @@ import numpy as np
 import os
 import numba as nb
 import random
+from pathlib import Path
 import gc
 from tqdm import tqdm
 import json
@@ -106,7 +107,7 @@ class perturbator:
 
         return pc_genes_df.T, corr_matrix_genes
     import numpy as np
-    def getPPINetworkDict(self, adata, hippiefile = './hippie_current.txt',stringfile = '9606.protein.links.v11.5.txt',stringinfo = '9606.protein.info.v11.5.txt', output_GIN_path = 'PPINetworkDict.npy'):
+    def getPPINetworkDict(self, adata, hippiefile = 'hippie_current.txt',stringfile = '9606.protein.links.v11.5.txt',stringinfo = '9606.protein.info.v11.5.txt', output_GIN_path = 'PPINetworkDict.npy'):
         hippiefile = open(hippiefile)
         hippiefile = hippiefile.readlines()
         stringfile = open(stringfile)
@@ -203,7 +204,7 @@ class perturbator:
                 queue.append({each:PPIDict[popedgenename][each]})
 
         return PPIFactor
-    def preprocess_GIN(self, selected_adata_index, perturb_resource, GIN_path = './PPINetworkDict.npy'):
+    def preprocess_GIN(self, selected_adata_index, perturb_resource, GIN_path = 'PPINetworkDict.npy'):
         PPIdict = np.load(GIN_path,allow_pickle=True).item()
         adata = self.data
         genetable = {gene:i for i,gene in enumerate(adata.var.index)}
@@ -217,7 +218,7 @@ class perturbator:
         # GINFactor = GINFactor/len(perturb_resource)
         return GINFactor
     
-    def change_GIN_targets(self, adata,selected_adata_index, perturb_resource,GIN_path='./PPINetworkDict.npy'):
+    def change_GIN_targets(self, adata,selected_adata_index, perturb_resource,GIN_path='PPINetworkDict.npy'):
         GINFactors = self.preprocess_GIN(selected_adata_index, perturb_resource,GIN_path)
         temp = adata[selected_adata_index,:].X.copy()
         new_exps = None
@@ -353,10 +354,10 @@ class perturbator:
         return scores[0]
 
 class perturbation:
-    def __init__(self, data,model_name,idrem_dir,config_path = None):
-        self.model_name = model_name
+    def __init__(self, data, model_name, idrem_dir, config_path=None):
+        self.model_name = Path(model_name)
 
-        self.idrem_dir = idrem_dir
+        self.idrem_dir = Path(idrem_dir)
         self.adata = data
         self.total_stage = len(set(self.adata.obs['stage']))
         self.tracks = self.getTrackReadOrder()
@@ -366,9 +367,10 @@ class perturbation:
         
         self.hiddenReps = []
         self.perturb_stage_data_mean = []
-        model_dir = os.path.dirname(self.model_name)
+        model_dir = self.model_name.parent
         if config_path is None:
-            config_path = model_dir+'/training_parameters.json'
+            config_path = model_dir / 'training_parameters.json'
+
         self.pb = perturbator(model_path = self.model_name, data = self.adata, config_path = config_path)
     def read_stagedata(self):
         stageadata = []
@@ -382,8 +384,11 @@ class perturbation:
             for j in range(1,len(track)):
                 if str(j) not in stage_have_clusters.keys():
                     stage_have_clusters[str(j)] = []
-                stage_have_clusters[str(j)].append(str(track[j][0]))
-                track_name += '-' + str(track[j][0])
+                try:
+                    stage_have_clusters[str(j)].append(str(track[j][0]))
+                    track_name += '-' + str(track[j][0])
+                except:
+                    continue
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
         for i in list(self.adata.obs['stage'].unique()):
 
@@ -406,7 +411,7 @@ class perturbation:
         for each completed path in track (completed path = control->1->2->3, number of completed paths = number of 3 nodes), return a dictionary of orders. 
         like the path has stage3:1 is the second one to be read.
         '''
-        path = self.idrem_dir#os.path.join(self.target_directory,'idremVizCluster')
+        path = self.idrem_dir
         filenames = os.listdir(path) #defalut path
         tempTrack = [[] for _ in range(self.total_stage)]
         for each in filenames:

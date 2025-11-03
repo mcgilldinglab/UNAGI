@@ -6,6 +6,7 @@ from tracemalloc import start
 import numpy as np
 from .utils.attribute_utils import split_dataset_into_stage, get_all_adj_adata
 import os
+from pathlib import Path
 import scanpy as sc
 import gc
 from .utils.gcn_utils import get_gcn_exp
@@ -45,18 +46,19 @@ class UNAGI:
         threads: int
             the number of threads for the cell graph construction, default is 20.
         '''
+        data_path = Path(data_path)
         self.label_key = label_key
         if total_stage < 2:
             raise ValueError('The total number of stages should be larger than 1')
         
         if os.path.isfile(data_path):
-            self.data_folder = os.path.dirname(data_path)
+            self.data_folder = data_path.parent
         else:
             self.data_folder = data_path
         #os.path.dirname(data_path)
         self.stage_key = stage_key
-        if os.path.exists(os.path.join(self.data_folder ,'0.h5ad')):
-            temp = sc.read(os.path.join(self.data_folder , '0.h5ad'))
+        if os.path.exists(self.data_folder / '0.h5ad'):
+            temp = sc.read(self.data_folder / '0.h5ad')
             self.input_dim = temp.shape[1]
             if 'gcn_connectivities' not in list(temp.obsp.keys()):
                 gcn_connectivities = False
@@ -68,23 +70,23 @@ class UNAGI:
             self.input_dim = split_dataset_into_stage(self.data_path, self.data_folder, self.stage_key)
             gcn_connectivities = False
         if os.path.isfile(data_path):
-            self.data_path = os.path.dirname(data_path)
+            self.data_path = data_path.parent
         else:
             self.data_path = data_path
-        self.data_path = os.path.join(self.data_path,'0.h5ad')
+        self.data_path = self.data_path / '0.h5ad'
         self.ns = total_stage
         #data folder is the folder that contains all the h5ad files
-        self.data_folder = os.path.dirname(self.data_path)
-        if os.path.exists(os.path.join(self.data_folder , '0')):
+        self.data_folder = self.data_path.parent
+        if os.path.exists(self.data_folder / '0'):
             raise ValueError('The iteration 0 folder is already existed, please remove the folder and rerun the code')
-        if os.path.exists(os.path.join(self.data_folder , '0/stagedata')):
+        if os.path.exists(self.data_folder / '0/stagedata'):
             raise ValueError('The iteration 0/stagedata folder is already existed, please remove the folder and rerun the code')
-        if os.path.exists(os.path.join(self.data_folder , 'model_save')):
+        if os.path.exists(self.data_folder / 'model_save'):
             raise ValueError('The iteration model_save folder is already existed, please remove the folder and rerun the code')
-        dir1 = os.path.join(self.data_folder , '0')
-        dir2 = os.path.join(self.data_folder , '0/stagedata')
-        dir3 = os.path.join(self.data_folder , 'model_save')
-        initalcommand = 'mkdir '+ dir1 +' && mkdir '+dir2 +' && mkdir '+dir3
+        dir1 = self.data_folder / '0'
+        dir2 = self.data_folder / '0/stagedata'
+        dir3 = self.data_folder / 'model_save'
+        initalcommand = 'mkdir '+ str(dir1) +' && mkdir '+str(dir2) +' && mkdir '+str(dir3)
         p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
 
         if not gcn_connectivities:
@@ -288,7 +290,7 @@ class UNAGI:
         '''
         start_iteration = 0
         import json
-        with open(os.path.join(self.data_folder , 'model_save')+'/training_parameters.json', 'w') as json_file:
+        with open(self.data_folder / 'model_save' / 'training_parameters.json', 'w') as json_file:
             json.dump(self.training_parameters, json_file, indent=4)
         if resume:
             start_iteration = resume_iteration
@@ -296,10 +298,10 @@ class UNAGI:
             
 
             if iteration != 0:
-                dir1 = os.path.join(self.data_folder , str(iteration))
-                dir2 = os.path.join(self.data_folder , str(iteration)+'/stagedata')
-                dir3 = os.path.join(self.data_folder , 'model_save')
-                initalcommand = 'mkdir '+ dir1 +' && mkdir '+dir2
+                dir1 = self.data_folder / str(iteration)
+                dir2 = self.data_folder / str(iteration) / 'stagedata'
+                dir3 = self.data_folder / 'model_save'
+                initalcommand = 'mkdir '+ str(dir1) +' && mkdir '+str(dir2)
                 p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
             unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,self.label_key,idrem_dir,adversarial=self.adversarial,GCN = self.GCN,connect_edges_cutoff=connect_edges_cutoff)
             unagi_runner.set_up_species(self.species)
@@ -360,12 +362,12 @@ class UNAGI:
         return analysts.adata
 
     def customized_drug_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
-        iteration = data_path.split('/')[-2].split('_')[-1]
+        iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=None,cmap_dir=None,training_params=training_params)
         return analysts.drug_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
     def customized_pathway_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
-        iteration = data_path.split('/')[-2].split('_')[-1]
+        iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         return analysts.pathway_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)

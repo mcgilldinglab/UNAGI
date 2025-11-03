@@ -33,10 +33,9 @@ class perturbationAnalysis:
         self.log2fc = log2fc
         self.adata.var.index = self.adata.var.index.str.upper()
         self.mode = mode
-        self.target_directory = target_directory
         self.stage = stage
         self.allTracks = allTracks
-        self.idrem_path = self.target_directory#os.path.join(self.target_directory,'idremVizCluster/')#'./'+ self.target_directory +'/idremVizCluster/'
+        self.idrem_path = Path(target_directory)
     def readIdremJson(self, filename):
         '''
         Parse the IDREM json file.
@@ -52,7 +51,7 @@ class perturbationAnalysis:
             The parsed the IDREM results.
         '''
 
-        path = os.path.join(self.idrem_path,filename ,'DREM.json')
+        path = self.idrem_path / filename / 'DREM.json'
         f=open(path,"r")
         lf=f.readlines()
         f.close()

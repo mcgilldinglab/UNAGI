@@ -50,10 +50,10 @@ def get_gcn_exp(source_directory,total_stage,neighbors,threads= 20):
     get the gcn connectivities for each cell
     save stage adata with gcn connectivities in the same directory
     '''
-
+    source_directory = Path(source_directory)
     for i in range(total_stage):
-        print('Calculating cell graph for stage %d.....'%i)
-        read_path = source_directory+'/%d.h5ad'%i
+        print(f'Calculating cell graph for stage {i}.....')
+        read_path = source_directory / f'{i}.h5ad'
         temp = sc.read_h5ad(read_path)
         if 'X_pca' not in temp.obsm.keys():
             sc.pp.pca(temp)
@@ -64,7 +64,7 @@ def get_gcn_exp(source_directory,total_stage,neighbors,threads= 20):
         adj = kneighbors_graph(temp.obsm['X_pca'],  neighbors-1, mode='connectivity', include_self=False,n_jobs=threads)
         adj.setdiag(neighbors)#for pcls
         temp.obsp['gcn_connectivities'] = adj
-        write_path = os.path.join(source_directory,'%d.h5ad'%i)
+        write_path = source_directory / f'{i}.h5ad'
         temp.write(write_path, compression='gzip', compression_opts=9)
 
 def get_neighbours(batch_size, adj, cell_loader):

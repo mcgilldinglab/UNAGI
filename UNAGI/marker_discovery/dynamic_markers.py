@@ -293,6 +293,8 @@ def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=
     ---------------
     None
     '''
+    from pathlib import Path
+    save_dir = Path(save_dir)
     background = dict(np.load(background,allow_pickle=True).tolist())
     out = getTopMarkersFromIDREM(directory,background,topN=topN,cutoff=cutoff)
     results = pd.json_normalize(out)
@@ -307,7 +309,7 @@ def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=
     results = results.sort_index()
     # print(results)
     # return results
-    results.to_csv(os.path.join(save_dir,'mesProgressionMarker_pval_twofilters.csv')) 
+    results.to_csv(save_dir/'mesProgressionMarker_pval_twofilters.csv')
 
 
 def runGetProgressionMarker(directory,background, cutoff=0.05, topN=None):
