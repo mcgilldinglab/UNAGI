@@ -97,6 +97,45 @@ class analyst:
             a.uns['pathway_perturbation'].to_csv(Path(save_csv))
         if save_adata is not None:
             a.adata.write(Path(save_adata),compression='gzip', compression_opts=9)
+
+    def perturbation_analyse_single_gene(self,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu'):
+        '''
+        Perform perturbation on single gene.
+
+        parameters
+        ----------------
+        perturbed_tracks: str
+            the track to perform perturbation. if 'all', all tracks will be used.
+        overall_perturbation_analysis: bool
+            whether to calculate perturbation scores for all tracks. If False, perturbation scores will be calculated for each track.
+        bound: float
+            The gene expression changes after perturbation.
+        save_csv: str
+            the directory to save the perturbation results.
+        save_adata: str
+            the directory to save the perturbation results.
+        CUDA: bool
+            whether to use GPU for perturbation.
+        device: str
+            the device to perform perturbation.
+        random_genes: int
+            the number of random genes to perform random perturbation.
+        random_times: int
+            the number of times to build random perturbation score distribution.
+        '''
+        
+        print('Start perturbation....')
+        gc.collect()
+        a = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem',config_path=self.training_params)
+        a.run('single_gene',bound,inplace=True,CUDA=CUDA,device=device)
+        a.adata.uns['random_background_perturbation_deltaD'] = a.adata.uns['single_gene_perturbation_deltaD']
+        a.analysis('single_gene',bound,perturbed_tracks,overall_perturbation_analysis)
+        print('Finish results analysis')
+        if save_csv is not None:
+            a.uns['single_gene_perturbation'].to_csv(Path(save_csv))
+        if save_adata is not None:
+            a.adata.write(Path(save_adata),compression='gzip', compression_opts=9)
+
     def perturbation_analyse_customized_drug(self,customized_drug,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=True,device='cuda:0',random_genes=2,random_times=100):
         '''
         Perform perturbation on customized drug.
@@ -206,7 +245,7 @@ class analyst:
         self.adata = calculateTopPathwayGeneRanking(self.adata)
         print('calculateTopPathwayGeneRanking done')
         if not os.path.exists(self.target_dir/'idrem'):
-            initalcommand = 'cp -r ' + os.path.join(self.data_folder.parent,'idremResults') +' '+self.target_dir/'idrem'
+            initalcommand = 'cp -r ' + os.path.join(self.data_folder.parent,'idremResults') +' '+str(self.target_dir/'idrem')
             p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
         initalcommand = 'mkdir '+str(self.target_dir/'model_save')+'&& cp ' + os.path.join(self.data_folder.parent.parent,'model_save',self.model_name)+' '+str(self.target_dir/'model_save'/self.model_name)+'&& cp ' + os.path.join(self.data_folder.parent.parent,'model_save/training_parameters.json')+' '+str(self.target_dir/'model_save'/'training_parameters.json')
         p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)

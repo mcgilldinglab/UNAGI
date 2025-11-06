@@ -3,6 +3,7 @@ from sklearn.neighbors import kneighbors_graph
 import scanpy as sc
 import torch
 import os
+from pathlib import Path
 def find_neighbourhood(adj, start, end):
     '''
     find and return the neighbourhoods of cells in the batch)
@@ -57,10 +58,6 @@ def get_gcn_exp(source_directory,total_stage,neighbors,threads= 20):
         temp = sc.read_h5ad(read_path)
         if 'X_pca' not in temp.obsm.keys():
             sc.pp.pca(temp)
-        if 'gcn_connectivities' in temp.obsp.keys():
-            continue
-
-        sc.pp.pca(temp)
         adj = kneighbors_graph(temp.obsm['X_pca'],  neighbors-1, mode='connectivity', include_self=False,n_jobs=threads)
         adj.setdiag(neighbors)#for pcls
         temp.obsp['gcn_connectivities'] = adj

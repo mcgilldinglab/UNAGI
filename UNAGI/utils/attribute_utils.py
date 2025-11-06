@@ -230,9 +230,7 @@ def updateAttributes(adata,reps):
     average_cluster: np.array
         average expression of each cluster
     '''
-    print('top gene')
     sc.tl.rank_genes_groups(adata, 'leiden', method='wilcoxon',n_genes=100)
-    print('done')
     clusters = set(adata.obs['leiden'])
     average_cluster= []
     TDG = []

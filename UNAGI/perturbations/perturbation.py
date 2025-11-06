@@ -463,7 +463,7 @@ class perturbation:
         parameters
         -------------------
         mode: str
-            perturbation mode, 'drug', 'pathway', 'random_background', 'online_random_background', 'perfect'
+            perturbation mode, 'drug', 'pathway', 'random_background', 'online_random_background', 'single_gene'
         log2fc: float
             log2fc of the perturbation
         inplace: bool
@@ -552,10 +552,8 @@ class perturbation:
 
         elif mode == 'pathway':
             pathway_gene = self.adata.uns['data_pathway_overlap_genes']
-            tempadata = self.adata.copy()
             perturbed_items = list(pathway_gene.keys())
             temp_perturbed_genes = list(pathway_gene.values())
-            perturbed_genes = []
             for each_direction in [log2fc,1/log2fc]:
                 for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
                     gene_input_dict = {}
@@ -660,6 +658,41 @@ class perturbation:
                         self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
                     del self.pb.data.obsm['perturbed_embedding']
                     gc.collect() # collect garbage to free memory
+        elif mode == 'single_gene':
+            all_genes = self.adata.var_names.tolist()
+            all_genes = {each: [each] for each in all_genes}
+            perturbed_items = list(all_genes.keys())
+            temp_perturbed_genes = list(all_genes.values())
+            for each_direction in [log2fc,1/log2fc]:
+                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
+                    gene_input_dict = {}
+                    if type(genes)!= list:
+                        genes = genes.tolist()
+                    # for each in genes:
+                    #     gene_input_dict[each] = each_direction
+                    gene_input_dict = dict.fromkeys(genes, each_direction) 
+    
+                    perturb_cells = self.adata.obs.index
+                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
+                    if 'single_gene_perturbation_deltaD' not in self.adata.uns.keys():
+                        self.adata.uns['single_gene_perturbation_deltaD'] = {}
+                    if str(each_direction) not in self.adata.uns['single_gene_perturbation_deltaD'].keys():
+                        self.adata.uns['single_gene_perturbation_deltaD'][str(each_direction)] = {}
+                    for lastCluster in self.tracks.keys():
+                        track_indices = []
+                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
+                        track_name = str(track[0][0]) 
+                        for i in range(1,len(track)):
+                            track_name += '-' + str(track[i][0])
+                        track_indices = track_cache[track_name]
+
+                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                        if track_name not in self.adata.uns['single_gene_perturbation_deltaD'][str(each_direction)].keys():
+                            self.adata.uns['single_gene_perturbation_deltaD'][str(each_direction)][track_name] = {}
+                        self.adata.uns['single_gene_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
+                    del self.pb.data.obsm['perturbed_embedding']
+                    gc.collect() # collect garbage to free memory
+            print('Single gene perturbation finished!')
     def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None):
         '''
         Analysis of perturbation results
@@ -667,7 +700,7 @@ class perturbation:
         parameters
         ----------------
         mode: str
-            The mode is choosing from ['drug', 'pathway', 'online']
+            The mode is choosing from ['drug', 'pathway', 'online','single_gene']
         log2fc: float
             log2fc is the log2 fold change of perturbation
         overall_perturbation_analysis: bool
@@ -687,3 +720,4 @@ class perturbation:
         
         self.adata.uns['%s_perturbation_score'%mode][str(log2fc)] = temp
         self.adata.uns['%s_perturbation_score'%mode][str(1/log2fc)] = temp
+        self.adata.obs['stage'] = self.adata.obs['stage'].astype(str)
