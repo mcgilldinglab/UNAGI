@@ -193,7 +193,9 @@ def readIdremJson(path, filename):
     -----------
     tt: the parsed IDREM json file
     '''
+
     print('getting Target genes from ', filename)
+    path = Path(path)
     path = path / filename / 'DREM.json'
     f=open(path,"r")
     lf=f.readlines()

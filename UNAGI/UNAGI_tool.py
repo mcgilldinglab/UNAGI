@@ -346,19 +346,19 @@ class UNAGI:
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir,training_params=training_params)
         analysts.start_analyse(progressionmarker_background_sampling_times,customized_pathway=customized_pathway, run_pertubration=run_pertubration,random_times=progressionmarker_background_sampling_times,defulat_perturb_change=defulat_perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
         print('The analysis has been done, please check the outputs!')
-    
-    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,show=False,top_n=None,cut_off=None,training_params=None):
-        if bound == 1:
+
+    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,training_params=None):
+        if defulat_perturb_change == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
-        analysts.perturbation_analyse_customized_pathway(customized_pathway,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
+        analysts.perturbation_analyse_customized_pathway(customized_pathway,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=defulat_perturb_change,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
         return analysts.adata
 
-    def customize_drug_perturbation(self,data_path,iteration,customized_drug,bound,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes=1,show=False,top_n=None,cut_off=None,training_params=None):
-        if bound == 1:
+    def customize_drug_perturbation(self,data_path,iteration,customized_drug,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes=1,training_params=None):
+        if defulat_perturb_change == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,customized_mode=True,training_params=training_params)
-        analysts.perturbation_analyse_customized_drug(customized_drug,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=bound,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
+        analysts.perturbation_analyse_customized_drug(customized_drug,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=defulat_perturb_change,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
         return analysts.adata
 
     def customized_drug_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
@@ -371,3 +371,10 @@ class UNAGI:
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         return analysts.pathway_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
+    
+    def single_gene_perturbation(self,data_path,iteration,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',training_params=None):
+        if defulat_perturb_change == 1:
+            raise ValueError('If change level is one, the perturbed gene expression will not change')
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
+        analysts.perturbation_analyse_single_gene(perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)
+        return analysts.adata

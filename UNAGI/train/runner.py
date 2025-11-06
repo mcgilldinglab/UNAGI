@@ -56,7 +56,7 @@ class UNAGI_runner:
         self.all_in_one = get_all_adj_adata(stageadata)
         self.adata_stages = stageadata
         self.genenames = np.array(list(self.adata_stages[0].var.index.values))
-    def annotate_stage_data(self, adata,stage,CPO):
+    def annotate_stage_data(self, adata,stage,CPO, max_neighbors = 50):
         '''
         Retreive the latent representations of given single cell data. Performing clusterings, generating the UMAPs, annotating the cell types and adding the top genes and cell types attributes.
 
@@ -79,7 +79,7 @@ class UNAGI_runner:
         z_locs, z_scales, cell_embeddings = self.trainer.get_latent_representation(adata,self.iteration,self.data_path)
         adata.obsm['z'] = cell_embeddings
         if self.neighbor_parameters is None:
-            sc.pp.neighbors(adata, use_rep="z",n_neighbors=50,method='umap')
+            sc.pp.neighbors(adata, use_rep="z",n_neighbors=max_neighbors,method='umap')
             return adata
         if 'connectivities' in adata.obsp.keys():
             del adata.obsp['connectivities']
@@ -145,7 +145,10 @@ class UNAGI_runner:
                 max_adata_cells = len(each)
         self.resolution_coefficient = max_adata_cells
         for i in range(0,len(self.adata_stages)):
-            self.adata_stages[i] = self.annotate_stage_data(self.adata_stages[i], i,CPO=True)
+            if self.setup_CPO is False:
+                self.adata_stages[i] = self.annotate_stage_data(self.adata_stages[i], i,CPO=True)
+            else:
+                self.adata_stages[i] = self.annotate_stage_data(self.adata_stages[i], i,CPO=True,max_neighbors=self.max_neighbors)
         if not self.setup_CPO:
             print('CPO parameters are not set up, using default parameters')
             print('anchor_neighbors: 15, max_neighbors: 35, min_neighbors: 10, resolution_min: 0.8, resolution_max: 1.5')
@@ -276,7 +279,6 @@ class UNAGI_runner:
         self.trainer.train(self.all_in_one,self.iteration,target_dir=self.data_path,adversarial=self.adversarial,is_iterative=is_iterative)
         if CPO:
             self.run_CPO()
-            
         else:
             self.resolutions = [1.0]*self.total_stage
             self.neighbor_parameters = [30]*self.total_stage

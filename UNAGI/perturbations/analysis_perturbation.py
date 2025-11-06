@@ -7,7 +7,9 @@ import os
 import scanpy as sc
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from scipy.stats import norm
+
 class perturbationAnalysis:
     '''
     The perturbationAnalysis class takes the adata object and the directory of the task as the input. 
@@ -854,8 +856,11 @@ class perturbationAnalysis:
         if self.mode == 'pathway':
             items = self.adata.uns['data_pathway_overlap_genes']
             
-        else:
+        elif self.mode == 'drug':
             items = self.adata.uns['data_drug_overlap_genes']
+        elif self.mode == 'single_gene':
+            items = self.adata.var.index.tolist()
+            items = {each: [each] for each in items}
 
         direction_dict = self.getTendencyDict(track_percentage)
         candidates_weight = [0.001,0.01,0.1,0.5,1,5, 10,50,100,500,1000]
