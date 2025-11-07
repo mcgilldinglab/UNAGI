@@ -44,7 +44,7 @@ pip install .
 ```
 
 ### Prerequisites
--   Python >=3.9 (Python3.9 is recommended)
+-   Python >=3.9 
 -   pyro-ppl>=1.8.6
 -   scanpy>=1.9.5
 -   **anndata==0.8.0** 
