@@ -27,7 +27,7 @@ class UNAGI:
         #set up random seed
         np.random.seed(8848)
         torch.manual_seed(8848)
-    def setup_data(self,data_path,stage_key,total_stage,label_key='name.simple',gcn_connectivities=False,neighbors=25,threads = 20):
+    def setup_data(self,data_path,stage_key,total_stage,label_key='name.simple',gcn_connectivities=False,neighbors=25,threads = 20,calculate_cell_graph=True,fast_mode=True):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
         
@@ -45,6 +45,10 @@ class UNAGI:
             the number of neighbors for each cell used to construct the cell neighbors graph, default is 25.
         threads: int
             the number of threads for the cell graph construction, default is 20.
+        calculate_cell_graph: bool
+            whether to calculate the cell graphs for each stage, set to False if not using GCN. Default is True.
+        fast_mode: bool
+            whether to skip the cell graph construction if the cell graphs are already calculated. Default is True
         '''
         data_path = Path(data_path)
         self.label_key = label_key
@@ -88,12 +92,18 @@ class UNAGI:
         dir3 = self.data_folder / 'model_save'
         initalcommand = 'mkdir '+ str(dir1) +' && mkdir '+str(dir2) +' && mkdir '+str(dir3)
         p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
-
-        if not gcn_connectivities:
-            print('Cell graphs not found, calculating cell graphs for individual stages! Using K=%d and threads=%d for cell graph construction'%(neighbors,threads))
-            self.calculate_neighbor_graph(neighbors,threads)
+        if calculate_cell_graph:
+            if not gcn_connectivities:
+                print('Cell graphs not found, calculating cell graphs for individual stages! Using K=%d and threads=%d for cell graph construction'%(neighbors,threads))
+                self.calculate_neighbor_graph(neighbors,threads)
+            else:
+                if fast_mode:
+                    print('Fast mode enabled!')
+                    print('Cell graphs found, skipping cell graph construction!')
+                else:
+                    self.calculate_neighbor_graph(neighbors,threads)
         else:
-            print('Cell graphs found, skipping cell graph construction!')
+            print('Skipping cell graph construction as per user request!')
         
     def calculate_neighbor_graph(self, neighbors=25,threads = 20):
         '''

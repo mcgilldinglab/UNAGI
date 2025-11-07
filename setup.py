@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='scUNAGI',
-    version='0.5.3',
+    version='0.5.5',
     
     long_description=open('README.md').read(),
     packages=find_packages(),
