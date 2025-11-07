@@ -51,6 +51,7 @@ def get_neighbors(stagedata,num_cells,anchor_neighbors,max_neighbors,min_neighbo
             distance.sort()
             search = []
             for neighbor in range(max_neighbors):
+                
                 search.append(abs(np.mean(distance[:,neighbor])-avg_anchor_distance))
             #find the index of minimum value in search
             min_index = search.index(min(search))+1
@@ -134,6 +135,6 @@ def auto_resolution(stagedata, anchor_index,neighbors, min_res, max_res):
             out_res.append(min_index*0.1+min_res)
             all_means.append(temp_all_means[min_index])
         else:
-            out_res.append(1)
+            out_res.append(np.mean([min_res, max_res]))
             all_means.append(anchor_mean)
     return out_res, all_means

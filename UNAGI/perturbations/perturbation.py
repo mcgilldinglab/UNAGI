@@ -626,8 +626,9 @@ class perturbation:
             temp_perturbed_genes = list(drug_gene.values())
             perturbed_genes = []
             for each_direction in [log2fc,1/log2fc]:
-                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = random_times):
+                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
                     if perturbation_item_idx > random_times:
+                        print('Random drug background perturbation stopped as reaching the set random times:', random_times)
                         break
                     gene_input_dict = {}
                     if type(genes)!= list:

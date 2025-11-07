@@ -362,11 +362,13 @@ class UNAGI:
         return analysts.adata
 
     def customized_drug_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+        data_path = Path(data_path)
         iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=None,cmap_dir=None,training_params=training_params)
         return analysts.drug_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
     def customized_pathway_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+        data_path = Path(data_path)
         iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
@@ -378,3 +380,10 @@ class UNAGI:
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         analysts.perturbation_analyse_single_gene(perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)
         return analysts.adata
+    def customized_single_gene_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+        data_path = Path(data_path)
+        iteration = data_path.parts[-2].split('_')[-1]
+        target_dir = os.path.dirname(data_path)
+        analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
+        return analysts.single_gene_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
+    
