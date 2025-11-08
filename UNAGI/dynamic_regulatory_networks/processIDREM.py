@@ -4,6 +4,8 @@ import threading
 import subprocess
 import gc
 from pathlib import Path
+import shutil
+import glob
 from ..utils.idrem_helper import run_certrain_Idrem, test_idrem_results
 def getClusterPaths(edges, total_stages):
     '''
@@ -250,11 +252,18 @@ def runIdrem(paths, midpath, idremInput,genenames,iteration, idrem_dir, species=
     if not trained:
         print(os.getcwd())
         dir1 = midpath / str(iteration) / 'idremResults'
-        dir2 = midpath / str(iteration) / 'idremInput' / '*.txt_viz'
-        command = [['rm -r '+str(dir1)],[ ' mkdir '+str(dir1)], [' mv '+str(dir2)+ ' '+str(dir1)]]
-        for each in command:
-            p = subprocess.Popen(each, stdout=subprocess.PIPE, shell=True)
-            print(p.stdout.read())
+        
+        # Remove existing results directory if it exists
+        if dir1.exists():
+            shutil.rmtree(dir1)
+        
+        # Create results directory
+        dir1.mkdir(parents=True, exist_ok=True)
+        
+        # Move visualization files
+        idrem_input_dir = midpath / str(iteration) / 'idremInput'
+        for viz_file in idrem_input_dir.glob('*.txt_viz'):
+            shutil.move(str(viz_file), str(dir1 / viz_file.name))
 
     idrem_inputs = os.listdir(midpath / str(iteration) / 'idremInput')
     for each_input in idrem_inputs:
