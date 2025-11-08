@@ -335,7 +335,7 @@ class UNAGI:
         unagi_runner.load_stage_data()
         unagi_runner.update_gene_weights_table()
 
-    def analyse_UNAGI(self,data_path,iteration,progressionmarker_background_sampling_times,run_pertubration,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,defulat_perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False,training_params=None):
+    def analyse_UNAGI(self,data_path,iteration,random_background_sampling_times,run_pertubration,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False,training_params=None):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -345,7 +345,7 @@ class UNAGI:
             the directory of the data (h5ad format, e.g. dataset.h5ad).
         iteration: int
             the iteration used for analysis.
-        progressionmarker_background_sampling_times: int
+        random_background_sampling_times: int
             the number of times to sample the background cells for dynamic markers discoveries.
         target_dir: str
             the directory to save the results. Default is None.
@@ -355,56 +355,56 @@ class UNAGI:
             the directory to the cmap database. Default is None.
         '''
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir,training_params=training_params)
-        analysts.start_analyse(progressionmarker_background_sampling_times,customized_pathway=customized_pathway, run_pertubration=run_pertubration,random_times=progressionmarker_background_sampling_times,defulat_perturb_change=defulat_perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
+        analysts.start_analyse(random_background_sampling_times,customized_pathway=customized_pathway, run_pertubration=run_pertubration,random_times=random_background_sampling_times,perturb_change=perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
         print('The analysis has been done, please check the outputs!')
 
-    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,training_params=None):
-        if defulat_perturb_change == 1:
+    def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,training_params=None):
+        if perturb_change == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
-        analysts.perturbation_analyse_customized_pathway(customized_pathway,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=defulat_perturb_change,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
+        analysts.perturbation_analyse_customized_pathway(customized_pathway,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=perturb_change,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
         return analysts.adata
 
-    def customize_drug_perturbation(self,data_path,iteration,customized_drug,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes=1,training_params=None):
-        if defulat_perturb_change == 1:
+    def customize_drug_perturbation(self,data_path,iteration,customized_drug,perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes=1,training_params=None):
+        if perturb_change == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,customized_mode=True,training_params=training_params)
-        analysts.perturbation_analyse_customized_drug(customized_drug,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=defulat_perturb_change,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
+        analysts.perturbation_analyse_customized_drug(customized_drug,perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,bound=perturb_change,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device,random_times=random_times, random_genes=random_genes)
         return analysts.adata
 
-    def customized_drug_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+    def customized_drug_perturbation_analysis(self,data_path,training_params,perturb_change=0.5,perturbed_tracks='individual',centroid=False):
         data_path = Path(data_path)
         iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=None,cmap_dir=None,training_params=training_params)
         if 'drug_perturbation_deltaD' not in analysts.adata.uns.keys():
             raise ValueError('Please perform drug perturbation first to get the drug perturbation scores')
-        return analysts.drug_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
-    def customized_pathway_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+        return analysts.drug_perturbation_analysis(perturbed_tracks,perturb_change, centroid)
+    def customized_pathway_perturbation_analysis(self,data_path,training_params,perturb_change=0.5,perturbed_tracks='individual',centroid=False):
         data_path = Path(data_path)
         iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         if 'pathway_perturbation_deltaD' not in analysts.adata.uns.keys():
             raise ValueError('Please perform pathway perturbation first to get the pathway perturbation scores')
-        return analysts.pathway_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
+        return analysts.pathway_perturbation_analysis(perturbed_tracks,perturb_change, centroid)
     
-    def single_gene_perturbation(self,data_path,iteration,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',training_params=None):
-        if defulat_perturb_change == 1:
+    def single_gene_perturbation(self,data_path,iteration,perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',training_params=None):
+        if perturb_change == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         analysts.perturbation_analyse_single_gene(perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)
         return analysts.adata
-    def customized_single_gene_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+    def customized_single_gene_perturbation_analysis(self,data_path,training_params,perturb_change=0.5,perturbed_tracks='individual',centroid=False):
         data_path = Path(data_path)
         iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         if 'single_gene_perturbation_deltaD' not in analysts.adata.uns.keys():
             raise ValueError('Please perform single gene perturbation first to get the single gene perturbation scores')
-        return analysts.single_gene_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
-    def gene_combinatorial_perturbation(self,data_path,iteration,top_n_single_gene=None,defulat_perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',training_params=None):
-        if defulat_perturb_change == 1:
+        return analysts.single_gene_perturbation_analysis(perturbed_tracks,perturb_change, centroid)
+    def gene_combinatorial_perturbation(self,data_path,iteration,top_n_single_gene=None,perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',training_params=None):
+        if perturb_change == 1:
             raise ValueError('If change level is one, the perturbed gene expression will not change')
         
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
@@ -423,12 +423,12 @@ class UNAGI:
                 analysts.adata.uns['combinatorial_perturbation_genes_set1'] = single_gene_results['compound'].tolist()[:top_n_single_gene]
         analysts.perturbation_analyse_gene_combinatorial(perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)
         return analysts.adata
-    def customized_gene_combinatorial_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
+    def customized_gene_combinatorial_perturbation_analysis(self,data_path,training_params,perturb_change=0.5,perturbed_tracks='individual',centroid=False):
         data_path = Path(data_path)
         iteration = data_path.parts[-2].split('_')[-1]
         target_dir = os.path.dirname(data_path)
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_mode=True,training_params=training_params)
         if 'two_genes_perturbation_deltaD' not in analysts.adata.uns.keys():
             raise ValueError('Please perform gene combinatorial perturbation first to get the combinatorial gene perturbation scores')
-        return analysts.gene_combinatorial_perturbation_analysis(perturbed_tracks,defulat_perturb_change, centroid)
+        return analysts.gene_combinatorial_perturbation_analysis(perturbed_tracks,perturb_change, centroid)
     

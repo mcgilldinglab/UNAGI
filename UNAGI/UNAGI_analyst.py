@@ -241,7 +241,7 @@ class analyst:
             break
         return output
         
-    def start_analyse(self,progressionmarker_background_sampling,run_pertubration,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,defulat_perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False):
+    def start_analyse(self,progressionmarker_background_sampling,run_pertubration,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -251,7 +251,7 @@ class analyst:
             the number of times to sample the background cells for dynamic markers discoveries.
         run_pertubration: bool
             whether to perform perturbation analysis.
-        defulat_perturb_change: float
+        perturb_change: float
             The gene expression changes after perturbation..
         overall_perturbation_analysis: bool
             whether to use all tracks for perturbation analysis.
@@ -328,20 +328,20 @@ class analyst:
             print('Start perturbation....')
             gc.collect()
             if not ignore_pathway_perturabtion:
-                perturbation_runner.run('random_pathway_background',defulat_perturb_change,inplace=True,CUDA=True)
-                perturbation_runner.run('pathway',defulat_perturb_change,inplace=True,CUDA=True)
+                perturbation_runner.run('random_pathway_background',perturb_change,inplace=True,CUDA=True)
+                perturbation_runner.run('pathway',perturb_change,inplace=True,CUDA=True)
                 if perturbed_tracks != 'all':
-                    perturbation_runner.analysis('pathway',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis=False)
+                    perturbation_runner.analysis('pathway',perturb_change,perturbed_tracks,overall_perturbation_analysis=False)
                 else:
-                    perturbation_runner.analysis('pathway',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
+                    perturbation_runner.analysis('pathway',perturb_change,perturbed_tracks,overall_perturbation_analysis)
             else:
                 print('Ignore pathway perturbation!')
             if not ignore_drug_perturabtion:
-                perturbation_runner.run('drug',defulat_perturb_change,inplace=True)
+                perturbation_runner.run('drug',perturb_change,inplace=True)
                 print('drug perturabtion done')
                 
                 if self.customized_drug is not None:
-                    perturbation_runner.run('random_drug_background',defulat_perturb_change,inplace=True,random_times = random_times, random_genes=self.get_median_random_gene(perturbation_runner.adata.uns['data_drug_overlap_genes']))
+                    perturbation_runner.run('random_drug_background',perturb_change,inplace=True,random_times = random_times, random_genes=self.get_median_random_gene(perturbation_runner.adata.uns['data_drug_overlap_genes']))
                 else:
                     random_gene = self.cmap_overlapped_genes(perturbation_runner.adata.uns['data_drug_overlap_genes'])
                     random_genes = [] 
@@ -352,11 +352,11 @@ class analyst:
                         choices = [random.choice(['+','-']) for _ in range(len(random_gene))]
                         random_genes.append([random_gene[i] + ':' + choices[i] for i in range(len(random_gene))])
                     perturbation_runner.adata.uns['cmap_random_genes'] = random_genes
-                    perturbation_runner.run('random_drug_background',defulat_perturb_change,inplace=True,random_genes=random_genes)
+                    perturbation_runner.run('random_drug_background',perturb_change,inplace=True,random_genes=random_genes)
                 if perturbed_tracks!='all':
-                    perturbation_runner.analysis('drug',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis=False)
+                    perturbation_runner.analysis('drug',perturb_change,perturbed_tracks,overall_perturbation_analysis=False)
                 else:
-                    perturbation_runner.analysis('drug',defulat_perturb_change,perturbed_tracks,overall_perturbation_analysis)
+                    perturbation_runner.analysis('drug',perturb_change,perturbed_tracks,overall_perturbation_analysis)
                 print('analysis of drug perturbation')
             else:
                 print('Ignore drug perturbation!')
@@ -370,8 +370,8 @@ class analyst:
         perturbation_runner.adata.obs['ident'] = perturbation_runner.adata.obs['ident'].astype(str)
         perturbation_runner.adata.write(self.target_dir/'dataset.h5ad',compression='gzip', compression_opts=9)
         # return a.adata
-    def drug_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
-        key = defulat_perturb_change
+    def drug_perturbation_analysis(self,tracks,perturb_change, centroid=False):
+        key = perturb_change
         track_results = {}
         if not centroid:
             perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
@@ -411,8 +411,8 @@ class analyst:
                 perturbation_runner.adata.uns['drug_perturbation_score'][str(key)][each] = track_results[each]
                 perturbation_runner.adata.uns['drug_perturbation_score'][str(1/key)][each] = track_results[each]
         return perturbation_runner.adata
-    def pathway_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
-        key = defulat_perturb_change
+    def pathway_perturbation_analysis(self,tracks,perturb_change, centroid=False):
+        key = perturb_change
         track_results = {}
         if not centroid:
             perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
@@ -452,8 +452,8 @@ class analyst:
                 perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)][each] = track_results[each]
                 perturbation_runner.adata.uns['pathway_perturbation_score'][str(1/key)][each] = track_results[each]
         return perturbation_runner.adata
-    def single_gene_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
-        key = defulat_perturb_change
+    def single_gene_perturbation_analysis(self,tracks,perturb_change, centroid=False):
+        key = perturb_change
         track_results = {}
         if not centroid:
             perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
@@ -493,8 +493,8 @@ class analyst:
                 perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)][each] = track_results[each]
                 perturbation_runner.adata.uns['single_gene_perturbation_score'][str(1/key)][each] = track_results[each]
         return perturbation_runner.adata
-    def gene_combinatorial_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
-        key = defulat_perturb_change
+    def gene_combinatorial_perturbation_analysis(self,tracks,perturb_change, centroid=False):
+        key = perturb_change
         track_results = {}
         if not centroid:
             perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
