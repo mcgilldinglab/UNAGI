@@ -70,8 +70,8 @@ class UNAGI_trainer():
             if self.cuda:
                 x = x.to(self.device)
             if geneWeights is not None:
-                geneWeights1 = torch.tensor(transfer_to_ranking_score(geneWeights[idx].toarray()))
-                geneWeights1 = geneWeights1.to(self.device)
+                idx_np = idx.detach().cpu().numpy()
+                geneWeights1 = torch.tensor(transfer_to_ranking_score(geneWeights[idx_np].toarray())).to(self.device)
                 if neighbourhood is not None:
                     mu, dropout_logits, mu_, logvar_,_ = vae(x,adj,idx)
                     loss =  vae.loss_function(x[idx,:], mu, dropout_logits, mu_, logvar_,gene_weights=geneWeights1)

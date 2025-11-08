@@ -3,7 +3,7 @@ import os
 import json
 import pickle
 import scanpy as sc
-import subprocess
+import shutil
 from pathlib import Path
 import numpy as np
 from .utils.analysis_helper import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking,process_customized_drug_database
@@ -284,10 +284,11 @@ class analyst:
         self.adata = calculateTopPathwayGeneRanking(self.adata)
         print('calculateTopPathwayGeneRanking done')
         if not os.path.exists(self.target_dir/'idrem'):
-            initalcommand = 'cp -r ' + os.path.join(self.data_folder.parent,'idremResults') +' '+str(self.target_dir/'idrem')
-            p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
-        initalcommand = 'mkdir '+str(self.target_dir/'model_save')+'&& cp ' + os.path.join(self.data_folder.parent.parent,'model_save',self.model_name)+' '+str(self.target_dir/'model_save'/self.model_name)+'&& cp ' + os.path.join(self.data_folder.parent.parent,'model_save/training_parameters.json')+' '+str(self.target_dir/'model_save'/'training_parameters.json')
-        p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
+            shutil.copytree(self.data_folder.parent/'idremResults', self.target_dir/'idrem')
+        
+        (self.target_dir/'model_save').mkdir(parents=True, exist_ok=True)
+        shutil.copy(self.data_folder.parent.parent/'model_save'/self.model_name, self.target_dir/'model_save'/self.model_name)
+        shutil.copy(self.data_folder.parent.parent/'model_save'/'training_parameters.json', self.target_dir/'model_save'/'training_parameters.json')
         #stop 10 seconds to ensure the model is copied
         import time
         time.sleep(10)

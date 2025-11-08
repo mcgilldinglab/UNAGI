@@ -1,4 +1,3 @@
-import subprocess
 from ..utils.gcn_utils import  setup_graph
 from ..utils.CPO_utils import get_neighbors, auto_resolution
 from ..utils.attribute_utils import saveRep,get_all_adj_adata,mergeAdata,updateAttributes,get_data_file_path
@@ -6,7 +5,6 @@ from ..dynamic_graphs.buildGraph import getandUpadateEdges
 import gc
 import scanpy as sc
 import numpy as np
-import os
 from ..dynamic_regulatory_networks.processIDREM import getClusterPaths, getClusterIdrem, runIdrem
 from ..dynamic_regulatory_networks.processTFs import getTFs, getTargetGenes, matchTFandTGWithFoldChange, updataGeneTablesWithDecay
 from sklearn.neighbors import kneighbors_graph
@@ -150,7 +148,7 @@ class UNAGI_runner:
             else:
                 self.adata_stages[i] = self.annotate_stage_data(self.adata_stages[i], i,CPO=True,max_neighbors=self.max_neighbors)
         if not self.setup_CPO:
-            print('CPO parameters are not set up, using default parameters')
+            print('CPO parameters not specified, using default parameters')
             print('anchor_neighbors: 15, max_neighbors: 35, min_neighbors: 10, resolution_min: 0.8, resolution_max: 1.5')
             self.neighbor_parameters, anchor_index = get_neighbors(self.adata_stages, num_cells,anchor_neighbors=15,max_neighbors=35,min_neighbors=10)
             self.resolutions,_ = auto_resolution(self.adata_stages, anchor_index, self.neighbor_parameters, 0.8, 1.5)
