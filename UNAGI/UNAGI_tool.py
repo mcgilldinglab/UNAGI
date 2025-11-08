@@ -1,7 +1,6 @@
 '''
 This is the main module of UNAGI. It contains the UNAGI class, which is the main class of UNAGI. It also contains the functions to prepare the data, start the model training and start analysing the perturbation results. Initially, `setup_data` function should be used to prepare the data. Then, `setup_training`` function should be used to setup the training parameters. Finally, `run_UNAGI` function should be used to start the model training. After the model training is done, `analyse_UNAGI` function should be used to start the perturbation analysis.
 '''
-import subprocess
 import numpy as np
 from .utils.attribute_utils import split_dataset_into_stage, get_all_adj_adata
 import os
@@ -90,8 +89,9 @@ class UNAGI:
         dir1 = self.data_folder / '0'
         dir2 = self.data_folder / '0/stagedata'
         dir3 = self.data_folder / 'model_save'
-        initalcommand = 'mkdir '+ str(dir1) +' && mkdir '+str(dir2) +' && mkdir '+str(dir3)
-        p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
+        dir1.mkdir(parents=True, exist_ok=True)
+        dir2.mkdir(parents=True, exist_ok=True)
+        dir3.mkdir(parents=True, exist_ok=True)
         if calculate_cell_graph:
             if not gcn_connectivities:
                 print('Cell graphs not found, calculating cell graphs for individual stages! Using K=%d and threads=%d for cell graph construction'%(neighbors,threads))
@@ -311,8 +311,9 @@ class UNAGI:
                 dir1 = self.data_folder / str(iteration)
                 dir2 = self.data_folder / str(iteration) / 'stagedata'
                 dir3 = self.data_folder / 'model_save'
-                initalcommand = 'mkdir '+ str(dir1) +' && mkdir '+str(dir2)
-                p = subprocess.Popen(initalcommand, stdout=subprocess.PIPE, shell=True)
+                dir1.mkdir(parents=True, exist_ok=True)
+                dir2.mkdir(parents=True, exist_ok=True)
+                dir3.mkdir(parents=True, exist_ok=True)
             unagi_runner = UNAGI_runner(self.data_folder,self.ns,iteration,self.unagi_trainer,self.label_key,idrem_dir,adversarial=self.adversarial,GCN = self.GCN,connect_edges_cutoff=connect_edges_cutoff)
             unagi_runner.set_up_species(self.species)
             if self.CPO_parameters is not None:

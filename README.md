@@ -94,11 +94,11 @@ git clone https://github.com/phoenixding/idrem.git
 Install the iDREM to the source folder of UNAGI
 
 -   Java
-    To use iDREM, a version of Java 1.7 or later must be installed. If Java 1.7 or later is not currently installed, please refer to http://www.java.com for installation instructions.
+    To use iDREM, a version of Java 1.7 (64-bit) or later **must be installed**. If Java (64-bit) 1.7 or later is not currently installed, please refer to http://www.java.com for installation instructions.
 
 -   JavaScript
     To enable the interactive visualization powered by Javascript.
-    (The users are still able to run the software of-line, but Internet access is needed to view the result interactively.)
+    (The users are still able to run the software off-line, but Internet access is needed to view the result interactively.)
 
 ## Tutorials:
 
