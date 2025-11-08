@@ -861,6 +861,17 @@ class perturbationAnalysis:
         elif self.mode == 'single_gene':
             items = self.adata.var.index.tolist()
             items = {each: [each] for each in items}
+        elif self.mode =='two_genes':
+            all_genes = self.adata.var_names.tolist()
+            combination_gene_set1 = self.adata.uns['combinatorial_perturbation_genes_set1']
+            candidate_dict = {}
+            for each in combination_gene_set1:
+                for gene in all_genes:
+                    if gene != each:
+                        candidate_dict[each+'_'+gene] = []
+                        candidate_dict[each+'_'+gene].append(each)
+                        candidate_dict[each+'_'+gene].append(gene)
+            items = candidate_dict
 
         direction_dict = self.getTendencyDict(track_percentage)
         candidates_weight = [0.001,0.01,0.1,0.5,1,5, 10,50,100,500,1000]

@@ -37,7 +37,7 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                 return dict_results
             else:
                 if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
-                    raise ValueError('Not a valid track!')
+                    raise ValueError('Not a valid track! Valid tracks are: %s' % (list(adata.uns['pathway_perturbation_score'][str(intensity)].keys())))
                 else:
                     temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
                     temp.rename(columns={'compound': 'pathways'}, inplace=True)
@@ -60,7 +60,7 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                 return temp[:top_n]
             else:
                 if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
-                    raise ValueError('Not a valid track!')
+                    raise ValueError('Not a valid track! Valid tracks are: %s' % (list(adata.uns['pathway_perturbation_score'][str(intensity)].keys())))
                 if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)][selected_track].keys():
                     print('All pertubred pathways are not statistically significant!')
                     print('Here are the top %s pathways that are not statistically significant:'%(str(top_n)))
@@ -92,7 +92,7 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                 return dict_results
             else:
                 if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
-                    raise ValueError('Not a valid track!')
+                    raise ValueError('Not a valid track! Valid tracks are: %s' % (list(adata.uns['pathway_perturbation_score'][str(intensity)].keys())))
                 else:
                     temp = pd.DataFrame.from_dict(adata.uns['pathway_perturbation_score'][str(intensity)][selected_track]['top_compounds'])
                     temp.rename(columns={'compound': 'pathways'}, inplace=True)
@@ -114,7 +114,7 @@ def get_top_pathways(adata, intensity, top_n=None, cutoff=None,selected_track=No
                 return temp[temp['pval_adjusted'] < cutoff]
             else:
                 if selected_track not in adata.uns['pathway_perturbation_score'][str(intensity)].keys():
-                    raise ValueError('Not a valid track!')
+                    raise ValueError('Not a valid track! Valid tracks are: %s' % (list(adata.uns['pathway_perturbation_score'][str(intensity)].keys())))
                 if 'top_compounds' not in adata.uns['pathway_perturbation_score'][str(intensity)][selected_track].keys():
                     print('All pertubred pathways are not statistically significant!')
                     print('Here are the pathways that are not statistically significant:')

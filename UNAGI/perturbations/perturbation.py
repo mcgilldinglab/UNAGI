@@ -463,7 +463,7 @@ class perturbation:
         parameters
         -------------------
         mode: str
-            perturbation mode, 'drug', 'pathway', 'random_background', 'online_random_background', 'single_gene'
+            perturbation mode, 'drug', 'pathway', 'random_background', 'online_random_background', 'single_gene', 'two_genes'
         log2fc: float
             log2fc of the perturbation
         inplace: bool
@@ -694,6 +694,76 @@ class perturbation:
                     del self.pb.data.obsm['perturbed_embedding']
                     gc.collect() # collect garbage to free memory
             print('Single gene perturbation finished!')
+        elif mode =='two_genes':
+            all_genes = self.adata.var_names.tolist()
+            combination_gene_set1 = self.adata.uns['combinatorial_perturbation_genes_set1']
+            candidate_dict = {}
+            for each in combination_gene_set1:
+                for gene in all_genes:
+                    if gene != each:
+                        candidate_dict[each+'_'+gene] = []
+                        candidate_dict[each+'_'+gene].append(each)
+                        candidate_dict[each+'_'+gene].append(gene)
+
+            perturbed_items = list(candidate_dict.keys())
+            temp_perturbed_genes = list(candidate_dict.values())
+            for each_direction in [log2fc,1/log2fc]:
+                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
+                    gene_input_dict = {}
+                    if type(genes)!= list:
+                        genes = genes.tolist()
+                    # for each in genes:
+                    #     gene_input_dict[each] = each_direction
+                    gene_input_dict = dict.fromkeys(genes, each_direction) 
+    
+                    perturb_cells = self.adata.obs.index
+                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
+                    if 'two_genes_perturbation_deltaD' not in self.adata.uns.keys():
+                        self.adata.uns['two_genes_perturbation_deltaD'] = {}
+                    if str(each_direction) not in self.adata.uns['two_genes_perturbation_deltaD'].keys():
+                        self.adata.uns['two_genes_perturbation_deltaD'][str(each_direction)] = {}
+                    for lastCluster in self.tracks.keys():
+                        track_indices = []
+                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
+                        track_name = str(track[0][0]) 
+                        for i in range(1,len(track)):
+                            track_name += '-' + str(track[i][0])
+                        track_indices = track_cache[track_name]
+
+                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                        if track_name not in self.adata.uns['two_genes_perturbation_deltaD'][str(each_direction)].keys():
+                            self.adata.uns['two_genes_perturbation_deltaD'][str(each_direction)][track_name] = {}
+                        self.adata.uns['two_genes_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
+                    del self.pb.data.obsm['perturbed_embedding']
+                    gc.collect() # collect garbage to free memory
+        elif mode == 'random_background':
+            for each_direction in [log2fc,1/log2fc]:
+                for perturbation_item_idx in tqdm(range(random_times),total = random_times):
+                    gene_input_dict = {}
+                    genes = get_random_genes(self.adata, random_genes, perturbation_item_idx) #use random genes
+                    gene_input_dict = dict.fromkeys(genes, each_direction) 
+
+                    perturb_cells = self.adata.obs.index
+                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
+                    
+                    if 'random_background_perturbation_deltaD' not in self.adata.uns.keys():
+                        self.adata.uns['random_background_perturbation_deltaD'] = {}
+                    if str(each_direction) not in self.adata.uns['random_background_perturbation_deltaD'].keys():
+                        self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)] = {}
+                    for lastCluster in self.tracks.keys():
+                        track_indices = []
+                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
+                        track_name = str(track[0][0]) 
+                        for i in range(1,len(track)):
+                            track_name += '-' + str(track[i][0])
+                        track_indices = track_cache[track_name]
+                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                        if track_name not in self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)].keys():
+                            self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name] = {}
+                        self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name][perturbation_item_idx] = deltaD
+                    del self.pb.data.obsm['perturbed_embedding']
+                    gc.collect() # collect garbage to free memory
+            print('finished')
     def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None):
         '''
         Analysis of perturbation results
@@ -701,7 +771,7 @@ class perturbation:
         parameters
         ----------------
         mode: str
-            The mode is choosing from ['drug', 'pathway', 'online','single_gene']
+            The mode is choosing from ['drug', 'pathway', 'online','single_gene','two_genes']
         log2fc: float
             log2fc is the log2 fold change of perturbation
         overall_perturbation_analysis: bool

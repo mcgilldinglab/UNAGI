@@ -1,14 +1,32 @@
-# UNAGI
+# UNAGI: virtual disease and drug perturbation
 
-UNAGI: Deep Generative Model for Deciphering Cellular Dynamics and In-Silico Drug Discovery in Complex Diseases
+UNAGI is a data-driven virtual disease model powered by deep generative AI for reconstructing longitudial cell dynamics in disease progression and performing **unsupervised** in-silico drug perturbations for drug discovery/repurposing.
 
 Full documentations and tutorials can be accessed at [UNAGI-docs](https://unagi-docs.readthedocs.io/en/latest/index.html).
 
+## Citation
+Zheng, Y., Schupp, J.C., Adams, T. et al. A deep generative model for deciphering cellular dynamics and in silico drug discovery in complex diseases. Nat. Biomed. Eng (2025). https://doi.org/10.1038/s41551-025-01423-7
+
+## Highlights
+* UNAGI supports both time-series scRNA data and control/disease (two-condition) data.
+* UNAGI can construct temporal cell dynamics
+    * trajectories
+    * TFs
+    * temporal marker genes
+* UNAGI can perform **UNSUPERVISED** perturbation for
+    * single gene
+    * gene combinations
+    * pathways
+    * drug and compounds
+
+## News
+* Sept/2025: We are honored to have this work highlighted by Anaconda AI Platform! ([link](https://www.anaconda.com/resources/case-study/mcgill-university))
+* June/2025: We are thrilled to share that UNAGI is published on Nature Biomedical Engineering! ([link](https://www.nature.com/articles/s41551-025-01423-7))
+
 ## Overview 
 <img title="UNAGI Overview" alt="Alt text" src="UNAGI_overview.png">
-UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug discovery framework. UNAGI adeptly deciphers cellular dynamics from human disease time-series single-cell data and facilitates in-silico drug perturbations to earmark therapeutic targets and drugs potentially active against complex human diseases. All outputs, from cellular dynamics to drug perturbations, are rendered in an interactive visual format within the UNAGI framework. Nestled within a deep learning architecture Variational Autoencoder-Generative adversarial network (VAE-GAN), UNAGI is tailored to manage diverse data distributions frequently arising post-normalization. It also innovatively employs disease-informed cell embeddings, harnessing crucial gene markers derived from the disease dataset. On achieving cell embeddings, UNAGI fabricates a graph that chronologically links cell clusters across disease stages, subsequently deducing the gene regulatory network orchestrating these connections. UNAGI is primed to leverage time-series data, enabling a precise portrayal of cellular dynamics and a superior capture of disease markers and regulators. Lastly, the deep generative prowess of the UNAGI framework powers an in-silico drug perturbation module, simulating drug impacts by manipulating the latent space informed by real drug perturbation data from the CMAP database. This allows for an empirical assessment of drug efficacy based on cellular shifts towards healthier states following drug treatment. The in-silico perturbation module can similarly be utilized to investigate therapeutic pathways, employing an approach akin to the one used in drug perturbation analysis.
+<!-- UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug discovery framework. UNAGI adeptly deciphers cellular dynamics from human disease time-series single-cell data and facilitates in-silico drug perturbations to earmark therapeutic targets and drugs potentially active against complex human diseases. All outputs, from cellular dynamics to drug perturbations, are rendered in an interactive visual format within the UNAGI framework. Nestled within a deep learning architecture Variational Autoencoder-Generative adversarial network (VAE-GAN), UNAGI is tailored to manage diverse data distributions frequently arising post-normalization. It also innovatively employs disease-informed cell embeddings, harnessing crucial gene markers derived from the disease dataset. On achieving cell embeddings, UNAGI fabricates a graph that chronologically links cell clusters across disease stages, subsequently deducing the gene regulatory network orchestrating these connections. UNAGI is primed to leverage time-series data, enabling a precise portrayal of cellular dynamics and a superior capture of disease markers and regulators. Lastly, the deep generative prowess of the UNAGI framework powers an in-silico drug perturbation module, simulating drug impacts by manipulating the latent space informed by real drug perturbation data from the CMAP database. This allows for an empirical assessment of drug efficacy based on cellular shifts towards healthier states following drug treatment. The in-silico perturbation module can similarly be utilized to investigate therapeutic pathways, employing an approach akin to the one used in drug perturbation analysis. -->
 
-## Key Capabilities
 -   Learning disease-specific cell embeddings through iterative training processes.
 
 -   Constructing temporal dynamic graphs from time-series single-cell data and reconstructing temporal gene regulatory networks to decipher cellular dynamics.
@@ -25,7 +43,7 @@ conda create -n unagi python=3.10
 conda activate unagi
 ```
 
-<!-- UNAGI installation
+UNAGI installation
 
 ### Option 1: Install from pip
 
@@ -33,7 +51,7 @@ conda activate unagi
 pip install scUNAGI
 ```
 
-### Option 2: Install from Github -->
+### Option 2: Install from Github (Recommended)
 
 Installing UNAGI directly from GitHub ensures you have the latest version. **(Please install directly from GitHub to use the provided Jupyter notebooks for tutorials and walkthrough examples.)**
 

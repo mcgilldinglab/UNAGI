@@ -136,6 +136,45 @@ class analyst:
         if save_adata is not None:
             a.adata.write(Path(save_adata),compression='gzip', compression_opts=9)
 
+    def perturbation_analyse_gene_combinatorial(self,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu'):
+        '''
+        Perform perturbation on gene combinations.
+
+        parameters
+        ----------------
+        perturbed_tracks: str
+            the track to perform perturbation. if 'all', all tracks will be used.
+        overall_perturbation_analysis: bool
+            whether to calculate perturbation scores for all tracks. If False, perturbation scores will be calculated for each track.
+        bound: float
+            The gene expression changes after perturbation.
+        save_csv: str
+            the directory to save the perturbation results.
+        save_adata: str
+            the directory to save the perturbation results.
+        CUDA: bool
+            whether to use GPU for perturbation.
+        device: str
+            the device to perform perturbation.
+        random_genes: int
+            the number of random genes to perform random perturbation.
+        random_times: int
+            the number of times to build random perturbation score distribution.
+        '''
+        
+        print('Start perturbation....')
+        gc.collect()
+        a = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem',config_path=self.training_params)
+        a.run('two_genes',bound,inplace=True,CUDA=CUDA,device=device)
+        a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=2,random_times=20)
+        print('random background done')
+        a.analysis('two_genes',bound,perturbed_tracks,overall_perturbation_analysis)
+        print('Finish results analysis')
+        if save_csv is not None:
+            a.uns['two_genes_perturbation'].to_csv(Path(save_csv))
+        if save_adata is not None:
+            a.adata.write(Path(save_adata),compression='gzip', compression_opts=9)
+
     def perturbation_analyse_customized_drug(self,customized_drug,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=True,device='cuda:0',random_genes=2,random_times=100):
         '''
         Perform perturbation on customized drug.
@@ -171,7 +210,7 @@ class analyst:
         a = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem',config_path=self.training_params)
         a.run('drug',bound,inplace=True,CUDA=CUDA,device=device)
         print('drug perturabtion done')
-        a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times)
+        a.run('random_drug_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times)
         print('random background done')
         a.analysis('drug',bound,perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis)
         print('Finish results analysis')
@@ -411,4 +450,86 @@ class analyst:
             for each in track_results.keys():  
                 perturbation_runner.adata.uns['pathway_perturbation_score'][str(key)][each] = track_results[each]
                 perturbation_runner.adata.uns['pathway_perturbation_score'][str(1/key)][each] = track_results[each]
+        return perturbation_runner.adata
+    def single_gene_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
+        key = defulat_perturb_change
+        track_results = {}
+        if not centroid:
+            perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
+        else:
+            perturbation_runner = perturbation_centroid(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
+        if tracks == 'individual':
+            tracks_head = []
+            for each in list(self.adata.uns['single_gene_perturbation_deltaD'][str(key)].keys()):
+                each = each.split('-')[0]
+                if each not in tracks_head:
+                    tracks_head.append(each)
+            if  'overall' in self.adata.uns['single_gene_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['single_gene_perturbation_score'][str(key)]['overall'].copy()
+            for each_track in tracks_head:
+                print('Processing track %s'%(each_track))
+                perturbation_runner.analysis('single_gene',key,each_track,overall_perturbation_analysis=True)
+                track_results['track_'+each_track] = perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)]['overall'].copy()
+
+            del perturbation_runner.adata.uns['single_gene_perturbation_score']
+            perturbation_runner.adata.uns['single_gene_perturbation_score'] = {}
+            perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['single_gene_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['single_gene_perturbation_score'][str(1/key)][each] = track_results[each]
+        else:
+            track_results = {}
+            if  'overall' in self.adata.uns['single_gene_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['single_gene_perturbation_score'][str(key)]['overall'].copy()
+            perturbation_runner.analysis('single_gene',key, tracks,overall_perturbation_analysis=True)
+            track_results['track_'+tracks] = perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)]['overall'].copy()
+            del perturbation_runner.adata.uns['single_gene_perturbation_score']
+            perturbation_runner.adata.uns['single_gene_perturbation_score'] = {}
+            perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['single_gene_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['single_gene_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['single_gene_perturbation_score'][str(1/key)][each] = track_results[each]
+        return perturbation_runner.adata
+    def gene_combinatorial_perturbation_analysis(self,tracks,defulat_perturb_change, centroid=False):
+        key = defulat_perturb_change
+        track_results = {}
+        if not centroid:
+            perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
+        else:
+            perturbation_runner = perturbation_centroid(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
+        if tracks == 'individual':
+            tracks_head = []
+            for each in list(self.adata.uns['two_genes_perturbation_deltaD'][str(key)].keys()):
+                each = each.split('-')[0]
+                if each not in tracks_head:
+                    tracks_head.append(each)
+            if  'overall' in self.adata.uns['two_genes_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['two_genes_perturbation_score'][str(key)]['overall'].copy()
+            for each_track in tracks_head:
+                print('Processing track %s'%(each_track))
+                perturbation_runner.analysis('two_genes',key,each_track,overall_perturbation_analysis=True)
+                track_results['track_'+each_track] = perturbation_runner.adata.uns['two_genes_perturbation_score'][str(key)]['overall'].copy()
+
+            del perturbation_runner.adata.uns['two_genes_perturbation_score']
+            perturbation_runner.adata.uns['two_genes_perturbation_score'] = {}
+            perturbation_runner.adata.uns['two_genes_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['two_genes_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['two_genes_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['two_genes_perturbation_score'][str(1/key)][each] = track_results[each]
+        else:
+            track_results = {}
+            if  'overall' in self.adata.uns['two_genes_perturbation_score'][str(key)].keys():
+                track_results['overall'] = self.adata.uns['two_genes_perturbation_score'][str(key)]['overall'].copy()
+            perturbation_runner.analysis('two_genes',key, tracks,overall_perturbation_analysis=True)
+            track_results['track_'+tracks] = perturbation_runner.adata.uns['two_genes_perturbation_score'][str(key)]['overall'].copy()
+            del perturbation_runner.adata.uns['two_genes_perturbation_score']
+            perturbation_runner.adata.uns['two_genes_perturbation_score'] = {}
+            perturbation_runner.adata.uns['two_genes_perturbation_score'][str(key)] = {}
+            perturbation_runner.adata.uns['two_genes_perturbation_score'][str(1/key)] = {}
+            for each in track_results.keys():  
+                perturbation_runner.adata.uns['two_genes_perturbation_score'][str(key)][each] = track_results[each]
+                perturbation_runner.adata.uns['two_genes_perturbation_score'][str(1/key)][each] = track_results[each]
         return perturbation_runner.adata
