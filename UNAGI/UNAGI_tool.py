@@ -2,7 +2,6 @@
 This is the main module of UNAGI. It contains the UNAGI class, which is the main class of UNAGI. It also contains the functions to prepare the data, start the model training and start analysing the perturbation results. Initially, `setup_data` function should be used to prepare the data. Then, `setup_training`` function should be used to setup the training parameters. Finally, `run_UNAGI` function should be used to start the model training. After the model training is done, `analyse_UNAGI` function should be used to start the perturbation analysis.
 '''
 import subprocess
-from tracemalloc import start
 import numpy as np
 from .utils.attribute_utils import split_dataset_into_stage, get_all_adj_adata
 import os
@@ -420,7 +419,7 @@ class UNAGI:
                 print('Using top %d genes in overall single-gene perturbation results to initiate\n' \
                 ' combinatorial perturbation analysis'%top_n_single_gene)
                 single_gene_results = pd.DataFrame.from_dict(analysts.adata.uns['single_gene_perturbation_score'][str(0.5)]['overall']['top_compounds']).sort_values(by='pval_adjusted',ascending=True)
-                analysts.adata.uns['combinatorial_perturbation_genes_set1'] = single_gene_results['gene'].tolist()[:top_n_single_gene]
+                analysts.adata.uns['combinatorial_perturbation_genes_set1'] = single_gene_results['compound'].tolist()[:top_n_single_gene]
         analysts.perturbation_analyse_gene_combinatorial(perturbed_tracks=perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,save_csv = save_csv,save_adata = save_adata,CUDA=CUDA,device=device)
         return analysts.adata
     def customized_gene_combinatorial_perturbation_analysis(self,data_path,training_params,defulat_perturb_change=0.5,perturbed_tracks='individual',centroid=False):
