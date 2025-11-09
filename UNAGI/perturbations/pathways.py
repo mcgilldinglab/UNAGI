@@ -8,7 +8,7 @@ def get_top_pathways(adata, perturb_change, top_n=None, cutoff=None,selected_tra
     adata : AnnData object
         Annotated data matrix.
     perturb_change : int
-        Pertubration perturb_change.
+        perturbation perturb_change.
     top_n : int, optional
         Number of top pathways to return. The default is None.
     cutoff : float, optional

@@ -335,7 +335,7 @@ class UNAGI:
         unagi_runner.load_stage_data()
         unagi_runner.update_gene_weights_table()
 
-    def analyse_UNAGI(self,data_path,iteration,random_background_sampling_times,run_pertubration,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False,training_params=None):
+    def analyse_UNAGI(self,data_path,iteration,random_background_sampling_times,run_perturbation,customized_pathway=None,target_dir=None,customized_drug=None,cmap_dir=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,ignore_hcmarkers=False,ignore_dynamic_markers=False,training_params=None):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -355,7 +355,7 @@ class UNAGI:
             the directory to the cmap database. Default is None.
         '''
         analysts = analyst(data_path,iteration,target_dir=target_dir,customized_drug=customized_drug,cmap_dir=cmap_dir,training_params=training_params)
-        analysts.start_analyse(random_background_sampling_times,customized_pathway=customized_pathway, run_pertubration=run_pertubration,random_times=random_background_sampling_times,perturb_change=perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
+        analysts.start_analyse(random_background_sampling_times,customized_pathway=customized_pathway, run_perturbation=run_perturbation,random_times=random_background_sampling_times,perturb_change=perturb_change,overall_perturbation_analysis=overall_perturbation_analysis,perturbed_tracks=perturbed_tracks,ignore_pathway_perturabtion=ignore_pathway_perturabtion,ignore_drug_perturabtion=ignore_drug_perturabtion,centroid=centroid,ignore_hcmarkers=ignore_hcmarkers,ignore_dynamic_markers=ignore_dynamic_markers)
         print('The analysis has been done, please check the outputs!')
 
     def customize_pathway_perturbation(self,data_path,iteration,customized_pathway,perturb_change=0.5,perturbed_tracks='all',overall_perturbation_analysis=True,CUDA=True,save_csv = None,save_adata = None,target_dir=None,device='cuda:0',random_times=1000, random_genes= 5,training_params=None):

@@ -8,7 +8,7 @@ def get_top_compounds(adata, perturb_change, top_n=None, cutoff=None,selected_tr
     adata : AnnData object
         Annotated data matrix.
     perturb_change : int
-        Pertubration perturb_change.
+        perturbation perturb_change.
     top_n : int, optional
         Number of top compounds to return. The default is None.
     cutoff : float, optional
@@ -117,7 +117,7 @@ def get_top_single_genes(adata, perturb_change, top_n=None, cutoff=None, selecte
     adata : AnnData object
         Annotated data matrix.
     perturb_change : int
-        Pertubration perturb_change.
+        perturbation perturb_change.
     top_n : int, optional
         Number of top genes to return. The default is None.
     cutoff : float, optional
@@ -247,7 +247,7 @@ def get_top_gene_combinations(adata, perturb_change, top_n=None, cutoff=None, se
     adata : AnnData object
         Annotated data matrix.
     perturb_change : int
-        Pertubration perturb_change.
+        perturbation perturb_change.
     top_n : int, optional
         Number of top genes to return. The default is None.
     cutoff : float, optional

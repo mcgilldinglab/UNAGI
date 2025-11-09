@@ -482,7 +482,7 @@ class perturbationAnalysis:
 
     def fitlerOutNarrowPathway(self, scores, sanity_scores, names, name_order):
         '''
-        Calculate the p-values of the perturbation scores and filter out the ineffective pertubrations..
+        Calculate the p-values of the perturbation scores and filter out the ineffective perturbations..
         
         parameters
         ------------

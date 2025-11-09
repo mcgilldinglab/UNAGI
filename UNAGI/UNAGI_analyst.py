@@ -241,7 +241,7 @@ class analyst:
             break
         return output
         
-    def start_analyse(self,progressionmarker_background_sampling,run_pertubration,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False):
+    def start_analyse(self,progressionmarker_background_sampling,run_perturbation,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -249,7 +249,7 @@ class analyst:
         ----------------
         progressionmarker_background_sampling: int
             the number of times to sample the background cells for dynamic markers discoveries.
-        run_pertubration: bool
+        run_perturbation: bool
             whether to perform perturbation analysis.
         perturb_change: float
             The gene expression changes after perturbation..
@@ -306,7 +306,7 @@ class analyst:
             perturbation_runner = perturbation(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
         else:
             perturbation_runner = perturbation_centroid(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
-        if run_pertubration:
+        if run_perturbation:
             direction_flag = False
             if not ignore_drug_perturabtion:
                 try:
