@@ -374,36 +374,12 @@ class perturbation:
         self.pb = perturbator(model_path = self.model_name, data = self.adata, config_path = config_path)
     def read_stagedata(self):
         stageadata = []
-        self.stage_cluster = {}
-        stage_have_clusters = {}
-        stage_have_clusters[str(0)] = []
-        for i in self.tracks.keys():
-            track = self.getTrack(len(self.adata.obs['stage'].unique())-1,i)
-            track_name = str(track[0][0])
-            stage_have_clusters[str(0)].append(str(track[0][0]))
-            for j in range(1,len(track)):
-                if str(j) not in stage_have_clusters.keys():
-                    stage_have_clusters[str(j)] = []
-                try:
-                    stage_have_clusters[str(j)].append(str(track[j][0]))
-                    track_name += '-' + str(track[j][0])
-                except:
-                    continue
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
         for i in list(self.adata.obs['stage'].unique()):
 
             stagedataids = self.adata.obs[self.adata.obs['stage']==i].index.values
-            
-
             adata = self.adata[stagedataids]
             adata.obs['leiden'] = adata.obs['leiden'].astype('string')
-            grouped = adata.obs.groupby('leiden')
-            self.stage_cluster[str(i)] = {}#{name: adata[group.index.tolist()] for name, group in grouped}
-            for name, group in grouped:
-                if str(name) not in stage_have_clusters[str(i)]:
-                    continue
-                else:
-                    self.stage_cluster[str(i)][str(name)] = adata[group.index.tolist()]
             stageadata.append(adata)
         return stageadata
     def getTrackReadOrder(self):
