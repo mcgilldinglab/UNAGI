@@ -77,7 +77,7 @@ class UNAGI_runner:
         z_locs, z_scales, cell_embeddings = self.trainer.get_latent_representation(adata,self.iteration,self.data_path)
         adata.obsm['z'] = cell_embeddings
         if self.neighbor_parameters is None:
-            sc.pp.neighbors(adata, use_rep="z",n_neighbors=max_neighbors,method='umap')
+            sc.pp.neighbors(adata, use_rep="z",n_neighbors=max_neighbors+1,method='umap')
             return adata
         if 'connectivities' in adata.obsp.keys():
             del adata.obsp['connectivities']
