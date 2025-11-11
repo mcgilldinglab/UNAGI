@@ -327,6 +327,9 @@ class UNAGI:
                 else:
                     unagi_runner.set_up_iDREM(Minimum_Absolute_Log_Ratio_Expression = self.iDREM_parameters['Minimum_Absolute_Log_Ratio_Expression'], Convergence_Likelihood = self.iDREM_parameters['Convergence_Likelihood'], Minimum_Standard_Deviation = self.iDREM_parameters['Minimum_Standard_Deviation'])
             unagi_runner.run(CPO)
+            print('Iteration %d training is done!'%iteration)
+            gc.collect()
+        print('All iterations are done! The trained models are saved in the model_save folder under the data folder!')
 
     def test_geneweihts(self,iteration,idrem_dir):
         iteration = int(iteration)
