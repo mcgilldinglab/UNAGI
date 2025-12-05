@@ -7,7 +7,6 @@ import shutil
 from pathlib import Path
 import numpy as np
 
-from VTK.IO.Xdmf3.Testing.Python.VToXLoop import raiseErrorAndExit
 from .utils.analysis_helper import find_overlap_and_assign_direction,calculateDataPathwayOverlapGene,calculateTopPathwayGeneRanking,process_customized_drug_database
 from .marker_discovery.hierachical_static_markers import get_dataset_hcmarkers
 from .perturbations.perturbation import perturbation

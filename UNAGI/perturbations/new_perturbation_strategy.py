@@ -260,8 +260,9 @@ if __name__ == '__main__':
     parser.add_argument('--DATA_PATH', type=str, help='path of the adata file')
     parser.add_argument('--MODEL_CONF', type=str, help='the path of the model config file')
     parser.add_argument('--PERTURB_CONF', type=str, help='the path of the perturbation config file')
-    perturbation_conf = json.load(open(args.PERTURB_CONF))
+    
     args = parser.parse_args()
+    perturbation_conf = json.load(open(args.PERTURB_CONF))
     # MODEL_PATH = '/mnt/md0/jiahui/sex_chimeric/WT_mdx/data/model_save/WT_mdx_2.pth'
     # DATA_PATH = '/mnt/md0/jiahui/sex_chimeric/WT_mdx/data/2/stagedata/dataset.h5ad'
     # CONFIG_PATH = '/mnt/md0/jiahui/sex_chimeric/WT_mdx/data/model_save/training_parameters.json'
