@@ -18,14 +18,17 @@ class UNAGI:
     '''
     The UNAGI class is the main class of UNAGI. It contains the function to prepare the data, start the model training and start analysing the perturbation results.
     '''
-    def __init__(self,):
+    def __init__(self,random_seed=8848):
         self.CPO_parameters = None
         self.iDREM_parameters = None
         self.species = 'Human'
         self.input_dim = None
         #set up random seed
-        np.random.seed(8848)
-        torch.manual_seed(8848)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
+        torch.cuda.manual_seed_all(random_seed)
+
     def setup_data(self,data_path,stage_key,total_stage,label_key='name.simple',gcn_connectivities=False,neighbors=25,threads = 20,calculate_cell_graph=True,fast_mode=True):
         '''
         The function to specify the data directory, the attribute name of the stage information and the total number of time stages of the time-series single-cell data. If the input data is a single h5ad file, then the data will be split into multiple h5ad files based on the stage information. The function can take either the h5ad file or the directory as the input. The function will check weather the data is already splited into stages or not. If the data is already splited into stages, the data will be directly used for training. Otherwise, the data will be split into multiple h5ad files based on the stage information. The function will also calculate the cell graphs for each stage. The cell graphs will be used for the graph convolutional network (GCN) based cell graph construction.
