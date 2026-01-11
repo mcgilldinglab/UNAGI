@@ -65,8 +65,10 @@ class perturbator:
         self.adj = self.adj.to(self.config['device'])
 
         self.data.var_names_make_unique()
-        
-        self.model = VAE(self.config['input_dim'], self.config['hidden_dim'], self.config['graph_dim'], self.config['latent_dim'],beta=self.config['beta'],distribution=self.config['dist'])
+        if self.config['GCN'] == True:
+            self.model = VAE(self.config['input_dim'], self.config['hidden_dim'], self.config['graph_dim'], self.config['latent_dim'],beta=self.config['beta'],distribution=self.config['dist'])
+        else:
+            self.model = Plain_VAE(self.config['input_dim'], self.config['hidden_dim'],self.config['graph_dim'], self.config['latent_dim'],beta=self.config['beta'],distribution=self.config['dist'])
         self.model.load_state_dict(torch.load(model_path,map_location=torch.device(self.config['device'])))
         self.model.to(self.config['device'])
         self.model.eval()
