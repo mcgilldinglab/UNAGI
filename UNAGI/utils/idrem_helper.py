@@ -1,9 +1,28 @@
 import json
 import os
-import subprocess
 import shutil
+import subprocess
 import threading
+import time
 from pathlib import Path
+
+_IDREM_JSON_CACHE = {}
+
+
+def _default_idrem_dir_from_repo() -> Path:
+    return Path(__file__).resolve().parents[2] / "idrem"
+
+
+def _idrem_json_fingerprint(path):
+    resolved = Path(path).expanduser().resolve()
+    stat = resolved.stat()
+    return f"{resolved}:{stat.st_size}:{int(stat.st_mtime_ns)}"
+
+
+def clear_idrem_json_cache():
+    _IDREM_JSON_CACHE.clear()
+
+
 def readIdremJson(path, filename):
     '''
     Parse the IDREM json file
@@ -16,15 +35,24 @@ def readIdremJson(path, filename):
     -----------
     tt: the parsed IDREM json file
     '''
-    print('getting Target genes from ', filename)
-    path = os.path.join(path,filename,'DREM.json')
-    f=open(path,"r")
-    lf=f.readlines()
-    f.close()
-    lf="".join(lf)
-    lf=lf[5:-2]+']'
-    tt=json.loads(lf,strict=False)
-    return tt
+    json_path = Path(path).expanduser().resolve() / filename / 'DREM.json'
+    fingerprint = _idrem_json_fingerprint(json_path)
+    cached = _IDREM_JSON_CACHE.get(fingerprint)
+    if cached is not None:
+        return cached
+
+    started_at = time.time()
+    with json_path.open("r", encoding="utf-8") as handle:
+        payload = "".join(handle.readlines())
+    payload = payload[5:-2] + ']'
+    parsed = json.loads(payload, strict=False)
+    _IDREM_JSON_CACHE[fingerprint] = parsed
+    elapsed = time.time() - started_at
+    print(
+        f"[IDREM] parse file={filename} cache=miss "
+        f"elapsed={elapsed:.2f}s"
+    )
+    return parsed
 
 def test_idrem_results(path, filename):
     '''
@@ -59,10 +87,16 @@ class IDREMthread(threading.Thread):
         self.outdir = outdir
         self.idrem_dir = idrem_dir
     def run(self):
-        
-        command = 'cd '+ str(self.idrem_dir)+' && java -Xmx8G -jar idrem.jar -b %s %s'%(self.indir, self.outdir)
-        p = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-        print(p.stdout.read())
+        result = subprocess.run(
+            ['java', '-Xmx8G', '-jar', 'idrem.jar', '-b', str(self.indir), str(self.outdir)],
+            cwd=str(self.idrem_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        if result.stdout:
+            print(result.stdout)
 def run_certrain_Idrem(path, file_name, idrem_dir, species='Human', Minimum_Standard_Deviation = 0.01,Convergence_Likelihood=0.1,Minimum_Absolute_Log_Ratio_Expression=0.05, trained=False):
     '''
     train IDREM model and save the results in iterative training with midpath and iteration
@@ -175,12 +209,9 @@ def run_certrain_Idrem(path, file_name, idrem_dir, species='Human', Minimum_Stan
     for each in threads:
         each.join()
 
-    dir1 = os.path.join(midpath, 'idremResults', file_name)
-    dir2 = os.path.join(midpath, 'idremInput',file_name)
-    command = ['mv '+dir2+ ' '+dir1]
-
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-    print(p.stdout.read())
+    dir1 = midpath / 'idremResults' / file_name
+    dir2 = midpath / 'idremInput' / file_name
+    shutil.move(str(dir2), str(dir1))
     
 
 if __name__ == "__main__":
@@ -189,7 +220,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test the branches in the IDREM json file')
     parser.add_argument('--path', type=str, help='the file path of IDREM results')
     args = parser.parse_args()
-    idrem_dir = '/mnt/md0/yumin/UNAGI/idrem'
+    default_idrem_dir = _default_idrem_dir_from_repo()
+    if not default_idrem_dir.exists():
+        default_idrem_dir = Path(args.path).expanduser().resolve().parent / 'idrem'
+    idrem_dir = Path(os.environ.get('UNAGI_IDREM_DIR', str(default_idrem_dir))).expanduser()
     file_names = os.listdir(args.path)
     for file_name in file_names:
         print(file_name)

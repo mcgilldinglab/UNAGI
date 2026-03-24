@@ -1,0 +1,174 @@
+<div class="section-head">
+  <h2>Job Summary</h2>
+  <p class="muted">{{ job.job_kind }} job · status {{ job.status }}</p>
+</div>
+
+<div class="action-row">
+  {% if job.status in active_statuses %}
+    <button class="button-link danger" type="button" onclick="window.unagiConsole.postAction('/api/jobs/{{ job.job_id }}/cancel', null, 'job-action-result', { reloadOnSuccess: true })">Cancel Job</button>
+    <button class="button-link danger disabled-button" type="button" disabled>Delete Disabled While Active</button>
+  {% else %}
+    <form id="resume-form-{{ job.job_id }}" class="inline-form">
+      <input type="hidden" name="resume_iteration" value="">
+      <button class="button-link secondary" type="button" onclick="window.unagiConsole.postAction('/api/jobs/{{ job.job_id }}/resume', 'resume-form-{{ job.job_id }}', 'job-action-result', { reloadOnSuccess: true })">Resume Job</button>
+    </form>
+    <button
+      class="button-link danger"
+      type="button"
+      onclick="window.unagiConsole.postAction('/api/jobs/{{ job.job_id }}/delete', null, 'job-action-result', { confirmMessage: '{{ "Delete this entire training task and all nested analyses permanently?" if job.job_kind == "train" else ("Delete this analysis job permanently?" if job.job_kind == "analysis" else "Delete this custom perturbation job permanently?") }}', redirectTo: '/' })"
+    >{{ "Delete Entire Training Task" if job.job_kind == "train" else ("Delete Analysis Job" if job.job_kind == "analysis" else "Delete Custom Perturbation Job") }}</button>
+  {% endif %}
+  {% if job.job_kind == "analysis" %}
+    <a class="button-link primary" href="/analysis/{{ job.job_id }}/visualizations">Visualizations</a>
+  {% elif job.job_kind == "custom_perturbation" and job.parent_job %}
+    <a class="button-link primary" href="/analysis/{{ job.parent_job.job_id }}/perturbations/{{ job.job_id }}">Result Page</a>
+  {% endif %}
+</div>
+<pre id="job-action-result" class="json-result hidden-result"></pre>
+{% if job.status in active_statuses %}
+  <p class="muted">Delete is only available after the job reaches a terminal state.</p>
+{% elif job.job_kind == "train" %}
+  <p class="muted">Deleting a training task also removes all nested analysis jobs and their outputs.</p>
+{% elif job.job_kind == "analysis" %}
+  <p class="muted">Deleting an analysis job also removes any nested custom perturbation bundles stored under it.</p>
+{% endif %}
+
+<div class="detail-grid">
+  <article class="detail-card">
+    <p>Progress</p>
+    <strong>{{ "%.1f"|format(job.progress_percent or 0) }}%</strong>
+    <div class="progress-bar large"><span style="width: {{ job.progress_percent or 0 }}%"></span></div>
+    <p class="muted">{{ job.current_stage_label or "Waiting" }}</p>
+  </article>
+  <article class="detail-card">
+    <p>Timing</p>
+    <dl class="metric-list">
+      <div><dt>Runtime</dt><dd>{{ job.runtime_human or "n/a" }}</dd></div>
+      <div><dt>ETA</dt><dd>{{ job.eta_human or "n/a" }}</dd></div>
+      <div><dt>Attempts</dt><dd>{{ job.attempts }}</dd></div>
+    </dl>
+  </article>
+  <article class="detail-card">
+    <p>Iteration</p>
+    <dl class="metric-list">
+      <div><dt>Current</dt><dd>{{ job.current_iteration if job.current_iteration is not none else "n/a" }}</dd></div>
+      <div><dt>Total</dt><dd>{{ job.total_iterations if job.total_iterations is not none else "n/a" }}</dd></div>
+      <div><dt>Epoch</dt><dd>
+        {% if job.current_epoch is not none and job.total_epochs is not none %}
+          {{ job.current_epoch }} / {{ job.total_epochs }}
+        {% else %}
+          n/a
+        {% endif %}
+      </dd></div>
+      <div><dt>Last Loss</dt><dd>{{ job.last_loss if job.last_loss is not none else "n/a" }}</dd></div>
+    </dl>
+  </article>
+  <article class="detail-card">
+    <p>Browse</p>
+    <p class="muted">Open the config, log, or output browser views.</p>
+    <div class="link-stack">
+      <a href="/browse?path={{ job.config_path|urlquote }}">Open config</a>
+      <a href="/browse?path={{ job.log_path|urlquote }}">Open log</a>
+      <a href="/browse?path={{ job.output_path|urlquote }}">Open output</a>
+      {% if job.job_kind == "analysis" %}
+        <a href="/analysis/{{ job.job_id }}/visualizations">Open visualization page</a>
+      {% endif %}
+    </div>
+  </article>
+</div>
+
+{% if job.process %}
+  <section class="subpanel">
+    <div class="section-head compact">
+      <h3>Active Process</h3>
+      <p class="muted">PID {{ job.process.pid }}</p>
+    </div>
+    <dl class="metric-list spread">
+      <div><dt>CPU</dt><dd>{{ "%.1f"|format(job.process.cpu_percent or 0) }}%</dd></div>
+      <div><dt>RSS</dt><dd>{{ "{:,.0f}".format((job.process.memory_rss_bytes or 0) / 1048576) }} MB</dd></div>
+      <div><dt>Status</dt><dd>{{ job.process.status }}</dd></div>
+      <div><dt>GPU</dt><dd>
+        {% if job.process.gpu %}
+          {{ job.process.gpu.gpu_indices|join(", ") }} · {{ "%.1f"|format(job.process.gpu.memory_used_mb or 0) }} MB
+        {% else %}
+          n/a
+        {% endif %}
+      </dd></div>
+    </dl>
+  </section>
+{% endif %}
+
+{% if job.job_kind == "train" %}
+  <section class="subpanel">
+    <div class="section-head compact">
+      <h3>Finished Iterations</h3>
+      <p class="muted">{{ job.finished_iterations|length }} staged outputs ready</p>
+    </div>
+    {% if job.finished_iterations %}
+      <div class="path-list">
+        {% for item in job.finished_iterations %}
+          <div class="path-item path-item-static">
+            <div>
+              <strong>Iteration {{ item.iteration }}</strong>
+              <span>{{ item.dataset_path }}</span>
+            </div>
+            <a class="button-link secondary small" href="/jobs/{{ job.job_id }}/analysis/new?iteration={{ item.iteration }}">Run Analysis</a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No finished iterations detected yet.</p>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if job.parent_job %}
+  <section class="subpanel">
+    <div class="section-head compact">
+      <h3>{{ "Parent Training Job" if job.job_kind == "analysis" else "Parent Analysis Job" }}</h3>
+    </div>
+    <a class="job-link" href="/jobs/{{ job.parent_job.job_id }}">{{ job.parent_job.job_name }}</a>
+  </section>
+{% endif %}
+
+{% if job.child_jobs %}
+  <section class="subpanel">
+    <div class="section-head compact">
+      <h3>{{ "Child Analysis Jobs" if job.job_kind == "train" else "Custom Perturbation Jobs" }}</h3>
+      <p class="muted">{{ job.child_jobs|length }} linked {{ "analyses" if job.job_kind == "train" else "custom perturbation jobs" }}</p>
+    </div>
+    <div class="path-list">
+      {% for child in job.child_jobs %}
+        <a class="path-item" href="{{ '/jobs/%s'|format(child.job_id) if child.job_kind != 'custom_perturbation' else '/analysis/%s/perturbations/%s'|format(job.job_id, child.job_id) }}">
+          <strong>{{ child.job_name }}</strong>
+          <span>
+            {{ child.status }} · {{ "%.1f"|format(child.progress_percent or 0) }}%
+            {% if child.analysis_iteration is not none %} · iter {{ child.analysis_iteration }}{% endif %}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+{% if job.job_kind == "analysis" %}
+  <section class="subpanel">
+    <div class="section-head compact">
+      <h3>Visualization Status</h3>
+      <p class="muted">{{ job.visualizations.manifest_path }}</p>
+    </div>
+    <div class="action-row">
+      <a class="button-link secondary" href="/analysis/{{ job.job_id }}/visualizations">Open Visualization Gallery</a>
+      <button class="button-link primary" type="button" data-generate-visualizations-job="{{ job.job_id }}" onclick="window.unagiConsole.generateVisualizations('{{ job.job_id }}', 'visualization-task-result')">{% if job.visualizations.manifest %}Refresh Visualizations{% else %}Generate Visualizations{% endif %}</button>
+    </div>
+    <pre id="visualization-task-result" class="json-result hidden-result"></pre>
+    {% if job.visualizations.manifest %}
+      <p class="muted">
+        {{ job.visualizations.manifest.counts.successes }} outputs generated,
+        {{ job.visualizations.manifest.counts.failures }} failures recorded.
+      </p>
+    {% else %}
+      <p class="muted">No visualization manifest exists yet.</p>
+    {% endif %}
+  </section>
+{% endif %}

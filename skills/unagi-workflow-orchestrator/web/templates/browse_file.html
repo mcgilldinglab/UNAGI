@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}{{ path }} · File{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <div class="section-head">
+      <h2>File Preview</h2>
+      <code>{{ path }}</code>
+    </div>
+    <pre class="log-tail">{{ content }}</pre>
+  </section>
+{% endblock %}

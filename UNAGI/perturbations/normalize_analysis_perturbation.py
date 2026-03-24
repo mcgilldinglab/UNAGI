@@ -4,23 +4,27 @@ This module analyses the perturbation results. It contains the main function to 
 import csv
 import json
 import os
-from turtle import distance
 import scanpy as sc
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+from .direction_utils import normalize_direction_mode, select_direction_payloads
+from ..utils.idrem_helper import readIdremJson as read_cached_idrem_json
 
-def get_all_distance_changes(distance_change_dict1,distance_change_dict2):
+def get_all_distance_changes(distance_change_dict1,distance_change_dict2=None):
     total_distance_changes = []
     for item in distance_change_dict1.keys():
         for each_track in distance_change_dict1[item].keys():
             for i in range(len(np.array(list(distance_change_dict1[item][each_track])))):
                 temp = np.array(list(distance_change_dict1[item][each_track]))[i]
-                temp2 = np.array(list(distance_change_dict2[item][each_track]))[i]
+                temp2 = None
+                if distance_change_dict2 is not None:
+                    temp2 = np.array(list(distance_change_dict2[item][each_track]))[i]
                 for each_stage in range(len(temp)):
                     if each_stage != i:
                         total_distance_changes.append(temp[each_stage])
-                        total_distance_changes.append(temp2[each_stage])
+                        if temp2 is not None:
+                            total_distance_changes.append(temp2[each_stage])
     return total_distance_changes, np.array(total_distance_changes).mean(), np.array(total_distance_changes).std()
 
 class perturbationAnalysis:
@@ -43,7 +47,7 @@ class perturbationAnalysis:
         If allTracks is True, the perturbation analysis will be performed on all tracks. Otherwise, the perturbation analysis will be performed on a single track.
 
     '''
-    def __init__(self,adata,target_directory,log2fc,stage=None,mode=None,allTracks=None):
+    def __init__(self,adata,target_directory,log2fc,stage=None,mode=None,allTracks=None,direction_mode=None):
         self.adata = adata
         self.log2fc = log2fc
         self.adata.var.index = self.adata.var.index.str.upper()
@@ -52,6 +56,7 @@ class perturbationAnalysis:
         self.stage = stage
         self.allTracks = allTracks
         self.idrem_path = self.target_directory#os.path.join(self.target_directory,'idremVizCluster/')#'./'+ self.target_directory +'/idremVizCluster/'
+        self.direction_mode = None if direction_mode is None else normalize_direction_mode(direction_mode)
     def readIdremJson(self, filename):
         '''
         Parse the IDREM json file.
@@ -67,14 +72,7 @@ class perturbationAnalysis:
             The parsed the IDREM results.
         '''
 
-        path = os.path.join(self.idrem_path,filename ,'DREM.json')
-        f=open(path,"r")
-        lf=f.readlines()
-        f.close()
-        lf="".join(lf)
-        lf=lf[5:-2]+']'
-        tt=json.loads(lf,strict=False)
-        return tt
+        return read_cached_idrem_json(self.idrem_path, filename)
     def getTendency(self,filename):
         '''
         get the tendency of each path
@@ -140,6 +138,38 @@ class perturbationAnalysis:
             tracks = self.adata.uns['%s_perturbation_deltaD'%self.mode][str(self.log2fc)].keys()
 
         return list(set(tracks))
+
+    def _resolve_direction_payloads(self, sanity):
+        if sanity:
+            payload = self.adata.uns['random_background_perturbation_deltaD']
+        else:
+            payload = self.adata.uns['%s_perturbation_deltaD'%self.mode]
+        direction_mode, k1, k2 = select_direction_payloads(
+            payload,
+            self.log2fc,
+            self.direction_mode,
+        )
+        self.direction_mode = direction_mode
+        return k1, k2
+
+    def _score_from_direction(self, forward_delta, reverse_delta, flag, mean_distance_change, std_distance_change, score_weight):
+        forward_score = self.calculateScore(
+            np.array(forward_delta),
+            flag,
+            mean_distance_change=mean_distance_change,
+            std_distance_change=std_distance_change,
+            weight=score_weight,
+        )[0]
+        if self.direction_mode == 'one_sided' or reverse_delta is None:
+            return forward_score
+        reverse_score = self.calculateScore(
+            np.array(reverse_delta),
+            flag,
+            mean_distance_change=mean_distance_change,
+            std_distance_change=std_distance_change,
+            weight=score_weight,
+        )[0]
+        return np.abs(forward_score - reverse_score) / 2
     
     
     def load(self,data_pathway_overlap_genes,track_percentage,score_weight,overall_perturbation_analysis=True,sanity=False,mean_distance_change=None, std_distance_change=None):
@@ -164,12 +194,10 @@ class perturbationAnalysis:
 
         '''
         if sanity == True:
-            k1 = self.adata.uns['random_background_perturbation_deltaD'][str(self.log2fc)]
-            k2 = self.adata.uns['random_background_perturbation_deltaD'][str(1/self.log2fc)]
+            k1, k2 = self._resolve_direction_payloads(sanity=True)
             records_to_adjust_weight = []
         else:
-            k1 = self.adata.uns['%s_perturbation_deltaD'%self.mode][str(self.log2fc)]
-            k2 = self.adata.uns['%s_perturbation_deltaD'%self.mode][str(1/self.log2fc)]
+            k1, k2 = self._resolve_direction_payloads(sanity=False)
         # self.stageadata[i].uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][name]
         pathwaydic1= {}
         for each in list(k1.keys()):
@@ -190,25 +218,27 @@ class perturbationAnalysis:
                     else:
                         pathwaydic1[each1][each] = [np.array(k1[each][each1][i]) for i in range(total_len)]
   
-        pathwaydic2= {}
-    #each 1 is the item name, each is the track name
-        for each in list(k2.keys()):
+        pathwaydic2= None
+        if k2 is not None:
+            pathwaydic2 = {}
+        #each 1 is the item name, each is the track name
+            for each in list(k2.keys()):
 
-            if each not in pathwaydic2.keys():
-                
-                for each1 in list(k2[each].keys()):
-                    if each1 not in pathwaydic2.keys():
-                        pathwaydic2[each1] = {}
+                if each not in pathwaydic2.keys():
                     
-                    if each not in pathwaydic2[each1].keys():
-                        pathwaydic2[each1][each] = []
-                    total_len = len(k2[each][each1])
-                    if overall_perturbation_analysis == True:
-                        if each not in track_percentage.keys():
-                            continue
-                        pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
-                    else:
-                        pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
+                    for each1 in list(k2[each].keys()):
+                        if each1 not in pathwaydic2.keys():
+                            pathwaydic2[each1] = {}
+                        
+                        if each not in pathwaydic2[each1].keys():
+                            pathwaydic2[each1][each] = []
+                        total_len = len(k2[each][each1])
+                        if overall_perturbation_analysis == True:
+                            if each not in track_percentage.keys():
+                                continue
+                            pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
+                        else:
+                            pathwaydic2[each1][each]= [np.array(k2[each][each1][i]) for i in range(total_len)]
         if sanity == True:
             _, mean_distance_change, std_distance_change = get_all_distance_changes(pathwaydic1,pathwaydic2)
         if overall_perturbation_analysis:
@@ -222,19 +252,41 @@ class perturbationAnalysis:
                 for each_track in list(pathwaydic1[each].keys()):
                     if len(list(pathwaydic1[each][each_track])) == 0:
                         del pathwaydic1[each][each_track]
-                        del pathwaydic2[each][each_track]
+                        if pathwaydic2 is not None:
+                            del pathwaydic2[each][each_track]
 
                     # temp_track_score.append(0)
                     # temp_track_score_2.append(0)
                     temp_track_score = []
                     for i in range(len(np.array(list(pathwaydic1[each][each_track])))):
+                        reverse_delta = None
+                        if pathwaydic2 is not None:
+                            reverse_delta = np.array(list(pathwaydic2[each][each_track]))[i]
                         if self.stage is None:
-                            temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
+                            temp_track_score.append(
+                                np.array(track_percentage[each_track]) * self._score_from_direction(
+                                    np.array(list(pathwaydic1[each][each_track]))[i],
+                                    reverse_delta,
+                                    i,
+                                    mean_distance_change,
+                                    std_distance_change,
+                                    score_weight,
+                                )
+                            )
                         else:
                             if i != self.stage:
                                 continue
                             elif i == self.stage:
-                                temp_track_score.append(np.array(track_percentage[each_track])*np.abs(self.calculateScore(np.array(list(pathwaydic1[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][each_track]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
+                                temp_track_score.append(
+                                    np.array(track_percentage[each_track]) * self._score_from_direction(
+                                        np.array(list(pathwaydic1[each][each_track]))[i],
+                                        reverse_delta,
+                                        i,
+                                        mean_distance_change,
+                                        std_distance_change,
+                                        score_weight,
+                                    )
+                                )
                     unit_score.append(np.mean(temp_track_score))
                 # for i in range(len(np.sum(np.array(list(pathwaydic1[each].values())),axis=0))):
                 #     if self.stage is None:
@@ -266,13 +318,34 @@ class perturbationAnalysis:
                     temp = []
 
                     for i in range(len(np.array(list(pathwaydic1[each][item])))):
+                        reverse_delta = None
+                        if pathwaydic2 is not None:
+                            reverse_delta = np.array(list(pathwaydic2[each][item]))[i]
                         if self.stage is None:
-                            temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
+                            temp.append(
+                                self._score_from_direction(
+                                    np.array(list(pathwaydic1[each][item]))[i],
+                                    reverse_delta,
+                                    i,
+                                    mean_distance_change,
+                                    std_distance_change,
+                                    score_weight,
+                                )
+                            )
                         else:
                             if i != self.stage:
                                 continue
                             else:
-                                temp.append(np.abs(self.calculateScore(np.array(list(pathwaydic1[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0] - self.calculateScore(np.array(list(pathwaydic2[each][item]))[i],i,mean_distance_change=mean_distance_change,std_distance_change=std_distance_change,weight=score_weight)[0])/2)
+                                temp.append(
+                                    self._score_from_direction(
+                                        np.array(list(pathwaydic1[each][item]))[i],
+                                        reverse_delta,
+                                        i,
+                                        mean_distance_change,
+                                        std_distance_change,
+                                        score_weight,
+                                    )
+                                )
                     temp = np.sum(temp)
                     
                     # temp.append(np.sqrt(((np.abs(np.mean(temp1_copy[:,0]))+np.abs(np.mean(temp2_copy[:,0])))/2) * ((np.abs(np.mean(temp1_copy[:,1]))+np.abs(np.mean(temp2_copy[:,1])))/2)))
@@ -513,11 +586,14 @@ class perturbationAnalysis:
         # record_down = []
 
     
-        for i,each in enumerate(scores):
-
-            if float(each) >= 0:#sanity_scores.mean()+sanity_scores.std():
-                top_compounds.append(names[i])
-                record_top.append(i)
+        if self.direction_mode == 'one_sided':
+            record_top = list(range(len(scores)))
+            top_compounds = list(names)
+        else:
+            for i,each in enumerate(scores):
+                if float(each) >= 0:#sanity_scores.mean()+sanity_scores.std():
+                    top_compounds.append(names[i])
+                    record_top.append(i)
             # elif  float(each) <= sanity_scores.mean()-sanity_scores.std():
                 
             #     down_compounds.append(names[i])
@@ -604,7 +680,9 @@ class perturbationAnalysis:
             # for j,each in enumerate(down_compounds):  
             #     results[track_name[i]]['down_compounds'][str(j)] = down_compounds[j]
         results = pd.json_normalize(results)
-        results.columns = results.columns.str.split(".").map(tuple)
+        results.columns = pd.MultiIndex.from_tuples(
+            results.columns.str.split(".").map(tuple)
+        )
         results = results.stack([0, 1]).reset_index(0, drop=True)
         results = results.transpose()
         # return results
@@ -888,10 +966,23 @@ class perturbationAnalysis:
         
         sanity_scores = []
         sanity_pathwaydics = {}
+        sanity_distance_stats = {}
         for weight in candidates_wegiht:
-            sanity_pathwaydic,temp_sanity_score = self.load( None ,track_percentage,weight,overall_perturbation_analysis=overall_perturbation_analysis,sanity=True)
+            (
+                sanity_pathwaydic,
+                temp_sanity_score,
+                mean_distance_change,
+                std_distance_change,
+            ) = self.load(
+                None,
+                track_percentage,
+                weight,
+                overall_perturbation_analysis=overall_perturbation_analysis,
+                sanity=True,
+            )
             sanity_scores.append(temp_sanity_score)
             sanity_pathwaydics[weight] = sanity_pathwaydic
+            sanity_distance_stats[weight] = (mean_distance_change, std_distance_change)
         sanity_scores = np.array(sanity_scores)
         # differences = np.abs(sanity_scores-0.05) + np.abs(sanity_scores-0.1)
         # differences = np.mean(differences,axis=1)
@@ -906,7 +997,15 @@ class perturbationAnalysis:
         weight = candidates_wegiht[min_index]
         print('score weight:',weight)
         sanity_pathwaydic = sanity_pathwaydics[weight]
-        objectdic = self.load(items,track_percentage,weight,overall_perturbation_analysis=overall_perturbation_analysis)
+        mean_distance_change, std_distance_change = sanity_distance_stats[weight]
+        objectdic = self.load(
+            items,
+            track_percentage,
+            weight,
+            overall_perturbation_analysis=overall_perturbation_analysis,
+            mean_distance_change=mean_distance_change,
+            std_distance_change=std_distance_change,
+        )
         # print('loaded objectdic')
         topdownpathways = self.getTopDownObjects(objectdic,sanity_pathwaydic,track_percentage,perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis)
         

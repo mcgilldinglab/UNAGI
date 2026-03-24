@@ -4,6 +4,14 @@ import scipy
 import pandas as pd
 from scipy.stats import norm
 from .attribute_utils import get_data_file_path
+
+
+def _sorted_stage_labels(adata):
+    stage_values = [str(v) for v in adata.obs['stage'].unique().tolist()]
+    try:
+        return sorted(stage_values, key=lambda x: float(x))
+    except ValueError:
+        return sorted(stage_values)
 def calculateDataPathwayOverlapGene(adata, customized_pathway=None):
     if customized_pathway is None:
         data_path = get_data_file_path('gesa_pathways.npy')
@@ -50,68 +58,77 @@ def calculateTopPathwayGeneRanking(adata):
     pathway_gene = adata.uns['data_pathway_overlap_genes']
 
     avg_ranking = {}
-    for i in range(1,4):
-        # adata = sc.read_h5ad(f'./iterativeTrainingNOV26/'+str(ITERATION)+'/stagedata/%d.h5ad'%i)
-        stageadataids = adata.obs[adata.obs['stage']==i].index.tolist()
+    adata.obs['stage'] = adata.obs['stage'].astype(str)
+    for stage_label in _sorted_stage_labels(adata):
+        stageadataids = adata.obs[adata.obs['stage'] == stage_label].index.tolist()
         stageadata = adata[stageadataids]
-        avg_ranking[i] = {}
+        avg_ranking[stage_label] = {}
         adata_genes = stageadata.var.index.values.tolist()
-        adata_genes_index_dict={}
-        for idx,gene in enumerate(adata_genes):
+        adata_genes_index_dict = {}
+        for idx, gene in enumerate(adata_genes):
             adata_genes_index_dict[gene] = idx
         for clusterid in set(stageadata.obs['leiden']):
-            
-            avg_ranking[i][clusterid] = {}
-            clusteradataid = stageadata.obs[stageadata.obs['leiden']==clusterid].index.tolist()
+            avg_ranking[stage_label][clusterid] = {}
+            clusteradataid = stageadata.obs[stageadata.obs['leiden'] == clusterid].index.tolist()
             clusteradata = stageadata[clusteradataid]
             cluster_gene_weight_table = clusteradata.layers['geneWeight']
-            avg_cluster_gene_weight_table = np.mean(cluster_gene_weight_table,axis=0).reshape(-1)
-    
-            
+            avg_cluster_gene_weight_table = np.mean(cluster_gene_weight_table, axis=0).reshape(-1)
+
             avg_geneWeightTable_ranking = scipy.stats.rankdata(avg_cluster_gene_weight_table)
-            avg_geneWeightTable_ranking = np.zeros_like(avg_geneWeightTable_ranking)+len(adata_genes)-avg_geneWeightTable_ranking
-    
+            avg_geneWeightTable_ranking = np.zeros_like(avg_geneWeightTable_ranking) + len(adata_genes) - avg_geneWeightTable_ranking
+
             for pathway in list(pathway_gene.keys()):
-                avg_ranking[i][clusterid][pathway] = 0
+                avg_ranking[stage_label][clusterid][pathway] = 0
                 for gene_in_pathway in pathway_gene[pathway]:
-                    avg_ranking[i][clusterid][pathway]+=avg_geneWeightTable_ranking[adata_genes_index_dict[gene_in_pathway]]
-                avg_ranking[i][clusterid][pathway] = avg_ranking[i][clusterid][pathway]/len(pathway_gene[pathway])
+                    avg_ranking[stage_label][clusterid][pathway] += avg_geneWeightTable_ranking[
+                        adata_genes_index_dict[gene_in_pathway]
+                    ]
+                avg_ranking[stage_label][clusterid][pathway] = (
+                    avg_ranking[stage_label][clusterid][pathway] / len(pathway_gene[pathway])
+                )
+
     new_av_ranking = {}
-    for i in list(avg_ranking.keys()):
-        new_av_ranking[str(i)] = {}
-        for j in list(avg_ranking[i].keys()):
-            
-            new_av_ranking[str(i)][str(j)]={k: idx+1 for idx,(k, v) in enumerate(sorted(avg_ranking[i][j].items(), key=lambda item: item[1]))}
-    # np.save('./iterativeTrainingNOV26/'+str(ITERATION)+'/avg_ranking.npy',new_av_ranking)
+    for stage_label in list(avg_ranking.keys()):
+        new_av_ranking[str(stage_label)] = {}
+        for clusterid in list(avg_ranking[stage_label].keys()):
+            new_av_ranking[str(stage_label)][str(clusterid)] = {
+                k: idx + 1
+                for idx, (k, v) in enumerate(
+                    sorted(avg_ranking[stage_label][clusterid].items(), key=lambda item: item[1])
+                )
+            }
     adata.uns['pathway_ranking'] = new_av_ranking
     return adata
+
 def findTopGenesInCluster(adata,pval=0.1):
     '''
     find top genes with high gene weight in each cluster (pval < 0.1 default)
     '''
     topClusterGeneBasedOnGeneWeight = {}
-    for i in range(1,4):
-        stageadataids = adata.obs[adata.obs['stage']==i].index.tolist()
+    adata.obs['stage'] = adata.obs['stage'].astype(str)
+    for stage_label in _sorted_stage_labels(adata):
+        stageadataids = adata.obs[adata.obs['stage'] == stage_label].index.tolist()
         stageadata = adata[stageadataids]
-        topClusterGeneBasedOnGeneWeight[i] = {}
+        topClusterGeneBasedOnGeneWeight[stage_label] = {}
         adata_genes = adata.var.index.values.tolist()
-        adata_genes_index_dict={}
-        for idx,gene in enumerate(adata_genes):
+        adata_genes_index_dict = {}
+        for idx, gene in enumerate(adata_genes):
             adata_genes_index_dict[gene] = idx
         for clusterid in set(stageadata.obs['leiden']):
-            topClusterGeneBasedOnGeneWeight[i][clusterid] = []
-            clusteradataid = stageadata.obs[stageadata.obs['leiden']==clusterid].index.tolist()
+            topClusterGeneBasedOnGeneWeight[stage_label][clusterid] = []
+            clusteradataid = stageadata.obs[stageadata.obs['leiden'] == clusterid].index.tolist()
             clusteradata = stageadata[clusteradataid]
             cluster_gene_weight_table = clusteradata.layers['geneWeight']
-            avg_cluster_gene_weight_table = np.mean(cluster_gene_weight_table,axis=0).reshape(-1)
+            avg_cluster_gene_weight_table = np.mean(cluster_gene_weight_table, axis=0).reshape(-1)
             dist_mean = np.mean(avg_cluster_gene_weight_table)
             dist_std = np.std(avg_cluster_gene_weight_table)
             for idx, eachgene in enumerate(avg_cluster_gene_weight_table):
                 cdf = 1 - norm.cdf(eachgene, dist_mean, dist_std)
                 if cdf < pval:
-                    topClusterGeneBasedOnGeneWeight[i][clusterid].append(adata_genes[idx])
+                    topClusterGeneBasedOnGeneWeight[stage_label][clusterid].append(adata_genes[idx])
     adata.uns['topClusterGeneBasedOnGeneWeight'] = topClusterGeneBasedOnGeneWeight
     return adata
+
 def merge_drugs_with_sametarget_samedirection(adata,overlapped_drug_direction_profile):
     reverse = {}
     for key in list(overlapped_drug_direction_profile.keys()):
@@ -141,9 +158,12 @@ def merge_drugs_with_sametarget_samedirection(adata,overlapped_drug_direction_pr
 import gc
 from scipy.sparse import csr_matrix
 def alterative(source_directory):
-    for i in range(4):
-        temp1 = sc.read_h5ad(source_directory / 'stagedata' / '%d.h5ad'%i)
-        temp2 = sc.read_h5ad(source_directory / 'stagedata' / 'concat_%d.h5ad'%i)
+    stage_files = sorted((source_directory / 'stagedata').glob('*.h5ad'))
+    stage_ids = sorted({p.stem for p in stage_files if p.stem.isdigit()}, key=int)
+    for stage_id in stage_ids:
+        i = int(stage_id)
+        temp1 = sc.read_h5ad(source_directory / 'stagedata' / f'{i}.h5ad')
+        temp2 = sc.read_h5ad(source_directory / 'stagedata' / f'concat_{i}.h5ad')
         temp1.obsp['gcn_connectivities'] = temp2.obsp['gcn_connectivities'].copy()
         temp1.layers['concat'] = csr_matrix(temp2.layers['concat'].copy())
         

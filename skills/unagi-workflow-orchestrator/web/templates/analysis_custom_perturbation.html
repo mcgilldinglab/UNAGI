@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}{{ job.job_name }} · Custom Perturbation{% endblock %}
+
+{% block content %}
+  <section class="hero hero-detail">
+    <div>
+      <p class="hero-kicker">Custom Perturbation · {{ job.status }}</p>
+      <h2>{{ job.job_name }}</h2>
+      <p class="hero-text">Queued under analysis <a href="/analysis/{{ analysis_job.job_id }}/visualizations">{{ analysis_job.job_name }}</a></p>
+    </div>
+    <div class="hero-actions">
+      <a class="button-link secondary" href="/analysis/{{ analysis_job.job_id }}/visualizations">Back To Analysis</a>
+      <a class="button-link secondary" href="/jobs/{{ job.job_id }}">Open Job Detail</a>
+    </div>
+  </section>
+
+  {% with perturb_job=job, perturb_result=result, perturb_result_error=result_error, perturb_preview=result_preview %}
+    {% include "partials/custom_perturbation_detail.html" %}
+  {% endwith %}
+{% endblock %}

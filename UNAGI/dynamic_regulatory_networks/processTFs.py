@@ -11,6 +11,7 @@ from pathlib import Path
 from scipy.sparse import lil_matrix
 from scipy.sparse import csr_matrix
 import gc
+from ..utils.idrem_helper import readIdremJson as _read_cached_idrem_json
 
 def getLastStageIDs(json,total_stage):
     '''
@@ -194,16 +195,7 @@ def readIdremJson(path, filename):
     tt: the parsed IDREM json file
     '''
 
-    print('getting Target genes from ', filename)
-    path = Path(path)
-    path = path / filename / 'DREM.json'
-    f=open(path,"r")
-    lf=f.readlines()
-    f.close()
-    lf="".join(lf)
-    lf=lf[5:-2]+']'
-    tt=json.loads(lf,strict=False)
-    return tt
+    return _read_cached_idrem_json(path, filename)
 
 def getTopNTargetGenes(json,genenames,geneids,topN,total_stage):
     '''
@@ -590,4 +582,5 @@ def mySigmoid(z,weight=-4):
     out = 1/(1+20*np.exp(weight*z+1.5)) #hyper parameters needed to be adjusted by users
     return out
 if __name__ == '__main__':
-    getPosNegDynamicPathGenes('/mnt/md0/yumin/to_upload/UNAGI/tutorials/example_1/idrem','4-4-5-1.txt_viz',50)
+    example_idrem_dir = Path(__file__).resolve().parents[2] / 'tutorials' / 'example_1' / 'idrem'
+    getPosNegDynamicPathGenes(example_idrem_dir, '4-4-5-1.txt_viz', 50)

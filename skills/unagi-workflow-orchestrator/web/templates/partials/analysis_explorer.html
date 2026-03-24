@@ -1,0 +1,635 @@
+<div id="analysis-explorer-{{ job.job_id }}" class="analysis-explorer">
+  <div class="explorer-meta">
+    <div class="header-chip">
+      <span>{{ explorer.metadata.gene_count }} genes</span>
+      <span>limit {{ explorer.metadata.gene_limit }} custom genes / request</span>
+    </div>
+    <div class="link-stack">
+      {% if explorer.metadata.dataset_path %}
+        <a href="/browse?path={{ explorer.metadata.dataset_path|urlquote }}">dataset</a>
+      {% endif %}
+      {% if explorer.metadata.attribute_path %}
+        <a href="/browse?path={{ explorer.metadata.attribute_path|urlquote }}">attribute</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="explorer-shell">
+    <aside class="explorer-sidebar subpanel">
+      {% if explorer.metadata.umap_available and not explorer.metadata.umap_enabled %}
+        <form
+          class="explorer-inline-action"
+          hx-post="/partials/analysis/{{ job.job_id }}/explorer/render"
+          hx-target="#analysis-explorer-{{ job.job_id }}"
+          hx-swap="outerHTML"
+        >
+          <input type="hidden" name="enable_umap" value="true">
+          <input type="hidden" name="mode" value="umap">
+          <div class="notice">
+            The UMAP tab is disabled by default to keep the explorer lighter on first load.
+            <div class="explorer-actions">
+              <button class="button-link secondary" type="submit">Enable UMAP Tab</button>
+            </div>
+          </div>
+        </form>
+      {% endif %}
+      <form
+        id="analysis-explorer-form-{{ job.job_id }}"
+        class="explorer-form"
+        hx-post="/partials/analysis/{{ job.job_id }}/explorer/render"
+        hx-target="#analysis-explorer-{{ job.job_id }}"
+        hx-swap="outerHTML"
+      >
+        {% if explorer.metadata.umap_enabled %}
+          <input type="hidden" name="enable_umap" value="true">
+        {% endif %}
+        <div class="segmented-tabs">
+          {% for option in explorer.mode_options %}
+            <label class="segment-option{% if explorer.active_mode == option.value %} active{% endif %}{% if not option.available %} disabled{% endif %}">
+              <input type="radio" name="mode" value="{{ option.value }}" data-explorer-mode {% if explorer.active_mode == option.value %}checked{% endif %} {% if not option.available %}disabled{% endif %}>
+              <span>{{ option.label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+
+        {% if explorer.active_mode == "umap" and explorer.umap.available %}
+          <div class="explorer-controls-grid">
+            <label>
+              <span>Stage</span>
+              <select name="umap_stage">
+                {% for item in explorer.umap.stage_options %}
+                  <option value="{{ item }}" {% if explorer.umap.stage == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <div class="notice">The UMAP widget is fully interactive in the browser. Use pan/zoom plus box or lasso selection to inspect cells live.</div>
+        {% elif explorer.active_mode == "hierarchical" and explorer.hierarchical.available %}
+          <div class="explorer-controls-grid">
+            <label>
+              <span>Stage</span>
+              <select name="hier_stage">
+                {% for item in explorer.hierarchical.stage_options %}
+                  <option value="{{ item.value }}" {% if explorer.hierarchical.stage == item.value %}selected{% endif %}>{{ item.value }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Cluster</span>
+              <select name="hier_cluster">
+                {% for item in explorer.hierarchical.cluster_options %}
+                  <option value="{{ item.value }}" {% if explorer.hierarchical.cluster == item.value %}selected{% endif %}>{{ item.value }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Level</span>
+              <select name="hier_level">
+                {% for item in explorer.hierarchical.level_options %}
+                  <option value="{{ item }}" {% if explorer.hierarchical.level == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Top N</span>
+              <input type="number" name="hier_top_n" min="1" max="100" value="{{ explorer.hierarchical.top_n }}">
+            </label>
+          </div>
+        {% elif explorer.active_mode == "dynamic_markers" and explorer.dynamic_markers.available %}
+          <div class="explorer-controls-grid">
+            <label>
+              <span>View</span>
+              <select name="dyn_view_mode">
+                {% for item in explorer.dynamic_markers.view_mode_options %}
+                  <option value="{{ item.value }}" {% if explorer.dynamic_markers.view_mode == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            {% if explorer.dynamic_markers.view_mode == "ranked_markers" %}
+            <label>
+              <span>Track</span>
+              <select name="dyn_track">
+                {% for item in explorer.dynamic_markers.ranked.track_options %}
+                  <option value="{{ item.value }}" {% if explorer.dynamic_markers.ranked.track == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Plot Kind</span>
+              <select name="dyn_plot_kind">
+                <option value="trajectories" {% if explorer.dynamic_markers.ranked.plot_kind == "trajectories" %}selected{% endif %}>trajectories</option>
+                <option value="heatmap" {% if explorer.dynamic_markers.ranked.plot_kind == "heatmap" %}selected{% endif %}>heatmap</option>
+                <option value="cell_heatmap" {% if explorer.dynamic_markers.ranked.plot_kind == "cell_heatmap" %}selected{% endif %}>cell_heatmap</option>
+              </select>
+            </label>
+            <label>
+              <span>Top N</span>
+              <input type="number" name="dyn_top_n" min="1" max="50" value="{{ explorer.dynamic_markers.ranked.top_n }}">
+            </label>
+            <label class="control-check">
+              <span>Per Track Total</span>
+              <input type="checkbox" name="dyn_per_track_total" value="true" {% if explorer.dynamic_markers.ranked.per_track_total %}checked{% endif %}>
+            </label>
+            <label class="control-check">
+              <span>Normalize To Stage0</span>
+              <input type="checkbox" name="dyn_normalize_to_stage0" value="true" {% if explorer.dynamic_markers.ranked.normalize_to_stage0 %}checked{% endif %}>
+            </label>
+            {% else %}
+            <label>
+              <span>Scope</span>
+              <select name="gene_scope">
+                <option value="global_stage" {% if explorer.dynamic_markers.genes.scope == "global_stage" %}selected{% endif %}>global stage</option>
+                <option value="progression_track" {% if explorer.dynamic_markers.genes.scope == "progression_track" %}selected{% endif %}>temporal track</option>
+              </select>
+            </label>
+            {% if explorer.dynamic_markers.genes.show_track %}
+            <label>
+              <span>Temporal Track</span>
+              <select name="gene_track">
+                {% for item in explorer.dynamic_markers.genes.track_options %}
+                  <option value="{{ item.value }}" {% if explorer.dynamic_markers.genes.track == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            {% endif %}
+            <label class="control-check">
+              <span>Normalize To Stage0</span>
+              <input type="checkbox" name="gene_normalize_to_stage0" value="true" {% if explorer.dynamic_markers.genes.normalize_to_stage0 %}checked{% endif %}>
+            </label>
+            {% endif %}
+          </div>
+          {% if explorer.dynamic_markers.view_mode == "ranked_markers" %}
+          <div class="control-chip-row">
+            {% for direction in explorer.dynamic_markers.ranked.direction_options %}
+              <label class="chip-check">
+                <input type="checkbox" name="dyn_directions" value="{{ direction }}" {% if direction in explorer.dynamic_markers.ranked.directions %}checked{% endif %}>
+                <span>{{ direction }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          {% else %}
+          <label class="control-textarea">
+            <span>Genes</span>
+            <textarea name="gene_list" rows="3" placeholder="GENE1, GENE2, GENE3">{{ explorer.dynamic_markers.genes.gene_text }}</textarea>
+          </label>
+          <p class="muted">Enter up to {{ explorer.metadata.gene_limit }} genes, separated by commas, spaces, or new lines.</p>
+          {% endif %}
+        {% elif explorer.active_mode == "perturbation" and explorer.perturbation.available %}
+          <div class="explorer-controls-grid">
+            <label>
+              <span>View</span>
+              <select name="pert_panel_mode">
+                <option value="precomputed" {% if perturbation_panel_mode != "custom" %}selected{% endif %}>precomputed results</option>
+                <option value="custom" {% if perturbation_panel_mode == "custom" %}selected{% endif %}>custom perturbation</option>
+              </select>
+            </label>
+            {% if perturbation_panel_mode != "custom" %}
+            <label>
+              <span>Mode</span>
+              <select name="pert_mode">
+                {% for item in explorer.perturbation.mode_options %}
+                  <option value="{{ item }}" {% if explorer.perturbation.mode == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Perturb Change</span>
+              <select name="perturb_change">
+                {% for item in explorer.perturbation.perturb_change_options %}
+                  <option value="{{ item }}" {% if explorer.perturbation.perturb_change == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Track</span>
+              <select name="pert_track">
+                {% for item in explorer.perturbation.track_options %}
+                  <option value="{{ item.value }}" {% if explorer.perturbation.track == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Top N</span>
+              <input type="number" name="pert_top_n" min="1" max="100" value="{{ explorer.perturbation.top_n }}">
+            </label>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <div class="explorer-actions">
+          <button class="button-link primary" type="submit">Update View</button>
+          <p class="muted">The explorer renders from the current analysis directory and does not write new files.</p>
+        </div>
+      </form>
+    </aside>
+
+    <section class="subpanel explorer-result explorer-content">
+    {% if explorer.active_mode == "perturbation" and explorer.perturbation.available and perturbation_panel_mode == "custom" %}
+      <div class="section-head compact">
+        <div>
+          <h3>Custom Perturbation</h3>
+          <p class="muted">Queue durable gene, pathway, or drug perturbations from this analysis without leaving the perturbation explorer.</p>
+        </div>
+      </div>
+      <form
+        id="custom-perturbation-form-{{ job.job_id }}"
+        class="console-form"
+        data-custom-perturbation-form
+        data-custom-perturbation-suggest-url="/api/analysis/{{ job.job_id }}/perturbations/suggest"
+      >
+        <input type="hidden" name="analysis_job_id" value="{{ job.job_id }}">
+        {% if custom_perturbation_form_error %}
+          <div class="notice notice-bad">{{ custom_perturbation_form_error }}</div>
+        {% endif %}
+        <input type="hidden" name="selected_custom_job_id" value="{{ selected_custom_perturbation_job.job_id if selected_custom_perturbation_job else '' }}">
+        <div class="form-grid custom-perturbation-form-grid">
+          <label>
+            <span>Mode</span>
+            <select name="mode" data-custom-perturbation-mode>
+              {% for option in custom_perturbation_form.mode_options %}
+                <option value="{{ option.value }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Scope</span>
+            <select name="scope_kind" data-custom-perturbation-scope>
+              {% for option in custom_perturbation_form.scope_options %}
+                <option value="{{ option.value }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Perturb Change</span>
+            <input type="number" name="perturb_change" value="0.5" step="0.05" min="0.01">
+          </label>
+          <label>
+            <span>Direction Mode</span>
+            <select name="direction_mode">
+              {% for option in custom_perturbation_form.direction_mode_options %}
+                <option value="{{ option.value }}" {% if option.value == custom_perturbation_form.default_direction_mode %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+            {% if custom_perturbation_form.background_note %}
+              <span class="muted">{{ custom_perturbation_form.background_note }}</span>
+            {% endif %}
+          </label>
+          <label>
+            <span>Execution Mode</span>
+            <select name="execution_mode">
+              {% for option in custom_perturbation_form.execution_mode_options %}
+                <option value="{{ option.value }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label data-custom-perturbation-target-name hidden>
+            <span data-custom-perturbation-target-label>Pathway Name</span>
+            <input type="text" name="target_name" data-custom-perturbation-target-input autocomplete="off" placeholder="Required for pathway or drug jobs">
+            <div class="autocomplete-suggestion-list" data-custom-perturbation-target-suggestions hidden></div>
+          </label>
+          <label>
+            <span>Max Retries</span>
+            <input type="number" name="max_retries" value="0" min="0">
+          </label>
+          <label>
+            <span>Retry Delay (sec)</span>
+            <input type="number" name="retry_delay_sec" value="60" min="1">
+          </label>
+          <label class="full-width" data-custom-perturbation-track-group hidden>
+            <span>Temporal Track</span>
+            <select name="track_key">
+              {% for option in custom_perturbation_form.track_options %}
+                <option value="{{ option.value }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="full-width" data-custom-perturbation-gene-group>
+            <span>Gene List</span>
+            <textarea name="gene_text" rows="1" data-custom-perturbation-gene-text placeholder="Comma or newline separated genes"></textarea>
+            <div class="autocomplete-suggestion-list" data-custom-perturbation-gene-suggestions hidden></div>
+            <span class="muted">Pathway mode uses this field for the pathway gene set.</span>
+          </label>
+          <label class="full-width" data-custom-perturbation-drug-group hidden>
+            <span data-custom-perturbation-signed-label>Signed Gene Signature</span>
+            <textarea name="signed_gene_text" rows="1" data-custom-perturbation-signed-gene-text placeholder="GENE:+, GENE:-"></textarea>
+            <div class="autocomplete-suggestion-list" data-custom-perturbation-signed-gene-suggestions hidden></div>
+            <span class="muted" data-custom-perturbation-signed-help>Use GENE:+ or GENE:-.</span>
+          </label>
+        </div>
+        <div class="action-row">
+          <button class="button-link secondary" type="button" {% if custom_perturbation_form_error %}disabled{% endif %} onclick="window.unagiConsole.submitForm('custom-perturbation-form-{{ job.job_id }}', '/api/analysis/{{ job.job_id }}/perturbations/validate', 'custom-perturbation-result-{{ job.job_id }}', { successMessage: 'Passed' })">Validate</button>
+          <button class="button-link primary" type="button" {% if custom_perturbation_form_error %}disabled{% endif %} onclick="window.unagiConsole.submitForm('custom-perturbation-form-{{ job.job_id }}', '/api/analysis/{{ job.job_id }}/perturbations', 'custom-perturbation-result-{{ job.job_id }}', { successMessage: 'Queued', refreshExplorerOnSuccess: { jobId: '{{ job.job_id }}', mode: 'perturbation', pertPanelMode: 'custom' } })">Queue Perturbation</button>
+        </div>
+        <pre id="custom-perturbation-result-{{ job.job_id }}" class="json-result hidden-result"></pre>
+      </form>
+      <div class="section-head compact">
+        <div>
+          <h3>Submitted Custom Perturbations</h3>
+          <p class="muted">{{ custom_perturbation_jobs|length }} linked jobs</p>
+        </div>
+        {% if custom_perturbation_jobs %}
+          <button
+            class="button-link secondary"
+            type="button"
+            onclick="window.unagiConsole.postAction('/api/jobs/delete', 'custom-perturbation-delete-form-{{ job.job_id }}', 'custom-perturbation-delete-result-{{ job.job_id }}', { confirmMessage: 'Delete the selected custom perturbation jobs permanently?', successMessage: 'Deleted selected custom perturbations.', refreshExplorerOnSuccess: { jobId: '{{ job.job_id }}', mode: 'perturbation', pertPanelMode: 'custom' } })"
+          >Delete Selected</button>
+        {% endif %}
+      </div>
+      <pre id="custom-perturbation-delete-result-{{ job.job_id }}" class="json-result hidden-result"></pre>
+      {% if custom_perturbation_jobs %}
+        <form id="custom-perturbation-delete-form-{{ job.job_id }}">
+        <div class="module-collapse-group custom-perturbation-collapse-group" data-collapsible-group="custom-perturbation-group-{{ job.job_id }}">
+          {% for child in custom_perturbation_jobs %}
+            <details
+              class="module-section custom-perturbation-section"
+              data-collapsible-id="{{ child.job_id }}"
+              {% if selected_custom_perturbation_job and selected_custom_perturbation_job.job_id == child.job_id %}open{% endif %}
+            >
+              <summary
+                class="module-summary custom-perturbation-summary"
+                onclick="window.unagiConsole.openCustomPerturbation('{{ job.job_id }}', '{{ child.job_id }}');"
+              >
+                <label class="custom-perturbation-check" onclick="event.stopPropagation()">
+                  <input type="checkbox" name="job_id" value="{{ child.job_id }}">
+                  <span></span>
+                </label>
+                <div class="custom-perturbation-summary-copy">
+                  <strong>{{ child.job_name }}</strong>
+                  <span>{{ child.display_status or child.status }} · {{ "%.1f"|format(child.progress_percent or 0) }}%{% if child.current_stage %} · {{ child.current_stage|replace('_', ' ') }}{% endif %}</span>
+                  {% if child.queue_diagnostics and child.queue_diagnostics.message %}
+                    <span class="muted">{{ child.queue_diagnostics.message }}</span>
+                  {% endif %}
+                </div>
+              </summary>
+              {% if selected_custom_perturbation_job and selected_custom_perturbation_job.job_id == child.job_id %}
+                <div class="module-panel custom-perturbation-content">
+                  {% with perturb_job=selected_custom_perturbation_job, perturb_result=selected_custom_perturbation_result, perturb_result_error=selected_custom_perturbation_error, perturb_preview=selected_custom_perturbation_preview %}
+                    {% include "partials/custom_perturbation_detail.html" %}
+                  {% endwith %}
+                </div>
+              {% endif %}
+            </details>
+          {% endfor %}
+        </div>
+        </form>
+      {% else %}
+        <div class="notice">No custom perturbation jobs have been submitted for this analysis yet.</div>
+      {% endif %}
+    {% else %}
+    <div class="section-head compact">
+      <div>
+        <h3>{{ explorer.result.title }}</h3>
+        {% if explorer.result.subtitle %}
+          <p class="muted">{{ explorer.result.subtitle }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if explorer.result.status == "error" %}
+      <div class="notice notice-bad">{{ explorer.result.message }}</div>
+    {% elif explorer.result.status == "unavailable" %}
+      <div class="notice notice-warn">{{ explorer.result.message }}</div>
+    {% else %}
+      {% if explorer.result.warnings %}
+        {% for warning in explorer.result.warnings %}
+          <div class="notice notice-warn">{{ warning }}</div>
+        {% endfor %}
+      {% endif %}
+        {% if explorer.result.umap_widget %}
+        <div class="analysis-umap-shell">
+          <div class="analysis-umap-toolbar">
+            <div class="umap-color-mode-group">
+              <span>Color By</span>
+              <div class="umap-mode-tabs" data-umap-color-mode>
+                <button
+                  class="umap-mode-button{% if explorer.result.umap_widget.color_mode == 'metadata' %} is-active{% endif %}"
+                  type="button"
+                  data-umap-color-mode-option="metadata"
+                  aria-pressed="{% if explorer.result.umap_widget.color_mode == 'metadata' %}true{% else %}false{% endif %}"
+                >Metadata</button>
+                <button
+                  class="umap-mode-button{% if explorer.result.umap_widget.color_mode == 'gene' %} is-active{% endif %}"
+                  type="button"
+                  data-umap-color-mode-option="gene"
+                  aria-pressed="{% if explorer.result.umap_widget.color_mode == 'gene' %}true{% else %}false{% endif %}"
+                >Gene</button>
+              </div>
+            </div>
+            <label data-umap-field-group {% if explorer.result.umap_widget.color_mode == "gene" %}hidden{% endif %}>
+              <span>Metadata Field</span>
+              <select data-umap-control="color-by">
+                {% for field in explorer.result.umap_widget.color_options %}
+                  <option value="{{ field }}" {% if field == explorer.result.umap_widget.default_color_by %}selected{% endif %}>{{ field }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <div class="umap-gene-group" data-umap-gene-group {% if explorer.result.umap_widget.color_mode != "gene" %}hidden{% endif %}>
+              <label>
+                <span>Gene</span>
+                <input
+                  type="text"
+                  data-umap-control="gene"
+                  value="{{ explorer.result.umap_widget.gene }}"
+                  placeholder="Enter a gene symbol"
+                >
+              </label>
+            </div>
+            <button
+              class="button-link secondary"
+              type="button"
+              data-umap-gene-clear
+              {% if explorer.result.umap_widget.color_mode != "gene" %}hidden{% endif %}
+            >Clear Gene</button>
+            <a
+              class="button-link small secondary"
+              data-umap-publication
+              href="/analysis/{{ job.job_id }}/explorer/publication.pdf?{{ explorer.result.umap_widget.publication_query|querystring }}"
+              target="_blank"
+              rel="noreferrer"
+              title="Download publication-ready 300dpi PDF"
+            >&#8681; pdf</a>
+            <button class="button-link secondary" type="button" data-umap-clear>Clear Selection</button>
+            <p class="muted" data-umap-toolbar-note>Use the chart toolbar for pan, zoom, box select, and lasso select to inspect cell selections.</p>
+          </div>
+          <div
+            id="analysis-umap-widget-{{ job.job_id }}"
+            class="analysis-umap-widget"
+            data-umap-url="/api/analysis/{{ job.job_id }}/umap?stage={{ explorer.umap.stage|urlquote }}"
+            data-umap-summary-url="/api/analysis/{{ job.job_id }}/umap/selection-summary"
+            data-default-color="{{ explorer.result.umap_widget.default_color_by }}"
+            data-default-color-mode="{{ explorer.result.umap_widget.color_mode }}"
+          >
+            <p class="muted">Loading interactive UMAP...</p>
+          </div>
+          <div class="umap-selection-grid">
+            <article class="detail-card">
+              <p>Selected Cells</p>
+              <strong data-umap-selected-count>0</strong>
+              <p class="muted" data-umap-selection-note>No cells selected.</p>
+            </article>
+            <article class="artifact-card">
+              <div class="artifact-head">
+                <strong>Selection Summary</strong>
+              </div>
+              <div class="table-wrap" data-umap-summary-table>
+                <p class="muted">Select cells to see counts by the current color field.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      {% endif %}
+      {% if explorer.result.hierarchical_widget %}
+        <div
+          class="hierarchical-plot-stack"
+          data-hierarchical-shell
+          data-cluster-levels='{{ explorer.result.hierarchical_widget.cluster_levels|tojson }}'
+        >
+          <article
+            class="artifact-card"
+            data-dendrogram-url="/api/analysis/{{ job.job_id }}/hierarchical/dendrogram?{{ explorer.result.hierarchical_widget.dendrogram_query|querystring }}"
+          >
+            <div class="artifact-head">
+              <strong>Selected stage dendrogram</strong>
+              <div class="link-stack artifact-actions">
+                <a href="/analysis/{{ job.job_id }}/explorer/publication.pdf?{{ explorer.result.hierarchical_widget.dendrogram_publication_query|querystring }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+              </div>
+            </div>
+            <div class="analysis-hierarchical-plot analysis-hierarchical-dendrogram" data-hierarchical-dendrogram>
+              <p class="muted">Loading interactive dendrogram...</p>
+            </div>
+          </article>
+          <article
+            class="artifact-card"
+            data-heatmap-url="/api/analysis/{{ job.job_id }}/hierarchical/heatmap?{{ explorer.result.hierarchical_widget.heatmap_query|querystring }}"
+          >
+            <div class="artifact-head">
+              <strong>Branch heatmap</strong>
+              <div class="link-stack artifact-actions">
+                <a href="/analysis/{{ job.job_id }}/explorer/publication.pdf?{{ explorer.result.hierarchical_widget.heatmap_publication_query|querystring }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                <a href="/analysis/{{ job.job_id }}/explorer/table.csv?{{ explorer.result.hierarchical_widget.table_download_query|querystring }}" target="_blank" rel="noreferrer" title="Download marker table CSV">&#8681; table</a>
+              </div>
+            </div>
+            <div class="hierarchical-focus-row">
+              <span class="muted">Selected gene</span>
+              <span class="status-pill" data-hierarchical-selected-gene hidden>None</span>
+            </div>
+            <div class="analysis-hierarchical-plot analysis-hierarchical-heatmap" data-hierarchical-heatmap>
+              <p class="muted">Loading interactive branch heatmap...</p>
+            </div>
+          </article>
+        </div>
+      {% endif %}
+          {% if explorer.result.plots %}
+        <div class="artifact-grid">
+          {% for plot in explorer.result.plots %}
+            <article class="artifact-card">
+              <div class="artifact-head">
+                <strong>{{ plot.label }}</strong>
+                {% if plot.publication_query or plot.table_download_query %}
+                  <div class="link-stack artifact-actions">
+                    {% if plot.publication_query %}
+                      <a href="/analysis/{{ job.job_id }}/explorer/publication.pdf?{{ plot.publication_query|querystring }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                    {% endif %}
+                    {% if plot.table_download_query %}
+                      <a href="/analysis/{{ job.job_id }}/explorer/table.csv?{{ plot.table_download_query|querystring }}" target="_blank" rel="noreferrer" title="Download underlying table CSV">&#8681; table</a>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </div>
+              {% if plot.plotly_spec %}
+                <div class="analysis-plotly-widget" data-plotly-widget>
+                  <script type="application/json" data-plotly-spec>{{ plot.plotly_spec|tojson }}</script>
+                  <p class="muted">Loading interactive plot...</p>
+                </div>
+              {% else %}
+                <img class="artifact-image" src="{{ plot.image_data }}" alt="{{ plot.label }}">
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if explorer.result.split_cards %}
+        <div class="explorer-split-grid">
+          {% for item in explorer.result.split_cards %}
+            <article class="artifact-card">
+              <div class="artifact-head">
+                <strong>{{ item.label }}</strong>
+                {% if item.type == "plot" and item.publication_query %}
+                  <div class="link-stack artifact-actions">
+                    <a href="/analysis/{{ job.job_id }}/explorer/publication.pdf?{{ item.publication_query|querystring }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                    {% if item.table_download_query %}
+                      <a href="/analysis/{{ job.job_id }}/explorer/table.csv?{{ item.table_download_query|querystring }}" target="_blank" rel="noreferrer" title="Download marker table CSV">&#8681; table</a>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </div>
+              {% if item.type == "plot" %}
+                <img class="artifact-image" src="{{ item.image_data }}" alt="{{ item.label }}">
+              {% elif item.type == "table" and item.preview.columns %}
+                <div class="table-wrap">
+                  <table class="job-table compact-table">
+                    <thead>
+                      <tr>
+                        {% for column in item.preview.columns %}
+                          <th>{{ column }}</th>
+                        {% endfor %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for row in item.preview.rows %}
+                        <tr>
+                          {% for cell in row %}
+                            <td>{{ cell }}</td>
+                          {% endfor %}
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                <p class="muted">Previewing {{ item.preview.row_count }} rows.</p>
+              {% else %}
+                <p class="muted">No rows were available for this view.</p>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if explorer.result.tables %}
+        {% for table in explorer.result.tables %}
+          <article class="artifact-card">
+            <div class="artifact-head">
+              <strong>{{ table.label }}</strong>
+            </div>
+            {% if table.preview.columns %}
+              <div class="table-wrap">
+                <table class="job-table compact-table">
+                  <thead>
+                    <tr>
+                      {% for column in table.preview.columns %}
+                        <th>{{ column }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in table.preview.rows %}
+                      <tr>
+                        {% for cell in row %}
+                          <td>{{ cell }}</td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <p class="muted">Previewing {{ table.preview.row_count }} rows.</p>
+            {% else %}
+              <p class="muted">No rows were available for this view.</p>
+            {% endif %}
+          </article>
+        {% endfor %}
+      {% endif %}
+    {% endif %}
+    {% endif %}
+    </section>
+  </div>
+</div>

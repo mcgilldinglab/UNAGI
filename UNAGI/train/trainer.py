@@ -32,7 +32,62 @@ class UNAGI_trainer():
         self.dis_model = dis_model
         self.GCN = GCN
         self.lr_dis = lr_dis
-    def train_model(self,adata, vae,dis, train_loader,adj, adversarial=True,geneWeights=None, use_cuda=True):
+        self._loaded_checkpoint = None
+
+    def _ensure_dense_expression(self, adata):
+        if sp.isspmatrix(adata.X):
+            adata.X = adata.X.toarray()
+        elif not isinstance(adata.X, np.ndarray):
+            adata.X = np.asarray(adata.X)
+        if adata.X.dtype != np.float32:
+            adata.X = adata.X.astype(np.float32, copy=False)
+        return adata.X
+
+    def _expression_tensor(self, adata):
+        return torch.from_numpy(self._ensure_dense_expression(adata))
+
+    def _graph_csr(self, adata):
+        if 'gcn_connectivities' not in adata.obsp.keys():
+            return None
+        return adata.obsp['gcn_connectivities'].tocsr()
+
+    def _batch_neighbourhood_nodes(self, graph_csr, batch_idx):
+        batch_np = batch_idx.detach().cpu().numpy().astype(np.int64, copy=False)
+        indptr = graph_csr.indptr
+        indices = graph_csr.indices
+        chunks = [batch_np]
+        for each in batch_np:
+            chunks.append(indices[indptr[each]:indptr[each + 1]])
+        nodes = np.unique(np.concatenate(chunks))
+        return torch.as_tensor(nodes, dtype=torch.long)
+
+    def _prepare_plain_batch(self, x_source, batch_idx):
+        x = x_source.index_select(0, batch_idx.cpu())
+        if self.cuda:
+            x = x.to(self.device)
+            batch_idx = batch_idx.to(self.device)
+        return x, batch_idx
+
+    def _prepare_gcn_batch(self, x_source, graph_csr, work_x, batch_idx):
+        touched_nodes = self._batch_neighbourhood_nodes(graph_csr, batch_idx)
+        source_rows = x_source.index_select(0, touched_nodes)
+        if self.cuda:
+            touched_nodes = touched_nodes.to(self.device)
+            source_rows = source_rows.to(self.device)
+            batch_idx = batch_idx.to(self.device)
+        work_x.index_copy_(0, touched_nodes, source_rows)
+        return work_x, batch_idx, touched_nodes
+
+    def _ensure_loaded_checkpoint(self, iteration, target_dir):
+        target_dir = Path(target_dir)
+        checkpoint_path = target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth')
+        cache_key = (str(checkpoint_path), str(self.device))
+        if self._loaded_checkpoint == cache_key:
+            return
+        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+        self.model = self.model.to(self.device)
+        self._loaded_checkpoint = cache_key
+    def train_model(self,adata, vae,dis, train_loader,adj, x_source, graph_csr=None, adversarial=True,geneWeights=None, use_cuda=True):
         # initialize loss accumulator
         epoch_loss = 0.
         criterion=nn.BCELoss().to(self.device)
@@ -40,8 +95,10 @@ class UNAGI_trainer():
             if adj is not None:
                 adj=adj.to(self.device)
 
-        
-        placeholder = torch.zeros(adata.X.shape,dtype=torch.float32)
+        work_x = None
+        if self.GCN:
+            buffer_device = self.device if self.cuda else torch.device('cpu')
+            work_x = torch.zeros(adata.X.shape, dtype=torch.float32, device=buffer_device)
         optimizer_vae = optim.Adam(lr= self.lr,params=vae.parameters())
         if adversarial:
             optimizer_dis = optim.Adam(lr=self.lr_dis,params=dis.parameters()) 
@@ -51,30 +108,20 @@ class UNAGI_trainer():
         dis_loss = 0
         adversarial_loss = 0
         
-        for i, [x,neighbourhoods,idx] in enumerate(train_loader): 
-            size = len(x)
+        for i, idx in enumerate(train_loader): 
+            idx = idx.long()
+            size = len(idx)
             if self.GCN:
-                
-                temp_x = placeholder.clone()
-                start = i*self.batch_size
-                if (1+i)*self.batch_size > len(adj):
-                    end =  len(adj)
-                else:
-                    end = (1+i)*self.batch_size
-                neighbourhood = [item for sublist in neighbourhoods for item in sublist]
-                temp_x[neighbourhood] = torch.Tensor(adata.X)[neighbourhood]
-                x = temp_x
+                x, idx_device, touched_nodes = self._prepare_gcn_batch(x_source, graph_csr, work_x, idx)
             else:
-                neighbourhood = None
-        # if on GPU put mini-batch into CUDA memory
-            if self.cuda:
-                x = x.to(self.device)
+                x, idx_device = self._prepare_plain_batch(x_source, idx)
+                touched_nodes = None
             if geneWeights is not None:
                 idx_np = idx.detach().cpu().numpy()
                 geneWeights1 = torch.tensor(transfer_to_ranking_score(geneWeights[idx_np].toarray())).to(self.device)
-                if neighbourhood is not None:
-                    mu, dropout_logits, mu_, logvar_,_ = vae(x,adj,idx)
-                    loss =  vae.loss_function(x[idx,:], mu, dropout_logits, mu_, logvar_,gene_weights=geneWeights1)
+                if self.GCN:
+                    mu, dropout_logits, mu_, logvar_,_ = vae(x,adj,idx_device)
+                    loss =  vae.loss_function(x[idx_device,:], mu, dropout_logits, mu_, logvar_,gene_weights=geneWeights1)
                 else:
                     mu, dropout_logits, mu_, logvar_,_ = vae(x)
                     loss =  vae.loss_function(x, mu, dropout_logits, mu_, logvar_,gene_weights=geneWeights1)
@@ -86,9 +133,9 @@ class UNAGI_trainer():
                 # continue
             else:
                 #train the generator
-                if neighbourhood is not None:
-                    mu, dropout_logits, mu_, logvar_,_ = vae(x,adj,idx)
-                    loss =  vae.loss_function(x[idx,:], mu, dropout_logits, mu_, logvar_)
+                if self.GCN:
+                    mu, dropout_logits, mu_, logvar_,_ = vae(x,adj,idx_device)
+                    loss =  vae.loss_function(x[idx_device,:], mu, dropout_logits, mu_, logvar_)
                 else:
                     mu, dropout_logits, mu_, logvar_,recons = vae(x) 
                     loss =  vae.loss_function(x, mu, dropout_logits, mu_, logvar_)
@@ -99,15 +146,15 @@ class UNAGI_trainer():
             if adversarial:
 
                 #discriminator loss
-                if neighbourhood is not None:
-                    _,_,_,_,recons = vae(x,adj,idx)
+                if self.GCN:
+                    _,_,_,_,recons = vae(x,adj,idx_device)
                 else:
                     _,_,_,_,recons = vae(x)
                 zeros_label1=Variable(torch.zeros(size,1)).to(self.device)
                 ones_label = torch.ones((size,1)).to(self.device)
                 zeros_label = torch.zeros((size,1)).to(self.device)
-                if neighbourhood is not None:
-                    output_real = dis(x[idx,:])
+                if self.GCN:
+                    output_real = dis(x[idx_device,:])
                 else:
                     output_real = dis(x)
                 output_fake = dis(recons)
@@ -120,8 +167,8 @@ class UNAGI_trainer():
                 dis_loss += loss_dis.item()
                 
                 #tune the generator
-                if neighbourhood is not None:
-                    _,_,_,_,recons = vae(x,adj,idx)
+                if self.GCN:
+                    _,_,_,_,recons = vae(x,adj,idx_device)
                 else:
                     _,_,_,_,recons = vae(x)
                 output_fake = dis(recons)
@@ -130,17 +177,16 @@ class UNAGI_trainer():
                 loss_adversarial.backward()
                 optimizer_vae.step()
                 adversarial_loss += loss_adversarial.item()
+            if touched_nodes is not None:
+                work_x.index_fill_(0, touched_nodes, 0.0)
 
             
 
         normalizer_train = len(train_loader)
         total_epoch_vae_loss = vae_loss / normalizer_train
-        print('vae_loss', total_epoch_vae_loss)
         if adversarial:
             total_epoch_dis_loss = dis_loss / normalizer_train
             total_epoch_adversarial_loss = adversarial_loss / normalizer_train
-            print('dis_loss', total_epoch_dis_loss)
-            print('adversarial_loss', total_epoch_adversarial_loss)
         return total_epoch_vae_loss
     def get_latent_representation(self,adata,iteration,target_dir):
         '''
@@ -150,47 +196,38 @@ class UNAGI_trainer():
         if 'X_pca' not in adata.obsm.keys():
             sc.pp.pca(adata)
     
-        if 'gcn_connectivities' in adata.obsp.keys():
-            adj = adata.obsp['gcn_connectivities']
-            adj = adj.asformat('coo')
+        graph_csr = self._graph_csr(adata)
         if self.GCN:
             cell = H5ADDataSet(adata)
         else:
             cell = H5ADPlainDataSet(adata)
         num_genes=cell.num_genes()
-        placeholder = torch.zeros(adata.X.shape,dtype=torch.float32)
         cell_loader=DataLoader(cell,batch_size=self.batch_size,num_workers=0)
-        self.model.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth'),map_location=self.device))
+        self._ensure_loaded_checkpoint(iteration, target_dir)
         TZ=[]
         z_locs = []
         z_scales = []
-        adj = setup_graph(adj)
-        adj = adj.to(self.device)
-        if sp.isspmatrix(adata.X):
-            adata.X = adata.X.toarray()
-        for i, [x,neighbourhoods,idx] in enumerate(cell_loader):
+        x_source = self._expression_tensor(adata)
+        adj = None
+        work_x = None
+        if self.GCN and graph_csr is not None:
+            adj = setup_graph(graph_csr.asformat('coo')).to(self.device)
+            buffer_device = self.device if self.cuda else torch.device('cpu')
+            work_x = torch.zeros(adata.X.shape, dtype=torch.float32, device=buffer_device)
+        for i, idx in enumerate(cell_loader):
+            idx = idx.long()
             if self.GCN:
-                temp_x = placeholder.clone()
-                start = i*self.batch_size
-                if (1+i)*self.batch_size > len(adj):
-                    end =  len(adj)
-                else:
-                    end = (1+i)*self.batch_size
-                neighbourhood = [item for sublist in neighbourhoods for item in sublist]
-                temp_x[neighbourhood] = torch.Tensor(adata.X)[neighbourhood]
-                x = temp_x
-                if self.cuda:
-                    x = x.to(self.device)
-                # _,mu, logvar,_,_  = self.model.getZ(x.view(-1, num_genes),adj,i,start, end,test=False)
-                mu, logvar = self.model.encoder(x.view(-1, num_genes),adj,idx)
+                x, idx_device, touched_nodes = self._prepare_gcn_batch(x_source, graph_csr, work_x, idx)
+                mu, logvar = self.model.encoder(x.view(-1, num_genes),adj,idx_device)
             else:
-                if self.cuda:
-                    x = x.to(self.device)
+                x, _ = self._prepare_plain_batch(x_source, idx)
                 mu, logvar = self.model.encoder(x.view(-1, num_genes))
             z = mu+logvar
             z_locs+=mu.detach().cpu().numpy().tolist()
             z_scales+=logvar.detach().cpu().numpy().tolist()
             TZ+=z.detach().cpu().numpy().tolist()
+            if self.GCN:
+                work_x.index_fill_(0, touched_nodes, 0.0)
         z_locs = np.array(z_locs)
         z_scales = np.array(z_scales)
         z_scales = np.exp(0.5 * z_scales)
@@ -205,41 +242,31 @@ class UNAGI_trainer():
         if 'X_pca' not in adata.obsm.keys():
             sc.pp.pca(adata)
     
-        if 'gcn_connectivities' in adata.obsp.keys():
-            adj = adata.obsp['gcn_connectivities']
-            adj = adj.asformat('coo')
+        graph_csr = self._graph_csr(adata)
         cell = H5ADDataSet(adata)
         num_genes=cell.num_genes()
-        placeholder = torch.zeros(adata.X.shape,dtype=torch.float32)
         cell_loader=DataLoader(cell,batch_size=self.batch_size,num_workers=0)
-        self.model.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth'),map_location=self.device))
-        self.model = self.model.to(self.device)
+        self._ensure_loaded_checkpoint(iteration, target_dir)
         recons = []
-        adj = setup_graph(adj)
-        adj = adj.to(self.device)
-        if sp.isspmatrix(adata.X):
-            adata.X = adata.X.toarray()
-        for i, [x,neighbourhoods,idx] in enumerate(cell_loader):
+        x_source = self._expression_tensor(adata)
+        adj = None
+        work_x = None
+        if self.GCN and graph_csr is not None:
+            adj = setup_graph(graph_csr.asformat('coo')).to(self.device)
+            buffer_device = self.device if self.cuda else torch.device('cpu')
+            work_x = torch.zeros(adata.X.shape, dtype=torch.float32, device=buffer_device)
+        for i, idx in enumerate(cell_loader):
+            idx = idx.long()
             if self.GCN:
-                temp_x = placeholder.clone()
-                start = i*self.batch_size
-                if (1+i)*self.batch_size > len(adj):
-                    end =  len(adj)
-                else:
-                    end = (1+i)*self.batch_size
-                neighbourhood = [item for sublist in neighbourhoods for item in sublist]
-                temp_x[neighbourhood] = torch.Tensor(adata.X)[neighbourhood]
-                x = temp_x
-                if self.cuda:
-                    x = x.to(self.device)
-                # _,mu, logvar,_,_  = self.model.getZ(x.view(-1, num_genes),adj,i,start, end,test=False)
-                _, _, _, _, recon = self.model(x.view(-1, num_genes),adj,idx)
+                x, idx_device, touched_nodes = self._prepare_gcn_batch(x_source, graph_csr, work_x, idx)
+                _, _, _, _, recon = self.model(x.view(-1, num_genes),adj,idx_device)
             else:
-                if self.cuda:
-                    x = x.to(self.device)
+                x, _ = self._prepare_plain_batch(x_source, idx)
                 _, _, _, _, recon = self.model(x.view(-1, num_genes))
             
             recons+=recon.detach().cpu().numpy().tolist()
+            if self.GCN:
+                work_x.index_fill_(0, touched_nodes, 0.0)
            
         recons = np.array(recons)
 
@@ -250,12 +277,8 @@ class UNAGI_trainer():
         if 'X_pca' not in adata.obsm.keys():
             sc.tl.pca(adata, svd_solver='arpack')
 
-        if 'gcn_connectivities' in adata.obsp.keys():
-            adj = adata.obsp['gcn_connectivities']
-            adj = adj.asformat('coo')
-            adj = setup_graph(adj)
-        else:
-            adj = None
+        graph_csr = self._graph_csr(adata)
+        adj = setup_graph(graph_csr.asformat('coo')) if graph_csr is not None else None
         if is_iterative:
             geneWeights = adata.layers['geneWeight']
         else:
@@ -268,19 +291,18 @@ class UNAGI_trainer():
         cell_loader = DataLoader(cell, batch_size=self.batch_size, num_workers=0, shuffle=True)
         
         pyro.clear_param_store()
-        print('...')  
 
         if os.path.exists(target_dir / 'model_save' / (self.modelName + '_' + str(iteration-1) + '.pth')):
             vae = self.model
             dis = self.dis_model
             # dis = self.discriminator
             if os.path.exists(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth')):
-                print('load current iteration model....')
+                print(f"[TRAIN] iteration {iteration}: resume from existing checkpoint")
                 if adversarial:
                     dis.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_dis_' + str(iteration) + '.pth')))
                 vae.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration) + '.pth')))
             else:
-                print('load last iteration model.....')
+                print(f"[TRAIN] iteration {iteration}: initialize from previous iteration checkpoint")
                 if adversarial:
                     dis.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_dis_' + str(iteration-1) + '.pth')))
                 vae.load_state_dict(torch.load(target_dir / 'model_save' / (self.modelName + '_' + str(iteration-1) + '.pth')))
@@ -291,20 +313,31 @@ class UNAGI_trainer():
         vae.to(self.device)
         if adversarial:
             dis.to(self.device)
-        if geneWeights is None and is_iterative:
-            print('no geneWeight')
-    
+
         gc.collect()
 
         train_elbo = []
         epoch_range = self.epoch_iter if is_iterative else self.epoch_initial
-        if sp.isspmatrix(adata.X):
-            adata.X = adata.X.toarray()
+        x_source = self._expression_tensor(adata)
         for epoch in range(epoch_range):
-            print(epoch)
-            total_epoch_loss_train = self.train_model(adata, vae,dis, cell_loader, adj, adversarial=adversarial,geneWeights=geneWeights if is_iterative else None, use_cuda=self.cuda)
+            total_epoch_loss_train = self.train_model(
+                adata,
+                vae,
+                dis,
+                cell_loader,
+                adj,
+                x_source,
+                graph_csr=graph_csr,
+                adversarial=adversarial,
+                geneWeights=geneWeights if is_iterative else None,
+                use_cuda=self.cuda,
+            )
             train_elbo.append(-total_epoch_loss_train)
-            print("[epoch %03d]  average training loss: %.4f" % (epoch, total_epoch_loss_train))
+            print(
+                f"[UNAGI-TRAIN] iteration={iteration} epoch={epoch + 1}/{epoch_range} "
+                f"loss={total_epoch_loss_train:.4f}"
+            )
+            print(f"[TRAIN] iteration {iteration} epoch {epoch + 1}/{epoch_range} loss={total_epoch_loss_train:.4f}")
             with open(target_dir / f'{int(iteration)}' / 'loss.txt', "a+") as f:
                 f.write("[epoch %03d]  average training loss: %.4f\n" % (epoch, total_epoch_loss_train))
                 f.close()

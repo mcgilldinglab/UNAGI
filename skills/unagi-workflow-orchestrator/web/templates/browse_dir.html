@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{ path }} · Browser{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <div class="section-head">
+      <h2>Directory</h2>
+      <code>{{ path }}</code>
+    </div>
+    <div class="path-list">
+      {% for entry in entries %}
+        <a class="path-item" href="/browse?path={{ entry.path|urlquote }}">
+          <span>{{ "DIR" if entry.is_dir else "FILE" }}</span>
+          <strong>{{ entry.name }}</strong>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

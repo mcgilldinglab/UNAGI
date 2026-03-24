@@ -1,0 +1,202 @@
+<div class="section-head">
+  <h2>Training Runs</h2>
+  <p class="muted">{{ dashboard_view.task_count }} runs · {{ dashboard_view.analysis_count }} analysis jobs nested under runs</p>
+</div>
+
+<div class="stats-grid">
+  {% for item in counts %}
+    <article class="stat-card">
+      <p>{{ item.label }}</p>
+      <strong>{{ item.value }}</strong>
+    </article>
+  {% endfor %}
+</div>
+
+<form id="dashboard-bulk-delete-form">
+  <div class="bulk-action-bar">
+    <div>
+      <strong>Bulk Actions</strong>
+      <p class="muted">Selecting a run deletes the entire training run and all nested analyses. Selecting an analysis deletes only that analysis.</p>
+    </div>
+    <button
+      class="button-link danger"
+      type="button"
+      onclick="window.unagiConsole.postAction('/api/jobs/delete', 'dashboard-bulk-delete-form', 'dashboard-action-result', { confirmMessage: 'Delete the selected jobs permanently?', refreshDashboardOnSuccess: true })"
+    >Delete Selected</button>
+  </div>
+  <pre id="dashboard-action-result" class="json-result hidden-result"></pre>
+
+  <div class="task-list">
+    {% for entry in dashboard_view.tasks %}
+      {% set task = entry.task %}
+      <article class="task-card">
+        <div class="task-head">
+            <div class="task-title">
+              <input class="job-select" type="checkbox" name="job_id" value="{{ task.job_id }}" aria-label="Select task {{ task.job_name }}">
+              <div>
+                <a class="job-link" href="/jobs/{{ task.job_id }}">{{ task.job_name }}</a>
+                <div class="job-meta">
+                  <span>run</span>
+                </div>
+              </div>
+            </div>
+          <div class="task-badges">
+            <span class="status-pill status-{{ task.status }}">{{ task.status }}</span>
+            <span class="status-pill">updated {{ task.updated_at or "n/a" }}</span>
+          </div>
+        </div>
+
+        <div class="task-overview">
+          <article class="task-metric">
+            <p>Progress</p>
+            <strong>{{ "%.1f"|format(task.progress_percent or 0) }}%</strong>
+            <div class="progress-bar"><span style="width: {{ task.progress_percent or 0 }}%"></span></div>
+            <span class="muted">{{ task.current_stage_label or "Waiting" }}</span>
+          </article>
+          <article class="task-metric">
+            <p>Runtime</p>
+            <strong>{{ task.runtime_human or "n/a" }}</strong>
+            <span class="muted">ETA {{ task.eta_human or "n/a" }}</span>
+          </article>
+          <article class="task-metric">
+            <p>Links</p>
+            <div class="link-stack">
+              <a href="/jobs/{{ task.job_id }}">detail</a>
+              <a href="/browse?path={{ task.config_path|urlquote }}">config</a>
+              <a href="/browse?path={{ task.log_path|urlquote }}">log</a>
+              <a href="/browse?path={{ task.output_path|urlquote }}">output</a>
+            </div>
+          </article>
+        </div>
+
+        <section class="nested-analysis-section">
+          <details class="analysis-level-card" data-task-id="{{ task.job_id }}" {% if entry.analysis_open %}open{% endif %}>
+            <summary class="analysis-level-summary">
+              <div>
+                <strong>Analysis Jobs</strong>
+                <p class="muted">
+                  {% if entry.analyses %}
+                    Showing {{ entry.analyses|length }}{% if entry.total_analyses != entry.analyses|length %} of {{ entry.total_analyses }}{% endif %} for this run
+                  {% elif entry.total_analyses %}
+                    {{ entry.total_analyses }} analysis jobs exist for this run, but none match the current filter
+                  {% else %}
+                    No analyses have been created for this run yet
+                  {% endif %}
+                </p>
+              </div>
+              <span class="status-pill">{{ entry.total_analyses }} total</span>
+            </summary>
+            {% if entry.analyses %}
+              <div class="table-wrap">
+                <table class="job-table compact nested-job-table">
+                  <thead>
+                    <tr>
+                      <th>Select</th>
+                      <th>Analysis</th>
+                      <th>Status</th>
+                      <th>Progress</th>
+                      <th>Stage</th>
+                      <th>Updated</th>
+                      <th>Links</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for analysis in entry.analyses %}
+                      <tr>
+                        <td>
+                          <input class="job-select" type="checkbox" name="job_id" value="{{ analysis.job_id }}" aria-label="Select analysis {{ analysis.job_name }}">
+                        </td>
+                        <td>
+                          <a class="job-link" href="/jobs/{{ analysis.job_id }}">{{ analysis.job_name }}</a>
+                          <div class="job-meta">
+                            <span>analysis{% if analysis.analysis_iteration is not none %} · iter {{ analysis.analysis_iteration }}{% endif %}</span>
+                          </div>
+                        </td>
+                        <td><span class="status-pill status-{{ analysis.status }}">{{ analysis.status }}</span></td>
+                        <td>
+                          <div class="progress-label">{{ "%.1f"|format(analysis.progress_percent or 0) }}%</div>
+                          <div class="progress-bar"><span style="width: {{ analysis.progress_percent or 0 }}%"></span></div>
+                        </td>
+                        <td>{{ analysis.current_stage_label or "Waiting" }}</td>
+                        <td>{{ analysis.updated_at or "n/a" }}</td>
+                        <td class="link-stack">
+                          <a href="/jobs/{{ analysis.job_id }}">detail</a>
+                          <a href="/browse?path={{ analysis.log_path|urlquote }}">log</a>
+                          <a href="/browse?path={{ analysis.output_path|urlquote }}">output</a>
+                          {% if analysis.visualizations %}
+                            <a href="/analysis/{{ analysis.job_id }}/visualizations">visualizations</a>
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% elif entry.total_analyses %}
+              <p class="muted">No analysis jobs match the current filter for this run.</p>
+            {% else %}
+              <p class="muted">Launch analysis from the run detail page after at least one iteration finishes.</p>
+            {% endif %}
+          </details>
+        </section>
+      </article>
+    {% endfor %}
+  </div>
+
+  {% if dashboard_view.orphan_analyses %}
+    <section class="subpanel">
+      <div class="section-head compact">
+        <h3>Detached Analysis Jobs</h3>
+        <p class="muted">These analyses do not currently have a visible parent run</p>
+      </div>
+      <div class="table-wrap">
+        <table class="job-table compact nested-job-table">
+          <thead>
+            <tr>
+              <th>Select</th>
+              <th>Analysis</th>
+              <th>Status</th>
+              <th>Progress</th>
+              <th>Stage</th>
+              <th>Updated</th>
+              <th>Links</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for analysis in dashboard_view.orphan_analyses %}
+              <tr>
+                <td>
+                  <input class="job-select" type="checkbox" name="job_id" value="{{ analysis.job_id }}" aria-label="Select analysis {{ analysis.job_name }}">
+                </td>
+                <td>
+                  <a class="job-link" href="/jobs/{{ analysis.job_id }}">{{ analysis.job_name }}</a>
+                  <div class="job-meta">
+                    <span>analysis{% if analysis.analysis_iteration is not none %} · iter {{ analysis.analysis_iteration }}{% endif %}</span>
+                  </div>
+                </td>
+                <td><span class="status-pill status-{{ analysis.status }}">{{ analysis.status }}</span></td>
+                <td>
+                  <div class="progress-label">{{ "%.1f"|format(analysis.progress_percent or 0) }}%</div>
+                  <div class="progress-bar"><span style="width: {{ analysis.progress_percent or 0 }}%"></span></div>
+                </td>
+                <td>{{ analysis.current_stage_label or "Waiting" }}</td>
+                <td>{{ analysis.updated_at or "n/a" }}</td>
+                <td class="link-stack">
+                  <a href="/jobs/{{ analysis.job_id }}">detail</a>
+                  <a href="/browse?path={{ analysis.log_path|urlquote }}">log</a>
+                  <a href="/browse?path={{ analysis.output_path|urlquote }}">output</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+</form>
+
+{% if not dashboard_view.tasks and not dashboard_view.orphan_analyses %}
+  <div class="empty-state-panel">
+    <p class="muted">No training runs matched the current filter.</p>
+  </div>
+{% endif %}

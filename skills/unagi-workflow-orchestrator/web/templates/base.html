@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}UNAGI Console{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ static_url(request, 'monitor.css') }}">
+    <script src="{{ static_url(request, 'vendor/htmx.min.js') }}" defer></script>
+    <script src="{{ static_url(request, 'console.js') }}" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">UNAGI Workflow Console</p>
+          <h1><a href="/">Durable Job Dashboard</a></h1>
+        </div>
+        <nav class="top-nav">
+          <a href="/">Dashboard</a>
+          <a href="/experiments/new">New Experiment</a>
+        </nav>
+        <div class="header-chip">
+          <span>Read / Write Console</span>
+          <span>Local / Internal</span>
+        </div>
+      </header>
+      <main>
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

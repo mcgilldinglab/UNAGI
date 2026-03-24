@@ -1,3 +1,6 @@
+import concurrent.futures
+import multiprocessing
+import os
 from typing import Optional, Sequence, Dict, Any
 import scipy.cluster.hierarchy as sch
 import scanpy as sc
@@ -7,6 +10,30 @@ import pandas as pd
 from scanpy.tools._utils import _choose_representation
 from anndata import AnnData
 from ..dynamic_graphs.distDistance import fitClusterGaussianRepresentation,calculateKL
+
+
+def _coerce_dense_matrix(matrix):
+    if hasattr(matrix, 'toarray'):
+        return np.asarray(matrix.toarray())
+    return np.asarray(matrix)
+
+
+def _build_cluster_index_cache(cluster_labels):
+    cluster_labels = np.asarray(cluster_labels, dtype=str)
+    return {
+        label: np.flatnonzero(cluster_labels == label).astype(np.int32, copy=False)
+        for label in pd.Index(cluster_labels).unique().tolist()
+    }
+
+
+def _hierarchical_worker_init():
+    try:
+        from threadpoolctl import threadpool_limits
+
+        threadpool_limits(limits=1)
+    except Exception:
+        for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS'):
+            os.environ.setdefault(key, '1')
 
 def getclusterreps(data):
     '''
@@ -187,7 +214,7 @@ def mydendrogram(
 
     # aggregate values within categories using 'mean'
     
-    mean_df = rep_df.groupby(level=0).mean()
+    mean_df = rep_df.groupby(level=0, observed=False).mean()
 
     import scipy.cluster.hierarchy as sch
     from scipy.spatial import distance
@@ -430,28 +457,51 @@ def my_logfold_change(adata1, adata2,log_fold_change_cutoff=None,abs = False):
 
     '''
     genenames = adata1.var_names.tolist()
-    mean1 = np.mean(adata1.X.toarray(),axis=0)
-    mean2 = np.mean(adata2.X.toarray(),axis=0)
-    logfold_change = mean2 - mean1
+    mean1 = np.mean(_coerce_dense_matrix(adata1.X),axis=0)
+    mean2 = np.mean(_coerce_dense_matrix(adata2.X),axis=0)
+    return _build_logfold_dataframe(
+        genenames=genenames,
+        mean_compared=mean1,
+        mean_selected=mean2,
+        log_fold_change_cutoff=log_fold_change_cutoff,
+        absolute=abs,
+    )
+
+
+def _build_logfold_dataframe(
+    *,
+    genenames,
+    mean_compared,
+    mean_selected,
+    log_fold_change_cutoff=None,
+    absolute=False,
+):
+    logfold_change = mean_selected - mean_compared
     logfold_change_dict = {}
     order = np.argsort(logfold_change)[::-1]
-    mean2 = mean2[order]
-    mean1 = mean1[order]
-    for i, each in enumerate(genenames):
-        logfold_change_dict[each] = logfold_change[i]
-    if abs ==True:
-        temp = {k: v for k, v in sorted(logfold_change_dict.items(), key=lambda item: np.abs(item[1]),reverse=True)}
+    ordered_selected = mean_selected[order]
+    ordered_compared = mean_compared[order]
+    for idx, gene_name in enumerate(genenames):
+        logfold_change_dict[gene_name] = logfold_change[idx]
+    if absolute:
+        sorted_items = sorted(
+            logfold_change_dict.items(),
+            key=lambda item: np.abs(item[1]),
+            reverse=True,
+        )
     else:
-        temp = {k: v for k, v in sorted(logfold_change_dict.items(), key=lambda item: item[1],reverse=True)}
-
+        sorted_items = sorted(
+            logfold_change_dict.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
     df = pd.DataFrame()
-    df['log_fold_changes'] = temp.values()
-    df['names'] = temp.keys()
-
+    df['log_fold_changes'] = [value for _name, value in sorted_items]
+    df['names'] = [name for name, _value in sorted_items]
     if log_fold_change_cutoff is not None:
         df = df[np.abs(df['log_fold_changes'])>log_fold_change_cutoff]
-    df['Mean_compared_clusters'] = mean1
-    df['Mean_selected_clusters'] = mean2
+    df['Mean_compared_clusters'] = ordered_compared[: len(df)]
+    df['Mean_selected_clusters'] = ordered_selected[: len(df)]
     return df
 def build_reference_siblings(dendrogram):
     '''
@@ -483,7 +533,7 @@ def build_reference_siblings(dendrogram):
         for level, sibs in enumerate(siblings):
             out[str(leaf_node_id)][str(level)] = level_table[level]
     return out
-def gethcmarkers(adata, selected,groups,cutoff=0.05):
+def _gethcmarkers_legacy(adata, selected, groups, cutoff=0.05):
     '''
     Get the hierarchical clustering markers for the selected cluster and the background clusters.
 
@@ -513,7 +563,7 @@ def gethcmarkers(adata, selected,groups,cutoff=0.05):
     for each in groups:
         groupids +=adata[adata.obs['leiden'] == str(each)].obs.index.tolist()
     ids += groupids.copy()
-    new = adata[ids]
+    new = adata[ids].copy()
     new.obs['compare'] = None
     new.obs.loc[new.obs.index.isin(selectedids), "compare"] = 'selected'
     new.obs.loc[new.obs.index.isin(groupids), "compare"] = 'background'
@@ -531,7 +581,52 @@ def gethcmarkers(adata, selected,groups,cutoff=0.05):
     negative_marker= negative_marker[negative_marker['pvals_adj'] <cutoff]
     
     return positive_marker, negative_marker,ref
-def get_stage_hcmarkers(adata,key,use_rep,cutoff=0.05):
+
+
+def _gethcmarkers_optimized(adata, selected, groups, cutoff=0.05, *, stage_dense, cluster_index_cache):
+    ref = [[selected], [selected] + groups]
+    selected_positions = cluster_index_cache[str(selected)]
+    group_positions = np.concatenate(
+        [cluster_index_cache[str(each)] for each in groups],
+        axis=0,
+    ).astype(np.int32, copy=False)
+    ids_positions = np.concatenate([selected_positions, group_positions], axis=0).astype(np.int32, copy=False)
+
+    new = adata[ids_positions].copy()
+    new.obs['compare'] = 'background'
+    new.obs.iloc[: len(selected_positions), new.obs.columns.get_loc('compare')] = 'selected'
+    sc.tl.rank_genes_groups(new,groupby='compare',method='wilcoxon',rankby_abs=False)
+
+    df1 = _build_logfold_dataframe(
+        genenames=adata.var_names.tolist(),
+        mean_compared=np.mean(stage_dense[group_positions], axis=0),
+        mean_selected=np.mean(stage_dense[selected_positions], axis=0),
+    ).set_index('names')
+    df = pd.DataFrame.from_dict(
+        {key: new.uns['rank_genes_groups'][key]['selected'] for key in ['names', 'pvals_adj', 'scores']}
+    ).set_index('names')
+    df = df.join(df1)
+    positive_marker = df[df['log_fold_changes'] > 0]
+    negative_marker = df[df['log_fold_changes'] > 0]
+    positive_marker = positive_marker[positive_marker['pvals_adj'] < cutoff]
+    negative_marker = negative_marker[negative_marker['pvals_adj'] < cutoff]
+    return positive_marker, negative_marker, ref
+
+
+def gethcmarkers(adata, selected,groups,cutoff=0.05, *, stage_dense=None, cluster_index_cache=None):
+    if stage_dense is not None and cluster_index_cache is not None:
+        return _gethcmarkers_optimized(
+            adata,
+            selected,
+            groups,
+            cutoff=cutoff,
+            stage_dense=stage_dense,
+            cluster_index_cache=cluster_index_cache,
+        )
+    return _gethcmarkers_legacy(adata, selected, groups, cutoff=cutoff)
+
+
+def _get_stage_hcmarkers_legacy(adata,key,use_rep,cutoff=0.05):
     '''
     Perform hierarchical clustering on the stage and get the hierarchical clustering markers for each cluster.
 
@@ -570,12 +665,144 @@ def get_stage_hcmarkers(adata,key,use_rep,cutoff=0.05):
         for level in test[each]:
             out_table[each][level] = {}
             out_table[each][level]['chosen'] = {}
-            pos_markers, neg_markers, ref = gethcmarkers(adata,int(each),test[each][level],cutoff=cutoff)
+            pos_markers, neg_markers, ref = _gethcmarkers_legacy(adata,int(each),test[each][level],cutoff=cutoff)
             out_table[each][level]['chosen']['pos'] = pos_markers
             out_table[each][level]['chosen']['neg'] = neg_markers
             out_table[each][level]['ref'] = ref
     return Z,order,out_table
-def get_dataset_hcmarkers(adata,stage_key,cluster_key,use_rep,cutoff=0.05):
+
+
+def _get_stage_hcmarkers_optimized(adata, key, use_rep, cutoff=0.05):
+    if use_rep == 'z':
+        mydendrogram(adata,use_rep='z',groupby=key)
+    elif use_rep == 'umaps':
+        mydendrogramUMAP(adata,use_rep='X_umap',groupby=key)
+
+    stage_dense = _coerce_dense_matrix(adata.X)
+    cluster_index_cache = _build_cluster_index_cache(adata.obs[key].astype(str).to_numpy())
+    test = build_reference_siblings(adata.uns['dendrogram_'+key])
+    Z = adata.uns['dendrogram_'+key]['linkage']
+    order = adata.uns['dendrogram_'+key]['categories_ordered']
+    out_table = {}
+    for each in list(test.keys()):
+        out_table[each] = {}
+        for level in test[each]:
+            out_table[each][level] = {}
+            out_table[each][level]['chosen'] = {}
+            pos_markers, neg_markers, ref = gethcmarkers(
+                adata,
+                int(each),
+                test[each][level],
+                cutoff=cutoff,
+                stage_dense=stage_dense,
+                cluster_index_cache=cluster_index_cache,
+            )
+            out_table[each][level]['chosen']['pos'] = pos_markers
+            out_table[each][level]['chosen']['neg'] = neg_markers
+            out_table[each][level]['ref'] = ref
+    return Z, order, out_table
+
+
+def get_stage_hcmarkers(adata,key,use_rep,cutoff=0.05, strategy='optimized'):
+    if str(strategy).lower() == 'legacy':
+        return _get_stage_hcmarkers_legacy(adata, key, use_rep, cutoff=cutoff)
+    return _get_stage_hcmarkers_optimized(adata, key, use_rep, cutoff=cutoff)
+
+
+def _compute_stage_hcmarkers_worker(args):
+    stage_label, stage_adata, cluster_key, use_rep, cutoff, strategy = args
+    Z, order, markers = get_stage_hcmarkers(
+        stage_adata,
+        cluster_key,
+        use_rep=use_rep,
+        cutoff=cutoff,
+        strategy=strategy,
+    )
+    return stage_label, Z, order, markers
+
+
+def _compare_hcmarker_nested(left, right, *, atol=1e-8, rtol=1e-6, path=''):
+    if isinstance(left, dict) and isinstance(right, dict):
+        if list(left.keys()) != list(right.keys()):
+            return False, f'{path}: key mismatch'
+        for key in left.keys():
+            ok, detail = _compare_hcmarker_nested(
+                left[key],
+                right[key],
+                atol=atol,
+                rtol=rtol,
+                path=f'{path}.{key}' if path else str(key),
+            )
+            if not ok:
+                return ok, detail
+        return True, None
+    if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+        if list(left.columns) != list(right.columns):
+            return False, f'{path}: dataframe columns mismatch'
+        if list(left.index) != list(right.index):
+            return False, f'{path}: dataframe index mismatch'
+        for column in left.columns:
+            left_values = left[column].to_numpy()
+            right_values = right[column].to_numpy()
+            if np.issubdtype(left_values.dtype, np.number) and np.issubdtype(right_values.dtype, np.number):
+                if not np.allclose(left_values, right_values, atol=atol, rtol=rtol, equal_nan=True):
+                    return False, f'{path}: dataframe numeric mismatch in {column}'
+            else:
+                if list(left_values) != list(right_values):
+                    return False, f'{path}: dataframe value mismatch in {column}'
+        return True, None
+    if isinstance(left, np.ndarray) or isinstance(right, np.ndarray):
+        if not np.allclose(np.asarray(left), np.asarray(right), atol=atol, rtol=rtol, equal_nan=True):
+            return False, f'{path}: array mismatch'
+        return True, None
+    if left != right:
+        return False, f'{path}: value mismatch'
+    return True, None
+
+
+def compare_hcmarker_strategies(adata, stage_key, cluster_key, use_rep, cutoff=0.05, cpu_workers=None, atol=1e-8, rtol=1e-6):
+    legacy = get_dataset_hcmarkers(
+        adata,
+        stage_key=stage_key,
+        cluster_key=cluster_key,
+        use_rep=use_rep,
+        cutoff=cutoff,
+        strategy='legacy',
+        cpu_workers=1,
+    )
+    optimized_serial = get_dataset_hcmarkers(
+        adata,
+        stage_key=stage_key,
+        cluster_key=cluster_key,
+        use_rep=use_rep,
+        cutoff=cutoff,
+        strategy='optimized',
+        cpu_workers=1,
+    )
+    optimized_parallel = get_dataset_hcmarkers(
+        adata,
+        stage_key=stage_key,
+        cluster_key=cluster_key,
+        use_rep=use_rep,
+        cutoff=cutoff,
+        strategy='optimized',
+        cpu_workers=cpu_workers,
+    )
+    legacy_vs_serial = _compare_hcmarker_nested(legacy, optimized_serial, atol=atol, rtol=rtol)
+    legacy_vs_parallel = _compare_hcmarker_nested(legacy, optimized_parallel, atol=atol, rtol=rtol)
+    return {
+        'ok': legacy_vs_serial[0] and legacy_vs_parallel[0],
+        'comparisons': {
+            'legacy_vs_optimized_serial': {'ok': legacy_vs_serial[0], 'detail': legacy_vs_serial[1]},
+            'legacy_vs_optimized_parallel': {'ok': legacy_vs_parallel[0], 'detail': legacy_vs_parallel[1]},
+        },
+        'legacy': legacy,
+        'optimized_serial': optimized_serial,
+        'optimized_parallel': optimized_parallel,
+    }
+
+
+def get_dataset_hcmarkers(adata,stage_key,cluster_key,use_rep,cutoff=0.05, strategy='optimized', cpu_workers=None):
     '''
     Perform hierarchical clustering on the dataset and get the hierarchical clustering markers for each stage.
 
@@ -598,23 +825,53 @@ def get_dataset_hcmarkers(adata,stage_key,cluster_key,use_rep,cutoff=0.05):
         The hierarchical clustering markers for each stage. The keys of the dictionary are the cluster information in adata.obs. The values of the dictionary are the positive and negative hierarchical clustering markers for each cluster. The positive and negative hierarchical clustering markers are pandas dataframe with the columns of the names of the genes, the log fold change and the adjusted p-value.
     '''
     hcmarkers = {}
-    for each in list(adata.obs[stage_key].unique()):
-        hcmarkers[str(each)] = {}
-        stage_adata = adata[adata.obs[stage_key] == each]
-        Z,order,markers = get_stage_hcmarkers(stage_adata,cluster_key,use_rep=use_rep,cutoff=cutoff)
-        hcmarkers[str(each)]['Z'] = Z
-        hcmarkers[str(each)]['order'] = order
-        hcmarkers[str(each)]['markers'] = markers
+    stage_labels = [str(each) for each in list(adata.obs[stage_key].unique())]
+    normalized_strategy = str(strategy or 'optimized').strip().lower()
+    worker_count = max(1, int(cpu_workers)) if cpu_workers not in (None, '') else 1
+    if normalized_strategy == 'optimized' and worker_count > 1 and len(stage_labels) > 1:
+        tasks = [
+            (
+                stage_label,
+                adata[adata.obs[stage_key].astype(str) == stage_label].copy(),
+                cluster_key,
+                use_rep,
+                cutoff,
+                normalized_strategy,
+            )
+            for stage_label in stage_labels
+        ]
+        try:
+            mp_context = multiprocessing.get_context('fork')
+        except ValueError:
+            mp_context = None
+        if mp_context is None:
+            results = map(_compute_stage_hcmarkers_worker, tasks)
+        else:
+            max_workers = min(worker_count, len(tasks))
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=max_workers,
+                mp_context=mp_context,
+                initializer=_hierarchical_worker_init,
+            ) as executor:
+                results = list(executor.map(_compute_stage_hcmarkers_worker, tasks))
+        result_map = {stage_label: (Z, order, markers) for stage_label, Z, order, markers in results}
+        for stage_label in stage_labels:
+            Z, order, markers = result_map[stage_label]
+            hcmarkers[stage_label] = {'Z': Z, 'order': order, 'markers': markers}
+        return hcmarkers
+
+    for each in stage_labels:
+        hcmarkers[each] = {}
+        stage_adata = adata[adata.obs[stage_key].astype(str) == each]
+        Z,order,markers = get_stage_hcmarkers(
+            stage_adata,
+            cluster_key,
+            use_rep=use_rep,
+            cutoff=cutoff,
+            strategy=normalized_strategy,
+        )
+        hcmarkers[each]['Z'] = Z
+        hcmarkers[each]['order'] = order
+        hcmarkers[each]['markers'] = markers
     return hcmarkers
 # get_dataset_hcmarkers(adata,'stage','leiden')
-#unit test
-if __name__ == '__main__':
-    import pickle
-    # adata = sc.read_h5ad('/mnt/md0/yumin/UNAGI_old/data/mes/4/org_test/dataset.h5ad')
-    adata = sc.read('/mnt/md0/yumin/UNAGI_pyro/src/small_0/dataset.h5ad')
-    # adata.uns = pickle.load(open('/mnt/md0/yumin/UNAGI_old/data/mes/4/org_test/attribute.pkl', 'rb'))
-    adata.uns = pickle.load(open('/mnt/md0/yumin/UNAGI_pyro/src/small_0/attribute.pkl', 'rb'))
-    
-    adata.uns['hcmarkers'] = get_dataset_hcmarkers(adata,stage_key='stage',cluster_key='leiden',use_rep='umaps')
-    # with open('/mnt/md0/yumin/UNAGI_old/data/mes/4/org_test/attribute_1109_newhc.pkl','wb') as f:
-    #     pickle.dump(adata.uns,f)

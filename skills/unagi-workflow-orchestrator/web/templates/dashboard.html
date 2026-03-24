@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}UNAGI Console{% endblock %}
+
+{% block content %}
+  <div class="dashboard-controls-row">
+    <form class="filter-bar" method="get" action="/">
+      <label>
+        <span>Filter by Status</span>
+        <select name="status">
+          <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+          <option value="queued" {% if status_filter == "queued" %}selected{% endif %}>Queued</option>
+          <option value="running" {% if status_filter == "running" %}selected{% endif %}>Running</option>
+          <option value="retrying" {% if status_filter == "retrying" %}selected{% endif %}>Retrying</option>
+          <option value="succeeded" {% if status_filter == "succeeded" %}selected{% endif %}>Succeeded</option>
+          <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>Failed</option>
+          <option value="cancelled" {% if status_filter == "cancelled" %}selected{% endif %}>Cancelled</option>
+        </select>
+      </label>
+      <button type="submit" class="button-link secondary">Apply</button>
+    </form>
+    
+    <a class="button-link primary" href="/experiments/new">Launch New Training Job</a>
+  </div>
+
+  <div class="dashboard-layout">
+    <aside class="dashboard-sidebar">
+      <section
+        id="system-panel"
+        class="panel custom-sidebar-panel"
+        hx-get="/partials/system"
+        hx-trigger="load, every 5s"
+        hx-swap="innerHTML"
+      >
+        <p class="muted">Loading system metrics...</p>
+      </section>
+    </aside>
+
+    <main class="dashboard-main">
+      <section
+        id="dashboard-panel"
+        class="panel custom-main-panel"
+        hx-get="/partials/dashboard?status={{ status_filter }}"
+        hx-trigger="load, every 5s"
+        hx-swap="innerHTML"
+      >
+        {% include "partials/dashboard_panel.html" %}
+      </section>
+    </main>
+  </div>
+{% endblock %}

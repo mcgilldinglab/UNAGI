@@ -3,10 +3,118 @@
 # 2. the log2FC of the marker is larger than a cutoff
 import json
 import os
+import time
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from ..dynamic_regulatory_networks.processTFs import readIdremJson
+
+
+def _empty_marker_bucket(stages: int) -> dict[str, dict[str, object]]:
+    bucket = {
+        'gene': {},
+        'log2fc': {},
+        'rank': {},
+    }
+    for stage_idx in range(stages):
+        bucket[f'stage{stage_idx}'] = {}
+    bucket['qval'] = {}
+    return bucket
+
+
+def _vectorized_one_dist_bucket(
+    *,
+    temp_change: np.ndarray,
+    temp_names: np.ndarray,
+    temp_stages: list[np.ndarray],
+    temp_background: np.ndarray,
+    cutoff: float,
+    increasing: bool,
+) -> dict[str, dict[str, object]]:
+    stages = len(temp_stages)
+    bucket = _empty_marker_bucket(stages)
+    if temp_change.size == 0:
+        return bucket
+
+    ordered_positions = temp_change.argsort()[::-1] if increasing else temp_change.argsort()
+    flattened_background = temp_background.reshape(-1, 1)
+    mean = flattened_background.mean()
+    std = flattened_background.std()
+    ordered_change = temp_change[ordered_positions]
+    cdf = np.asarray(scoreAgainstBackground(flattened_background, ordered_change, mean=mean, std=std)).reshape(-1)
+    if increasing:
+        keep_mask = cdf >= (1 - cutoff)
+        candidate_pvals = 1 - cdf[keep_mask]
+    else:
+        keep_mask = cdf <= cutoff
+        candidate_pvals = cdf[keep_mask]
+    candidate_positions = ordered_positions[keep_mask]
+    count = int(candidate_positions.size)
+    if count == 0:
+        return bucket
+
+    sort_order = np.argsort(candidate_pvals)
+    pvals = candidate_pvals[sort_order]
+    selected_positions = candidate_positions[sort_order]
+    # Preserve the legacy ordering quirk where the already-sorted p-values are
+    # sorted again before genes are materialized.
+    resort = np.argsort(pvals)
+    pvals = pvals[resort]
+    selected_positions = selected_positions[resort]
+
+    qvals = pvals * count / (np.arange(count) + 1)
+    out_idx = 0
+    for idx, q_val in zip(selected_positions, qvals):
+        if q_val > cutoff:
+            continue
+        key = str(out_idx)
+        bucket['gene'][key] = temp_names[idx]
+        bucket['log2fc'][key] = temp_change[idx]
+        bucket['rank'][key] = out_idx + 1
+        bucket['qval'][key] = q_val
+        for stage_idx in range(stages):
+            bucket[f'stage{stage_idx}'][key] = temp_stages[stage_idx][idx]
+        out_idx += 1
+    return bucket
+
+
+def _getTopMarkers_one_dist_optimized(idrem, background, filename, cutoff):
+    topMarkers = {}
+    tt = readIdremJson(idrem, filename)
+
+    background = np.asarray(background)
+    stages = len(filename.split('.')[0].split('-'))
+    temp = np.array(tt[8])
+    idrem_genes = np.array(temp[1:, 0].tolist())
+    tendency = temp[1:, 1].astype(float)
+    for i in range(2, stages):
+        tendency *= temp[1:, i].astype(float)
+    tendency[tendency < 0] = 0
+    index = [i for i, x in enumerate(tendency) if x <= 0]
+    change = temp[1:, stages].astype(float) - temp[1:, 1].astype(float)
+    change[index] = 0
+    stage_values = [temp[1:, i + 1].astype(float) for i in range(stages)]
+
+    increasing_stop = np.where(change > 0)[0]
+    decreasing_stop = np.where(change < 0)[0]
+
+    topMarkers['increasing'] = _vectorized_one_dist_bucket(
+        temp_change=change[increasing_stop],
+        temp_names=idrem_genes[increasing_stop],
+        temp_stages=[values[increasing_stop] for values in stage_values],
+        temp_background=background[:, increasing_stop],
+        cutoff=float(cutoff),
+        increasing=True,
+    )
+    topMarkers['decreasing'] = _vectorized_one_dist_bucket(
+        temp_change=change[decreasing_stop],
+        temp_names=idrem_genes[decreasing_stop],
+        temp_stages=[values[decreasing_stop] for values in stage_values],
+        temp_background=background[:, decreasing_stop],
+        cutoff=float(cutoff),
+        increasing=False,
+    )
+    return topMarkers
 def scoreAgainstBackground(background,input,all=False,mean=None,std=None):
     '''
     Calculate the p-value of the input gene expression change based on the background gene expression change.
@@ -36,7 +144,7 @@ def scoreAgainstBackground(background,input,all=False,mean=None,std=None):
     
     return cdf
 
-def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=False):
+def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=False, strategy='legacy'):
     '''
     **not updated**
     '''
@@ -239,7 +347,7 @@ def getTopMarkers(idrem, background,filename, cutoff=None,topN=None,one_dist=Fal
 
 
     return topMarkers
-def getTopMarkersFromIDREM(path, background,cutoff=None,topN=None,one_dist=False):
+def getTopMarkersFromIDREM(path, background,cutoff=None,topN=None,one_dist=False, strategy='legacy'):
     '''
     Get the top markers for each track from IDREM results.
     parameters
@@ -267,12 +375,12 @@ def getTopMarkersFromIDREM(path, background,cutoff=None,topN=None,one_dist=False
         if each[0] != '.':
             each = each.split('.')[0]#.split('-')[-1].split('n')
             if one_dist:
-                out[each] = getTopMarkers(path,background,name,cutoff,topN,one_dist=one_dist)
+                out[each] = getTopMarkers(path,background,name,cutoff,topN,one_dist=one_dist, strategy=strategy)
             else:
-                out[each] = getTopMarkers(path,background[each],name,cutoff,topN)
+                out[each] = getTopMarkers(path,background[each],name,cutoff,topN, strategy=strategy)
     return out
 
-def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=None):
+def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=None, strategy='legacy'):
     '''
     Get the top markers for each track from IDREM results and save as a csv file.
     
@@ -296,7 +404,7 @@ def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=
     from pathlib import Path
     save_dir = Path(save_dir)
     background = dict(np.load(background,allow_pickle=True).tolist())
-    out = getTopMarkersFromIDREM(directory,background,topN=topN,cutoff=cutoff)
+    out = getTopMarkersFromIDREM(directory,background,topN=topN,cutoff=cutoff, strategy=strategy)
     results = pd.json_normalize(out)
     results.columns = results.columns.str.split(".").map(tuple)
     results = results.stack([0,1,2]).reset_index(0, drop=True)
@@ -312,7 +420,7 @@ def runGetProgressionMarkercsv(directory,background, save_dir, topN=None,cutoff=
     results.to_csv(save_dir/'mesProgressionMarker_pval_twofilters.csv')
 
 
-def runGetProgressionMarker(directory,background, cutoff=0.05, topN=None):
+def runGetProgressionMarker(directory,background, cutoff=0.05, topN=None, strategy='legacy'):
     '''
     Get the top markers for each track from IDREM results.
     
@@ -332,11 +440,11 @@ def runGetProgressionMarker(directory,background, cutoff=0.05, topN=None):
     out:    dict
         a dictionary of top markers for each track.
     '''
-    out = getTopMarkersFromIDREM(directory,background,cutoff = cutoff,topN=topN)
+    out = getTopMarkersFromIDREM(directory,background,cutoff = cutoff,topN=topN, strategy=strategy)
     return out
 
 
-def runGetProgressionMarker_one_dist(directory,background,size, cutoff=0.05, topN=None):
+def runGetProgressionMarker_one_dist(directory,background,size, cutoff=0.05, topN=None, strategy='optimized'):
     '''
     Get the top markers for each track from IDREM results and consider the whole background as one distribution.
     
@@ -357,9 +465,16 @@ def runGetProgressionMarker_one_dist(directory,background,size, cutoff=0.05, top
         a dictionary of top markers for each track.
     '''
 
+    from ..utils.progress_logger import ProgressLogger
+    logger = ProgressLogger(prefix='[UNAGI-PROGRESSION]')
+    started_at = time.time()
+    logger.log(f"start marker_identification tracks={len(background)} genes={size} cutoff={cutoff} strategy={strategy}")
     one_dist  = []
     for each in background.keys(): 
         one_dist.append(np.array(background[each]))
     background = np.array(one_dist).reshape(-1, size)
-    out = getTopMarkersFromIDREM(directory,background,cutoff = cutoff,one_dist=True)
+    out = getTopMarkersFromIDREM(directory,background,cutoff = cutoff,one_dist=True, strategy=strategy)
+    logger.log(
+        f"finished marker_identification elapsed={ProgressLogger._format_duration(time.time() - started_at)}"
+    )
     return out

@@ -1,0 +1,82 @@
+<div class="section-head">
+  <h2>Server Telemetry</h2>
+  <p class="muted">Live host metrics for the UNAGI server.</p>
+</div>
+
+<div class="telemetry-grid">
+  <article class="telemetry-card">
+    <p>CPU</p>
+    <strong>{{ "%.1f"|format(system.cpu_percent or 0) }}%</strong>
+  </article>
+  <article class="telemetry-card">
+    <p>Memory</p>
+    <strong>{{ "%.1f"|format(system.memory.percent if system.memory else 0) }}%</strong>
+  </article>
+  <article class="telemetry-card">
+    <p>Disk</p>
+    <strong>{{ "%.1f"|format(system.disk.percent if system.disk else 0) }}%</strong>
+  </article>
+  <article class="telemetry-card">
+    <p>GPU Status</p>
+    <strong>{{ "Available" if system.gpus else "Unavailable" }}</strong>
+  </article>
+</div>
+
+{% if system.gpu_error %}
+  <p class="notice">{{ system.gpu_error }}</p>
+{% endif %}
+
+{% if system.gpus %}
+  <div class="gpu-grid">
+    {% for gpu in system.gpus %}
+      <article class="gpu-card">
+        <div class="section-head compact">
+          <h3>GPU {{ gpu.index }}</h3>
+          <p>{{ gpu.name }}</p>
+        </div>
+        <dl class="metric-list">
+          <div><dt>Utilization</dt><dd>{{ "%.1f"|format(gpu.utilization_gpu_percent) }}%</dd></div>
+          <div><dt>Memory</dt><dd>{{ "%.1f"|format(gpu.memory_used_mb) }} / {{ "%.1f"|format(gpu.memory_total_mb) }} MB</dd></div>
+          <div><dt>Temp</dt><dd>{{ "%.1f"|format(gpu.temperature_c) }} C</dd></div>
+        </dl>
+      </article>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if system.processes %}
+  <div class="section-head compact">
+    <h3>Tracked Job Processes</h3>
+    <p class="muted">{{ system.processes|length }} active processes</p>
+  </div>
+  <div class="table-wrap">
+    <table class="job-table compact">
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>PID</th>
+          <th>CPU</th>
+          <th>RSS</th>
+          <th>GPU</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for proc in system.processes %}
+          <tr>
+            <td><a class="job-link" href="/jobs/{{ proc.job_id }}">{{ proc.job_name }}</a></td>
+            <td>{{ proc.pid }}</td>
+            <td>{{ "%.1f"|format(proc.cpu_percent or 0) }}%</td>
+            <td>{{ "{:,.0f}".format((proc.memory_rss_bytes or 0) / 1048576) }} MB</td>
+            <td>
+              {% if proc.gpu %}
+                {{ proc.gpu.gpu_indices|join(", ") }} · {{ "%.1f"|format(proc.gpu.memory_used_mb or 0) }} MB
+              {% else %}
+                n/a
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

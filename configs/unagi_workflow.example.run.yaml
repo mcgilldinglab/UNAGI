@@ -1,0 +1,52 @@
+random_seed: 8848
+preflight:
+  allow_existing_outputs: true
+data:
+  path: UNAGI/data/example
+  stage_key: stage
+  total_stage: 4
+  label_key: name.simple
+  neighbors: 25
+  threads: 20
+  calculate_cell_graph: true
+  fast_mode: true
+training:
+  task: example_agent
+  dist: ziln
+  GPU: true
+  device: cuda:0
+  epoch_initial: 1
+  epoch_iter: 5
+  max_iter: 3
+  BATCHSIZE: 560
+  adversarial: true
+  GCN: true
+species: Human
+CPO:
+  anchor_neighbors: 15
+  max_neighbors: 35
+  min_neighbors: 10
+  resolution_min: 0.8
+  resolution_max: 1.5
+iDREM:
+  Normalize_data: Log_normalize_data
+  Minimum_Absolute_Log_Ratio_Expression: 0.5
+  Convergence_Likelihood: 0.001
+  Minimum_Standard_Deviation: 0.5
+run:
+  # Keep null to prefer the bundled repo-local idrem/ directory automatically.
+  # Set an explicit path only if you want to override the bundled runtime.
+  idrem_dir: null
+  auto_resolve_idrem: true
+  # Clone is only used as a fallback if neither a bundled nor user-provided iDREM is found.
+  auto_clone_idrem: true
+  idrem_clone_url: https://github.com/phoenixding/idrem
+  idrem_install_dir: idrem
+  idrem_scan_roots:
+  - ..
+  idrem_scan_depth: 4
+  persist_resolved_idrem_dir: false
+  CPO: true
+  resume: false
+  resume_iteration: null
+  connect_edges_cutoff: 0.05

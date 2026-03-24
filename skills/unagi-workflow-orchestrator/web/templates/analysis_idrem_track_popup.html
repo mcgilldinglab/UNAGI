@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Track iDREM Summary · UNAGI Console{% endblock %}
+
+{% block content %}
+  <section class="hero hero-detail">
+    <div>
+      <p class="hero-kicker">Track iDREM Summary</p>
+      <h2>{{ track_label or track_key }}</h2>
+      <p class="hero-text">Interactive summary for the selected temporal track, including path curves, genes, regulators, and enrichment.</p>
+    </div>
+    <div class="hero-actions">
+      <a class="button-link secondary" href="/analysis/{{ job.job_id }}/visualizations">Back To Analysis</a>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div
+      class="artifact-card idrem-track-panel idrem-track-popup"
+      data-idrem-track-panel
+      data-track-url="{{ track_url }}"
+    >
+      <p class="muted">Loading track iDREM summary...</p>
+    </div>
+  </section>
+{% endblock %}

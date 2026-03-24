@@ -1,0 +1,4 @@
+interface:
+  display_name: "UNAGI Workflow Orchestrator"
+  short_description: "Run and monitor long UNAGI workflow jobs"
+  default_prompt: "Use $unagi-workflow-orchestrator to run UNAGI training with submit/status/cancel/resume."
