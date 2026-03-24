@@ -10,7 +10,11 @@ _IDREM_JSON_CACHE = {}
 
 
 def _default_idrem_dir_from_repo() -> Path:
-    return Path(__file__).resolve().parents[2] / "idrem"
+    repo_root = Path(__file__).resolve().parents[2]
+    third_party = repo_root / "third_party" / "idrem"
+    if third_party.exists():
+        return third_party
+    return repo_root / "idrem"
 
 
 def _idrem_json_fingerprint(path):

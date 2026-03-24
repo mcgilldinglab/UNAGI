@@ -34,7 +34,7 @@ iDREM:
   Convergence_Likelihood: 0.001
   Minimum_Standard_Deviation: 0.5
 run:
-  # Keep null to prefer the bundled repo-local idrem/ directory automatically.
+  # Keep null to prefer the vendored third-party runtime at third_party/idrem automatically.
   # Set an explicit path only if you want to override the bundled runtime.
   idrem_dir: null
   auto_resolve_idrem: true

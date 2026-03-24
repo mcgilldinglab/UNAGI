@@ -18,7 +18,7 @@ The skill is intended to be installed locally from a cloned UNAGI checkout using
 - Require one active Python virtual environment before install checks or test examples. A conda environment is recommended, but a venv is acceptable.
 - Run `python skills/unagi-workflow-orchestrator/scripts/check_python_env.py` first.
 - If no virtual environment is detected, stop and ask the user to specify one virtual/conda environment, then continue only after activation.
-- Prefer the bundled repo-local `idrem/` runtime automatically when it exists.
+- Prefer the vendored third-party runtime at `third_party/idrem/` automatically when it exists.
 - If the user wants a different iDREM copy, set `run.idrem_dir` or `UNAGI_IDREM_DIR` to a directory that contains `idrem.jar`, `TFInput/`, and the rest of the iDREM runtime assets.
 - Run commands from the UNAGI repository root.
 

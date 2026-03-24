@@ -51,7 +51,7 @@ UNAGI installation
 pip install scUNAGI
 ```
 
-This installs the Python package and CLI. The repo-local YAML templates, tutorials, and workflow skill are not part of the standalone pip install.
+This installs the Python package and CLI. The repo-local YAML templates, tutorials, vendored third-party assets, and workflow skill are not part of the standalone pip install.
 
 ### Option 2: Install from Github (Recommended)
 
@@ -63,7 +63,7 @@ cd UNAGI
 pip install .
 ```
 
-The repository checkout includes a bundled `idrem/` directory. When you run UNAGI from the cloned repo, UNAGI will prefer that bundled iDREM runtime automatically.
+The repository checkout includes a vendored third-party iDREM runtime under `third_party/idrem/`. When you run UNAGI from the cloned repo, UNAGI will prefer that bundled dependency automatically.
 
 ### Local skill install
 
@@ -122,7 +122,7 @@ Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/
 
 **iDREM runtime:**
 
-The GitHub repo includes a bundled `idrem/` directory, and UNAGI will use it automatically when running from the cloned repo.
+The GitHub repo includes a vendored third-party iDREM runtime under `third_party/idrem/`, and UNAGI will use it automatically when running from the cloned repo.
 
 If you want to use a different iDREM copy, override it with:
 - `run.idrem_dir` in your workflow YAML

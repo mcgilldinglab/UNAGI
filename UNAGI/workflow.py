@@ -129,8 +129,8 @@ def _is_valid_idrem_dir(path: Path) -> bool:
 def _bundled_idrem_dirs() -> List[Path]:
     repo_root = Path(__file__).resolve().parent.parent
     return [
-        repo_root / "idrem",
         repo_root / "third_party" / "idrem",
+        repo_root / "idrem",
     ]
 
 
