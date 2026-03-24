@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Run Analysis · UNAGI Console{% endblock %}
+
+{% block content %}
+  <section class="hero hero-detail">
+    <div>
+      <p class="hero-kicker">Analysis Console</p>
+      <h2>Launch Analysis For Iteration {{ iteration }}</h2>
+      <p class="hero-text">This analysis will run against the finished staged dataset from training job <code>{{ job.job_id }}</code>.</p>
+    </div>
+    <div class="header-chip">
+      <span>{{ job.job_name }}</span>
+      <span>iter {{ iteration }}</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head">
+      <h2>Analysis Parameters</h2>
+      <p class="muted">Template {{ template_path or "none" }}</p>
+    </div>
+
+    <form id="analysis-form" class="console-form">
+      <input type="hidden" name="training_job_id" value="{{ job.job_id }}">
+      <input type="hidden" name="iteration" value="{{ iteration }}">
+
+      <div class="form-grid">
+        <label><span>Job Name</span><input type="text" name="job_name" placeholder="Optional display name"></label>
+        <label><span>Template Path</span><input id="analysis_template_path" type="text" name="template_path" value="{{ initial['template_path'] }}"></label>
+        <label><span>Sampling Times</span><input type="number" name="random_background_sampling_times" value="{{ initial['random_background_sampling_times'] }}"></label>
+        <label><span>Run Perturbation</span>
+          <select name="run_perturbation">
+            <option value="true" {% if initial['run_perturbation'] == 'true' %}selected{% endif %}>true</option>
+            <option value="false" {% if initial['run_perturbation'] != 'true' %}selected{% endif %}>false</option>
+          </select>
+        </label>
+        <label><span>Perturb Change</span><input type="text" name="perturb_change" value="{{ initial['perturb_change'] }}"></label>
+        <label><span>Direction Mode</span>
+          <select name="direction_mode">
+            <option value="two_sided" {% if initial['direction_mode'] != 'one_sided' %}selected{% endif %}>two_sided</option>
+            <option value="one_sided" {% if initial['direction_mode'] == 'one_sided' %}selected{% endif %}>one_sided</option>
+          </select>
+          <span class="muted">One-sided and two-sided post-training analyses use different random backgrounds.</span>
+        </label>
+        <label><span>Overall Perturbation Analysis</span>
+          <select name="overall_perturbation_analysis">
+            <option value="true" {% if initial['overall_perturbation_analysis'] != 'false' %}selected{% endif %}>true</option>
+            <option value="false" {% if initial['overall_perturbation_analysis'] == 'false' %}selected{% endif %}>false</option>
+          </select>
+        </label>
+        <label><span>Perturbed Tracks</span><input type="text" name="perturbed_tracks" value="{{ initial['perturbed_tracks'] }}"></label>
+        <label><span>Customized Pathway</span><input id="customized_pathway" type="text" name="customized_pathway" value="{{ initial['customized_pathway'] }}"></label>
+        <label><span>Customized Drug</span><input id="customized_drug" type="text" name="customized_drug" value="{{ initial['customized_drug'] }}"></label>
+        <label><span>CMAP Dir</span><input id="cmap_dir" type="text" name="cmap_dir" value="{{ initial['cmap_dir'] }}"></label>
+        <label><span>Ignore Pathway Perturbation</span>
+          <select name="ignore_pathway_perturabtion">
+            <option value="false" {% if initial['ignore_pathway_perturabtion'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['ignore_pathway_perturabtion'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Ignore Drug Perturbation</span>
+          <select name="ignore_drug_perturabtion">
+            <option value="false" {% if initial['ignore_drug_perturabtion'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['ignore_drug_perturabtion'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Centroid</span>
+          <select name="centroid">
+            <option value="false" {% if initial['centroid'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['centroid'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Ignore Hcmarkers</span>
+          <select name="ignore_hcmarkers">
+            <option value="false" {% if initial['ignore_hcmarkers'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['ignore_hcmarkers'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Ignore Dynamic Markers</span>
+          <select name="ignore_dynamic_markers">
+            <option value="false" {% if initial['ignore_dynamic_markers'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['ignore_dynamic_markers'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Max Retries</span><input type="number" name="max_retries" value="0"></label>
+        <label><span>Retry Delay Sec</span><input type="number" name="retry_delay_sec" value="60"></label>
+      </div>
+
+      <label class="full-width">
+        <span>Advanced YAML</span>
+        <textarea name="advanced_yaml" rows="20">{{ advanced_yaml }}</textarea>
+      </label>
+    </form>
+
+    <div class="action-row">
+      <button class="button-link primary" type="button" onclick="window.unagiConsole.submitForm('analysis-form', '/api/analysis', 'analysis-result', { redirectOnSuccess: true })">Submit Analysis Job</button>
+    </div>
+    <pre id="analysis-result" class="json-result hidden-result"></pre>
+  </section>
+
+  <section class="panel">
+    <div class="section-head">
+      <h2>Path Picker</h2>
+      <p class="muted">Allowed roots: {{ allowed_roots|join(', ') }}</p>
+    </div>
+    <div class="path-picker-controls">
+      <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target=customized_pathway&kind=path" hx-target="#analysis-path-picker" hx-swap="innerHTML">Browse Pathway Paths</button>
+      <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target=customized_drug&kind=path" hx-target="#analysis-path-picker" hx-swap="innerHTML">Browse Drug Paths</button>
+      <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target=cmap_dir&kind=dir" hx-target="#analysis-path-picker" hx-swap="innerHTML">Browse CMAP Dirs</button>
+      <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target=analysis_template_path&kind=path" hx-target="#analysis-path-picker" hx-swap="innerHTML">Browse Template Paths</button>
+    </div>
+    <div id="analysis-path-picker" class="subpanel">
+      <p class="muted">Choose a browser target above.</p>
+    </div>
+  </section>
+{% endblock %}

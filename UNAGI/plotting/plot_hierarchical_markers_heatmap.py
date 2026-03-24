@@ -1,81 +1,107 @@
-import scanpy as sc
+from __future__ import annotations
+
+import os
+from pathlib import Path
 
 
-def hierarchical_static_markers_heatmap(adata,stage,cluster,level,n_genes,stage_key,celltype_key,protein_encoding_gene=True,min_logfoldchange=1,dpi=None,save=None):
-    '''
-    Plot the heatmap of the hierarchical static markers of the chosen cluster and its siblings.
+def _prepare_scanpy():
+    os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba_cache")
+    Path(os.environ["NUMBA_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("JOBLIB_MULTIPROCESSING", "0")
+    import scanpy as sc
 
-    Parameters
-    ----------
-    adata : AnnData object
-        Annotated data matrix.
-    stage : int
-        Time point of the data.
-    cluster : int
-        Cluster id.
-    level : int
-        Level of the cluster.
-    n_genes : int
-        Number of genes to plot.
-    stage_key : str
-        Key for stage column in adata.obs.
-    celltype_key : str
-        Key for cell type column in adata.obs.
-    protein_encoding_gene : bool, optional
-        Whether to plot only protein encoding genes. The default is True.
-    min_logfoldchange : int, optional
-        Minimum log fold change. The default is 1.
-    dpi : int, optional
-        The default is None.
-    save : str, optional
-        Path to save the figure. The default is None.
+    return sc
 
-    Returns
-    ----------------
-    None
-    '''
-    import warnings
-    warnings.filterwarnings('ignore')
+
+def hierarchical_static_markers_heatmap(
+    adata,
+    stage,
+    cluster,
+    level,
+    n_genes,
+    stage_key,
+    celltype_key,
+    protein_encoding_gene=True,
+    min_logfoldchange=1,
+    dpi=None,
+    save=None,
+):
+    """
+    Plot a hierarchical-marker heatmap for one stage/cluster branch.
+    """
+    sc = _prepare_scanpy()
+    if "hcmarkers" not in adata.uns:
+        raise KeyError("Missing adata.uns['hcmarkers']. Run downstream analysis first.")
+    stage_s = str(stage)
+    if stage_s not in adata.uns["hcmarkers"]:
+        raise KeyError(f"Stage {stage_s} not found in adata.uns['hcmarkers']")
+    if stage_key not in adata.obs:
+        raise KeyError(f"Missing stage key in adata.obs: {stage_key}")
+    if celltype_key not in adata.obs:
+        raise KeyError(f"Missing cell type key in adata.obs: {celltype_key}")
+
     if protein_encoding_gene:
-        protein_coding_genes = []
-        for each in adata.var.index:
-            if each[:2] != 'AC' and each[:2] != 'AL' and each[:2] != 'AP' and each[:4] != 'LINC' and '.' not in each:
-                protein_coding_genes.append(each)
-        adata = adata[:,protein_coding_genes]
-    if dpi is None:
-        sc.set_figure_params(scanpy=True, dpi=80,dpi_save=300)
-    else:
-        sc.set_figure_params(scanpy=True, dpi=80,dpi_save=dpi)
-    adata.obs[stage_key] = adata.obs[stage_key].astype(str)
-    adata = adata[adata.obs[stage_key] == str(stage)]
-    temp_clustertype = {}
-    choice = adata.uns['hcmarkers'][str(stage)]['markers'][str(cluster)][str(level)]['ref'][0]
-    scope = adata.uns['hcmarkers'][str(stage)]['markers'][str(cluster)][str(level)]['ref'][1]
-    scope.remove(choice[0])
-    adata.obs['leiden'] = adata.obs['leiden'].astype(int)
-    choice_adata = adata[adata.obs['leiden'].isin(choice)]
-    scope_adata = adata[adata.obs['leiden'].isin(scope)]
-    choice_adata.obs['subset'] = 'chosen'
-    scope_adata.obs['subset'] = 'siblings'
-    apat = choice_adata.concatenate(scope_adata)
-    apat.obs['subset'] = apat.obs['subset'].astype('category')
-    apat.layers['scaled'] = sc.pp.scale(apat, copy=True).X
-    marker_genes = []
-    pos = []
-    for i in range(len(temp_clustertype.keys())):
-        temp = [i*10,i*10+9]
-        pos.append(tuple(temp))
-    sc.tl.rank_genes_groups(apat,'subset', method='wilcoxon',  n_genes=n_genes)
-    apat.obs['leiden'] = apat.obs['leiden'].astype(str)
-    marker_genes = apat.uns['rank_genes_groups']['names']['chosen']
-    if save is not None:
-        sc.pl.heatmap(apat, marker_genes, groupby=['subset',celltype_key,'leiden'],layer='scaled',swap_axes=True,vmin=-0.5, vmax=0.5, cmap='RdBu_r',figsize=(20, 16),save = save)
-    else:
-        # sc.pl.heatmap(apat, marker_genes, groupby=['subset',celltype_key,'leiden'],layer='scaled',swap_axes=True,vmin=-0.5, vmax=0.5, cmap='RdBu_r',figsize=(20, 16))
-        sc.pl.rank_genes_groups_heatmap(apat,groupby=['subset',celltype_key,'leiden'],layer='scaled', min_logfoldchange=min_logfoldchange,n_genes=n_genes,swap_axes=True, use_raw=False,show_gene_labels=True,vmin=-0.5, vmax=0.5, cmap='RdBu_r',var_group_positions=pos,dendrogram=False,var_group_rotation=0,figsize=(20, 16))
+        keep = [
+            g
+            for g in adata.var_names
+            if not (
+                g.startswith("AC")
+                or g.startswith("AL")
+                or g.startswith("AP")
+                or g.startswith("LINC")
+                or "." in g
+            )
+        ]
+        adata = adata[:, keep].to_memory() if adata.isbacked else adata[:, keep].copy()
 
-if __name__ == '__main__':
-    import pickle
-    adata = sc.read_h5ad('small_1/dataset.h5ad')
-    adata.uns = pickle.load(open('small_1/attribute.pkl', 'rb'))
-    hierarchical_static_markers_heatmap(adata ,stage=0,choice=3,level=1,n_genes=20, stage_key = 'stage', celltype_key='ident', protein_encoding_gene=True, min_logfoldchange=1,dpi=100, save='test.png')
+    sc.set_figure_params(scanpy=True, dpi=80, dpi_save=(dpi or 300))
+    stage_adata = adata[adata.obs[stage_key].astype(str) == stage_s].to_memory() if adata.isbacked else adata[adata.obs[stage_key].astype(str) == stage_s].copy()
+    if stage_adata.n_obs == 0:
+        raise ValueError(f"No cells found for {stage_key}={stage_s}")
+
+    marker_meta = stage_adata.uns["hcmarkers"][stage_s]["markers"][str(cluster)][str(level)]
+    chosen = marker_meta["ref"][0]
+    sibling_scope = [x for x in marker_meta["ref"][1] if x not in chosen]
+
+    stage_adata.obs["leiden"] = stage_adata.obs["leiden"].astype(str)
+    chosen_adata = stage_adata[stage_adata.obs["leiden"].isin([str(v) for v in chosen])].to_memory() if stage_adata.isbacked else stage_adata[stage_adata.obs["leiden"].isin([str(v) for v in chosen])].copy()
+    siblings_adata = stage_adata[stage_adata.obs["leiden"].isin([str(v) for v in sibling_scope])].to_memory() if stage_adata.isbacked else stage_adata[stage_adata.obs["leiden"].isin([str(v) for v in sibling_scope])].copy()
+    chosen_adata.obs["_subset"] = "chosen"
+    siblings_adata.obs["_subset"] = "siblings"
+    compare_adata = chosen_adata.concatenate(siblings_adata)
+    compare_adata.obs["_subset"] = compare_adata.obs["_subset"].astype("category")
+    compare_adata.layers["scaled"] = sc.pp.scale(compare_adata, copy=True).X
+    sc.tl.rank_genes_groups(compare_adata, "_subset", method="wilcoxon", n_genes=n_genes)
+
+    marker_genes = list(compare_adata.uns["rank_genes_groups"]["names"]["chosen"])[:n_genes]
+    if save is not None:
+        sc.pl.heatmap(
+            compare_adata,
+            marker_genes,
+            groupby=["_subset", celltype_key, "leiden"],
+            layer="scaled",
+            swap_axes=True,
+            vmin=-0.5,
+            vmax=0.5,
+            cmap="RdBu_r",
+            figsize=(20, 16),
+            save=save,
+            show=False,
+        )
+    else:
+        sc.pl.heatmap(
+            compare_adata,
+            marker_genes,
+            groupby=["_subset", celltype_key, "leiden"],
+            layer="scaled",
+            swap_axes=True,
+            vmin=-0.5,
+            vmax=0.5,
+            cmap="RdBu_r",
+            figsize=(20, 16),
+            show=True,
+        )
+
+
+__all__ = ["hierarchical_static_markers_heatmap"]
+

@@ -7,9 +7,12 @@ import scanpy as sc
 import numpy as np
 from ..dynamic_regulatory_networks.processIDREM import getClusterPaths, getClusterIdrem, runIdrem
 from ..dynamic_regulatory_networks.processTFs import getTFs, getTargetGenes, matchTFandTGWithFoldChange, updataGeneTablesWithDecay
+from ..utils.progress_logger import ProgressLogger
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import csr_matrix
 from pathlib import Path
+import json
+import time
 class UNAGI_runner:
     '''
     The UNAGI_runner class is used to set up the hyperparameters to run iDREM, find clustering optimal parameters and run the UNAGI model . It takes the following 
@@ -22,7 +25,7 @@ class UNAGI_runner:
     trainer: the trainer class to train the UNAGI model
     idrem_dir: the directory of the idrem software
     '''
-    def __init__(self,data_path,total_stage,iteration,trainer,label_key,idrem_dir,adversarial=True,GCN=True,connect_edges_cutoff=0.05):
+    def __init__(self,data_path,total_stage,iteration,trainer,label_key,idrem_dir,adversarial=True,GCN=True,connect_edges_cutoff=0.05,max_iter=None,enable_training_plots=False):
         self.data_path = data_path
         self.total_stage = total_stage
         self.iteration = iteration
@@ -37,6 +40,64 @@ class UNAGI_runner:
         self.adversarial = adversarial
         self.GCN = GCN
         self.connect_edges_cutoff = connect_edges_cutoff
+        self.max_iter = max_iter
+        self.progress_logger = ProgressLogger(prefix='[UNAGI-TRAIN]')
+        self.enable_training_plots = enable_training_plots
+        self._latent_cache = {}
+        self._neighbor_cache = {}
+
+    def _log_stage(self, stage, status):
+        max_iter = self.max_iter if self.max_iter is not None else "unknown"
+        self.progress_logger.log(
+            f"iteration={self.iteration} max_iter={max_iter} stage={stage} status={status}"
+        )
+
+    def _record_stage_timing(self, stage_timings, stage_name, started_at, **extra):
+        stage_timings[stage_name] = {
+            'seconds': time.time() - started_at,
+            **extra,
+        }
+
+    def _write_training_stage_timings(self, stage_timings, *, run_started_at):
+        timings_path = self.data_path / str(self.iteration) / 'training_stage_timings.json'
+        timings_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            'iteration': int(self.iteration),
+            'total_seconds': time.time() - run_started_at,
+            'stages': stage_timings,
+        }
+        timings_path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+
+    def _latent_cache_key(self, adata):
+        checkpoint = self.data_path / 'model_save' / f'{self.trainer.modelName}_{self.iteration}.pth'
+        if not checkpoint.exists() and self.iteration != 0:
+            checkpoint = self.data_path / 'model_save' / f'{self.trainer.modelName}_{self.iteration - 1}.pth'
+        stat = checkpoint.stat() if checkpoint.exists() else None
+        return (
+            int(self.iteration),
+            int(adata.n_obs),
+            int(adata.n_vars),
+            float(stat.st_mtime) if stat is not None else None,
+            int(stat.st_size) if stat is not None else None,
+        )
+
+    def _get_cached_latent_representation(self, adata, stage):
+        cache_key = self._latent_cache_key(adata)
+        cached = self._latent_cache.get(stage)
+        if cached is not None and cached.get('key') == cache_key:
+            return cached['z_locs'], cached['z_scales'], cached['cell_embeddings']
+        z_locs, z_scales, cell_embeddings = self.trainer.get_latent_representation(
+            adata,
+            self.iteration,
+            self.data_path,
+        )
+        self._latent_cache[stage] = {
+            'key': cache_key,
+            'z_locs': z_locs,
+            'z_scales': z_scales,
+            'cell_embeddings': cell_embeddings,
+        }
+        return z_locs, z_scales, cell_embeddings
     def load_stage_data(self):
         '''
         Load the stage data from the data_path. The stage data will be stored in the adata_stages list. The all_in_one adata will be used for the UNAGI model training.
@@ -74,28 +135,50 @@ class UNAGI_runner:
         reps: list
             the latent representations of the single cell data.
         '''
-        z_locs, z_scales, cell_embeddings = self.trainer.get_latent_representation(adata,self.iteration,self.data_path)
+        z_locs, z_scales, cell_embeddings = self._get_cached_latent_representation(adata, stage)
         adata.obsm['z'] = cell_embeddings
         if self.neighbor_parameters is None:
-            sc.pp.neighbors(adata, use_rep="z",n_neighbors=max_neighbors+1,method='umap')
+            desired_neighbors = max_neighbors + 1
+            sc.pp.neighbors(adata, use_rep="z",n_neighbors=desired_neighbors,method='umap')
+            self._neighbor_cache[stage] = {
+                'latent_key': self._latent_cache_key(adata),
+                'n_neighbors': desired_neighbors,
+            }
             return adata
-        if 'connectivities' in adata.obsp.keys():
-            del adata.obsp['connectivities']
-            del adata.obsp['distances']
-        z_adj = kneighbors_graph(adata.obsm['z'], self.neighbor_parameters[stage], mode='connectivity', include_self=True,n_jobs=20)
-        adata.obsp['connectivities'] = z_adj
-        adata.obsp['distances'] = kneighbors_graph(adata.obsm['z'], self.neighbor_parameters[stage], mode='distance', include_self=True,n_jobs=20)
-        if CPO is False:
-            sc.pp.neighbors(adata, use_rep="z",n_neighbors=self.neighbor_parameters[stage],method='umap')
+        desired_neighbors = self.neighbor_parameters[stage]
+        cached_neighbors = self._neighbor_cache.get(stage)
+        latent_key = self._latent_cache_key(adata)
+        if not (
+            cached_neighbors is not None
+            and cached_neighbors.get('latent_key') == latent_key
+            and cached_neighbors.get('n_neighbors') == desired_neighbors
+            and 'connectivities' in adata.obsp
+            and 'distances' in adata.obsp
+        ):
+            if 'connectivities' in adata.obsp.keys():
+                del adata.obsp['connectivities']
+                del adata.obsp['distances']
+            if CPO is False:
+                sc.pp.neighbors(adata, use_rep="z",n_neighbors=desired_neighbors,method='umap')
+            else:
+                z_adj = kneighbors_graph(adata.obsm['z'], desired_neighbors, mode='connectivity', include_self=True,n_jobs=20)
+                adata.obsp['connectivities'] = z_adj
+                adata.obsp['distances'] = kneighbors_graph(adata.obsm['z'], desired_neighbors, mode='distance', include_self=True,n_jobs=20)
+            self._neighbor_cache[stage] = {
+                'latent_key': latent_key,
+                'n_neighbors': desired_neighbors,
+            }
         sc.tl.leiden(adata,resolution = self.resolutions[stage])
         sc.tl.paga(adata)
-        sc.pl.paga(adata,show=False)
+        sc.pl.paga(adata, plot=False, show=False)
         # sc.tl.umap(adata, min_dist=0.25/self.resolution_coefficient*len(adata),init_pos='paga')
         sc.tl.umap(adata, min_dist=0.05,init_pos='paga')
         rep=[z_locs, z_scales]
         adata.obs['ident'] = 'None'
         adata.obs['leiden'] = adata.obs['leiden'].astype(str)
-        sc.pl.umap(adata,color='leiden',show=False)
+        if self.enable_training_plots:
+            sc.pl.paga(adata,show=False)
+            sc.pl.umap(adata,color='leiden',show=False)
         adata,averageValue,reps = updateAttributes(adata,rep)#add top genes, cell types attributes and get average cluster value
   
         adata.obs['leiden']=adata.obs['leiden'].astype(str)
@@ -103,7 +186,8 @@ class UNAGI_runner:
             allzeros = np.zeros_like(adata.X)
             allzeros = csr_matrix(allzeros)
             adata.layers['geneWeight'] = allzeros
-        sc.pl.umap(adata,color='ident',show=False)
+        if self.enable_training_plots:
+            sc.pl.umap(adata,color='ident',show=False)
         adata.write(self.data_path / f'{self.iteration}'/'stagedata'/f'{stage}.h5ad',compression='gzip',compression_opts=9)
         return adata,averageValue,reps
     
@@ -148,8 +232,7 @@ class UNAGI_runner:
             else:
                 self.adata_stages[i] = self.annotate_stage_data(self.adata_stages[i], i,CPO=True,max_neighbors=self.max_neighbors)
         if not self.setup_CPO:
-            print('CPO parameters not specified, using default parameters')
-            print('anchor_neighbors: 15, max_neighbors: 35, min_neighbors: 10, resolution_min: 0.8, resolution_max: 1.5')
+            print("[UNAGI] CPO parameters not provided, using defaults")
             self.neighbor_parameters, anchor_index = get_neighbors(self.adata_stages, num_cells,anchor_neighbors=15,max_neighbors=35,min_neighbors=10)
             self.resolutions,_ = auto_resolution(self.adata_stages, anchor_index, self.neighbor_parameters, 0.8, 1.5)
         else:
@@ -208,7 +291,7 @@ class UNAGI_runner:
             the species of the single cell data.
         '''
 
-        print('Species: Running on %s data'%species)
+        print(f"[UNAGI] species={species}")
         self.species = species
     def run_IDREM(self):
         '''
@@ -222,16 +305,15 @@ class UNAGI_runner:
         idrem = np.array(idrem)
         self.genenames =np.array(list(self.adata_stages[0].var.index.values))
         if not self.setup_IDREM:
-            print('IDREM parameters are not set up, using default parameters')
-            print('Minimum_Absolute_Log_Ratio_Expression: 0.5, Convergence_Likelihood: 0.001, Minimum_Standard_Deviation: 0.5')
+            print("[UNAGI] iDREM parameters not provided, using defaults")
             if self.species is None:
-                print('Human species is used as default')
+                print("[UNAGI] species not set for iDREM, defaulting to Human")
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir)
             else:
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species)
         else:
             if self.species is None:
-                print('Human species is used as default')
+                print("[UNAGI] species not set for iDREM, defaulting to Human")
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
             else:
                 runIdrem(paths,self.data_path,idrem,self.genenames,self.iteration,self.idrem_dir,species=self.species,Minimum_Absolute_Log_Ratio_Expression=self.Minimum_Absolute_Log_Ratio_Expression, Convergence_Likelihood=self.Convergence_Likelihood, Minimum_Standard_Deviation=self.Minimum_Standard_Deviation)
@@ -269,19 +351,64 @@ class UNAGI_runner:
         '''
         Run the UNAGI pipeline.
         '''
+        run_started_at = time.time()
+        stage_timings = {}
+        self._log_stage('load_staged_data', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: loading staged data")
+        stage_started_at = time.time()
         self.load_stage_data()
+        self._log_stage('load_staged_data', 'DONE')
+        self._record_stage_timing(stage_timings, 'load_staged_data', stage_started_at)
         if self.iteration == 0:
             is_iterative = False
         else:
             is_iterative = True
+        self._log_stage('training_model', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: training model")
+        stage_started_at = time.time()
         self.trainer.train(self.all_in_one,self.iteration,target_dir=self.data_path,adversarial=self.adversarial,is_iterative=is_iterative)
+        self._log_stage('training_model', 'DONE')
+        self._record_stage_timing(stage_timings, 'training_model', stage_started_at)
+        self._log_stage('cpo', 'START')
+        stage_started_at = time.time()
         if CPO:
+            print(f"[UNAGI] iteration {self.iteration}: running CPO")
             self.run_CPO()
         else:
             self.resolutions = [1.0]*self.total_stage
             self.neighbor_parameters = [30]*self.total_stage
+            print(f"[UNAGI] iteration {self.iteration}: skip CPO (fixed resolution/neighbors)")
+        self._log_stage('cpo', 'DONE')
+        self._record_stage_timing(stage_timings, 'cpo', stage_started_at)
+        self._log_stage('update_stage_attributes', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: updating stage attributes")
+        stage_started_at = time.time()
         self.update_cell_attributes(CPO)
+        self._log_stage('update_stage_attributes', 'DONE')
+        self._record_stage_timing(stage_timings, 'update_stage_attributes', stage_started_at)
+        self._log_stage('build_temporal_dynamics_graph', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: building temporal dynamics graph")
+        stage_started_at = time.time()
         self.build_temporal_dynamics_graph()
+        self._log_stage('build_temporal_dynamics_graph', 'DONE')
+        self._record_stage_timing(stage_timings, 'build_temporal_dynamics_graph', stage_started_at)
+        self._log_stage('run_idrem', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: running iDREM")
+        stage_started_at = time.time()
         self.run_IDREM()
+        self._log_stage('run_idrem', 'DONE')
+        self._record_stage_timing(stage_timings, 'run_idrem', stage_started_at)
+        self._log_stage('update_gene_weights', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: updating gene weights")
+        stage_started_at = time.time()
         self.update_gene_weights_table()
+        self._log_stage('update_gene_weights', 'DONE')
+        self._record_stage_timing(stage_timings, 'update_gene_weights', stage_started_at)
+        self._log_stage('build_merged_iteration_dataset', 'START')
+        print(f"[UNAGI] iteration {self.iteration}: building merged iteration dataset")
+        stage_started_at = time.time()
         self.build_iteration_dataset()
+        self._log_stage('build_merged_iteration_dataset', 'DONE')
+        self._record_stage_timing(stage_timings, 'build_merged_iteration_dataset', stage_started_at)
+        self._write_training_stage_timings(stage_timings, run_started_at=run_started_at)
+        print(f"[UNAGI] iteration {self.iteration}: completed")

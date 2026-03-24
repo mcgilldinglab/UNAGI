@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Visualizations · UNAGI Console{% endblock %}
+
+{% block content %}
+  <section class="hero hero-detail">
+    <div>
+      <p class="hero-kicker">Analysis Visualizations</p>
+      <h2>{{ job.job_name }}</h2>
+      <p class="hero-text">Generate and inspect figures, tables, embedded artifacts, and transient interactive views produced from the analysis output directory.</p>
+    </div>
+    <div class="hero-actions">
+      <button class="button-link primary" type="button" data-generate-visualizations-job="{{ job.job_id }}" onclick="window.unagiConsole.generateVisualizations('{{ job.job_id }}', 'visualization-task-result')">{% if job.visualizations.manifest %}Regenerate Visualizations{% else %}Generate Visualizations{% endif %}</button>
+      <button class="button-link secondary" type="button" data-export-share-bundle-job="{{ job.job_id }}" onclick="window.unagiConsole.exportShareBundle('{{ job.job_id }}', 'share-bundle-task-result')">{% if share_bundle.manifest %}Regenerate Offline Report{% else %}Export Offline Report{% endif %}</button>
+      {% if share_bundle.download_url %}
+        <a class="button-link secondary" href="{{ share_bundle.download_url }}">Download {{ share_bundle.zip_name or "Offline Report ZIP" }}</a>
+      {% endif %}
+      <a class="button-link secondary" href="/jobs/{{ job.job_id }}">Back To Job</a>
+    </div>
+  </section>
+
+  {% set visualization_status = job.visualizations.status or {} %}
+  {% if job.status == "running" and job.current_stage == "generate_visualizations" %}
+    <section class="panel">
+      <div class="notice notice-good">Visualization generation is in progress. This page will populate automatically when the analysis job finishes.</div>
+    </section>
+
+  {% elif visualization_status.status == "failed" and not job.visualizations.manifest %}
+    <section class="panel">
+      <div class="notice notice-bad">Visualization generation failed during analysis. You can rerun it manually from this page.</div>
+    </section>
+
+  {% endif %}
+
+  {% if share_bundle.manifest %}
+    <section class="panel">
+      <div class="notice notice-good">
+        Offline report bundle ready.
+        {% if share_bundle.manifest.counts %}
+          {{ share_bundle.manifest.counts.entries }} artifact entries and {{ share_bundle.manifest.counts.tracks }} track summaries are included.
+        {% endif %}
+        Download <code>{{ share_bundle.zip_name or "the zip archive" }}</code>, unzip it, then open <code>index.html</code> inside the extracted report folder.
+      </div>
+    </section>
+  {% endif %}
+
+  {% if visualization.stage_umap or visualization.temporal_graph or visualization.stage_composition %}
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Temporal Dynamics Overview</h2>
+          <p class="muted">Start with the static overview figures here. The interactive UMAP explorer is still available below when you want it.</p>
+        </div>
+      </div>
+      <div
+        id="temporal-overview-tabs-{{ job.job_id }}"
+        class="tabbed-module-group overview-tab-group"
+        data-tab-group
+      >
+        <div class="module-tab-nav overview-tab-nav" role="tablist" aria-label="Temporal dynamics overview">
+          {% if visualization.stage_umap %}
+            <button
+              class="module-tab-button"
+              type="button"
+              role="tab"
+              data-tab-target="stage-umap-panel-{{ job.job_id }}"
+            >
+              Stage UMAP
+            </button>
+          {% endif %}
+          {% if visualization.temporal_graph %}
+            <button
+              class="module-tab-button"
+              type="button"
+              role="tab"
+              data-tab-target="temporal-graph-panel-{{ job.job_id }}"
+            >
+              Temporal dynamics graph
+            </button>
+          {% endif %}
+          {% if visualization.stage_composition %}
+            <button
+              class="module-tab-button"
+              type="button"
+              role="tab"
+              data-tab-target="stage-composition-panel-{{ job.job_id }}"
+            >
+              Stage composition
+            </button>
+          {% endif %}
+        </div>
+        <div class="overview-tab-panels">
+          {% if visualization.stage_umap %}
+            {% set stage_umap_artifact = visualization.stage_umap.artifacts[0] if visualization.stage_umap.artifacts else None %}
+            <section class="tab-panel overview-tab-panel" data-tab-panel="stage-umap-panel-{{ job.job_id }}" role="tabpanel">
+              <article class="artifact-card overview-umap-card">
+                <div class="artifact-head">
+                  <strong>{{ visualization.stage_umap.title }}</strong>
+                  <div class="link-stack artifact-actions">
+                    {% if stage_umap_artifact and stage_umap_artifact.publication_download %}
+                      <a href="{{ stage_umap_artifact.publication_download }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                    {% endif %}
+                  </div>
+                </div>
+                {% if stage_umap_artifact %}
+                  <img class="artifact-image" src="{{ stage_umap_artifact.url or ('/files?path=' ~ (stage_umap_artifact.path|urlquote)) }}" alt="{{ visualization.stage_umap.title }}">
+                {% else %}
+                  <p class="muted">No static stage UMAP image is available for this analysis.</p>
+                {% endif %}
+              </article>
+            </section>
+          {% endif %}
+
+          {% if visualization.temporal_graph %}
+            {% set graph_artifact = visualization.temporal_graph.artifacts[0] if visualization.temporal_graph.artifacts else None %}
+            <section class="tab-panel overview-tab-panel" data-tab-panel="temporal-graph-panel-{{ job.job_id }}" role="tabpanel">
+              <article class="artifact-card overview-graph-card">
+                <div class="artifact-head">
+                  <strong>{{ visualization.temporal_graph.title }}</strong>
+                  <div class="link-stack artifact-actions">
+                    {% if graph_artifact and graph_artifact.publication_download %}
+                      <a href="{{ graph_artifact.publication_download }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="overview-graph-shell">
+                  <div
+                    class="analysis-temporal-graph-widget"
+                    data-graph-url="/api/analysis/{{ job.job_id }}/temporal-graph"
+                    data-track-popup-base="/analysis/{{ job.job_id }}/idrem/track-popup"
+                  >
+                    <p class="muted">Loading interactive temporal dynamics graph... The first load on large analyses can take 10-20 seconds while the cache warms.</p>
+                  </div>
+                </div>
+              </article>
+            </section>
+          {% endif %}
+
+          {% if visualization.stage_composition %}
+            {% set composition_artifact = visualization.stage_composition.artifacts[0] if visualization.stage_composition.artifacts else None %}
+            <section class="tab-panel overview-tab-panel" data-tab-panel="stage-composition-panel-{{ job.job_id }}" role="tabpanel">
+              <article class="artifact-card overview-composition-card">
+                <div class="artifact-head">
+                  <strong>{{ visualization.stage_composition.title }}</strong>
+                  <div class="link-stack artifact-actions">
+                    {% if composition_artifact and composition_artifact.publication_download %}
+                      <a href="{{ composition_artifact.publication_download }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                    {% endif %}
+                  </div>
+                </div>
+                <div
+                  class="analysis-stage-composition-widget"
+                  data-stage-composition-url="/api/analysis/{{ job.job_id }}/stage-composition"
+                >
+                  <p class="muted">Loading interactive stage composition... The first load on large analyses can take 10-20 seconds while the cache warms.</p>
+                </div>
+              </article>
+            </section>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="section-head">
+      <div>
+        <h2>Interactive Explorer</h2>
+        <p class="muted">Server-driven views for hierarchical branches, dynamic markers, custom genes, perturbation outputs, and on-demand interactive UMAP. These views are transient and are not written back to the analysis directory.</p>
+        <p class="muted">Large analyses warm an interactive cache on first load. The first explorer/overview load can take 10-20 seconds; later loads are much faster.</p>
+      </div>
+    </div>
+    <div
+      id="analysis-explorer-{{ job.job_id }}"
+      hx-get="/partials/analysis/{{ job.job_id }}/explorer"
+      hx-trigger="load"
+      hx-swap="outerHTML"
+    >
+      <p class="muted">Loading interactive explorer... The first load on large analyses can take 10-20 seconds while the cache warms.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head">
+      <h2>Visualization Modules</h2>
+      <p class="muted">Modules are collapsed by default. Open only the sections you want to inspect.</p>
+    </div>
+    <pre id="visualization-task-result" class="json-result hidden-result"></pre>
+    <pre id="share-bundle-task-result" class="json-result hidden-result"></pre>
+    <div
+      id="visualization-modules-{{ job.job_id }}"
+      class="module-collapse-group"
+      data-collapsible-group="visualization-modules-{{ job.job_id }}"
+    >
+      {% for group in visualization.groups %}
+        <details class="module-section" data-collapsible-id="group-{{ group.name }}">
+          <summary class="module-summary">
+            <span class="module-summary-title">{{ group.label }}</span>
+            <span class="muted">{{ group.entries|length }} item{% if group.entries|length != 1 %}s{% endif %}</span>
+          </summary>
+          <section class="module-panel">
+            {% for item in group.entries %}
+              <div class="section-head compact">
+                <h4>{{ item.title }}</h4>
+              </div>
+              {% for artifact in item.artifacts %}
+                <article class="artifact-card">
+                  <div class="artifact-head">
+                    {% if artifact.type not in ["image", "pdf", "html"] or artifact.label != "file" %}
+                      <strong>{{ artifact.label }}</strong>
+                    {% else %}
+                      <span></span>
+                    {% endif %}
+                    <div class="link-stack artifact-actions">
+                      {% if artifact.publication_download %}
+                        <a href="{{ artifact.publication_download }}" target="_blank" rel="noreferrer" title="Download publication-ready 300dpi PDF">&#8681; pdf</a>
+                      {% endif %}
+                      {% for download in artifact.downloads %}
+                        <a href="{{ download.url or ('/files?path=' ~ (download.path|urlquote)) }}" download title="Download {{ download.label }}">&#8681; {{ download.label }}</a>
+                      {% endfor %}
+                      {% if artifact.type not in ["image", "pdf", "html"] %}
+                        <a href="{{ artifact.url or ('/files?path=' ~ (artifact.path|urlquote)) }}" target="_blank" rel="noreferrer">raw</a>
+                        <a href="/browse?path={{ artifact.path|urlquote }}">browse</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                  {% if artifact.type == "image" %}
+                    <img class="artifact-image" src="{{ artifact.url or ('/files?path=' ~ (artifact.path|urlquote)) }}" alt="{{ item.title }}">
+                  {% elif artifact.type == "pdf" %}
+                    <iframe class="artifact-frame" src="{{ artifact.url or ('/files?path=' ~ (artifact.path|urlquote)) }}"></iframe>
+                  {% elif artifact.type == "html" %}
+                    <iframe class="artifact-frame" src="{{ artifact.url or ('/files?path=' ~ (artifact.path|urlquote)) }}"></iframe>
+                  {% elif artifact.type == "csv" and artifact.preview %}
+                    <div class="table-wrap">
+                      <table class="job-table compact-table">
+                        <thead>
+                          <tr>
+                            {% for column in artifact.preview.columns %}
+                              <th>{{ column }}</th>
+                            {% endfor %}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for row in artifact.preview.rows %}
+                            <tr>
+                              {% for cell in row %}
+                                <td>{{ cell }}</td>
+                              {% endfor %}
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p class="muted">Previewing {{ artifact.preview.row_count }} rows.</p>
+                  {% endif %}
+                </article>
+              {% endfor %}
+            {% endfor %}
+          </section>
+        </details>
+      {% endfor %}
+
+      {% if visualization.idrem_files %}
+        <details class="module-section" data-collapsible-id="idrem">
+          <summary class="module-summary">
+            <span class="module-summary-title">iDREM</span>
+            <span class="muted">{{ visualization.idrem_files|length }} item{% if visualization.idrem_files|length != 1 %}s{% endif %}</span>
+          </summary>
+          <section class="module-panel">
+            <div class="path-list">
+              {% for artifact in visualization.idrem_files %}
+                <a class="path-item" href="/files?path={{ artifact.path|urlquote }}" target="_blank" rel="noreferrer">
+                  <strong>{{ artifact.type }}</strong>
+                  <span>{{ artifact.name }}</span>
+                </a>
+              {% endfor %}
+            </div>
+          </section>
+        </details>
+      {% endif %}
+
+      {% if visualization.failures %}
+        <details class="module-section" data-collapsible-id="failures">
+          <summary class="module-summary">
+            <span class="module-summary-title">Failures</span>
+            <span class="muted">{{ visualization.failures|length }} item{% if visualization.failures|length != 1 %}s{% endif %}</span>
+          </summary>
+          <section class="module-panel">
+            <div class="path-list">
+              {% for failure in visualization.failures %}
+                <div class="path-item path-item-static">
+                  <strong>{{ failure.name }}</strong>
+                  <span>{{ failure.error }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </section>
+        </details>
+      {% endif %}
+
+      {% if not visualization.groups and not visualization.idrem_files and not visualization.failures %}
+        <section class="module-panel">
+          <p class="muted">No visualization modules exist yet. Generate visualizations to populate this page.</p>
+        </section>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

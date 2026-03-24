@@ -1,0 +1,57 @@
+{% if perturb_job %}
+  {% if perturb_job.status == "succeeded" and perturb_result %}
+    <article class="artifact-card">
+      <div class="artifact-head">
+        <strong>Custom Perturbation Result</strong>
+        <div class="artifact-actions artifact-actions-inline">
+          <a href="/files?path={{ perturb_result.plot_pdf_path|urlquote }}" download>&#8681; pdf</a>
+          <a href="/files?path={{ perturb_result.table_csv_path|urlquote }}" download>&#8681; table</a>
+        </div>
+      </div>
+      <img class="artifact-image" src="/files?path={{ perturb_result.plot_png_path|urlquote }}" alt="Custom perturbation ranked bar plot">
+    </article>
+
+    {% if perturb_preview %}
+      <article class="artifact-card">
+        <div class="artifact-head">
+          <strong>Perturbation Scores vs Random Background</strong>
+        </div>
+        <div class="table-wrap">
+          <table class="job-table compact-table">
+            <thead>
+              <tr>
+                {% for column in perturb_preview.columns %}
+                  <th>{{ column }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in perturb_preview.rows %}
+                <tr>
+                  {% for cell in row %}
+                    <td>{{ cell }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    {% endif %}
+  {% elif perturb_job.status in ["queued", "running", "retrying", "cancelling"] %}
+    {% set queue_diag = perturb_job.queue_diagnostics if perturb_job.queue_diagnostics is defined else None %}
+    {% if queue_diag and queue_diag.derived_status == "stuck" %}
+      <div class="notice notice-warn">{{ queue_diag.message }}</div>
+    {% elif queue_diag and queue_diag.message %}
+      <div class="notice">{{ queue_diag.message }}</div>
+    {% else %}
+      <div class="notice">Still running.</div>
+    {% endif %}
+  {% elif perturb_job.status == "failed" %}
+    <div class="notice notice-bad">{{ perturb_job.last_error or perturb_result_error or "This custom perturbation job failed." }}</div>
+  {% elif perturb_result_error %}
+    <div class="notice notice-bad">{{ perturb_result_error }}</div>
+  {% else %}
+    <div class="notice">{{ perturb_job.status|replace("_", " ") }}</div>
+  {% endif %}
+{% endif %}

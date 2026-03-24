@@ -1,83 +1,124 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: scUNAGI
-Version: 0.5.1
+Version: 0.5.10
 Summary: UNAGI: Deep Generative Model for Deciphering Cellular Dynamics and In-Silico Drug Discovery in Complex Diseases
 Home-page: https://github.com/mcgilldinglab/UNAGI
 Author: Yumin Zheng
 Author-email: yumin.zheng@mail.mcgill.ca
+Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 License-File: LICENSE.txt
+Requires-Dist: anndata==0.8.0
+Requires-Dist: fastapi>=0.103.1
 Requires-Dist: h5py>=3.9.0
 Requires-Dist: idna>=3.4
 Requires-Dist: igraph>=0.10.7
-Requires-Dist: igraph<=0.11
-Requires-Dist: networkx>=3.1
-Requires-Dist: numba>=0.57.1
-Requires-Dist: pandas>2.0.0
-Requires-Dist: parso>=0.8.3
-Requires-Dist: pillow>=9.4.0
-Requires-Dist: pip>=23.2.1
-Requires-Dist: psutil>=5.9.5
-Requires-Dist: ptyprocess>=0.7.0
-Requires-Dist: pure_eval>=0.2.2
-Requires-Dist: pycparser>=2.21
-Requires-Dist: pygments>=2.16.1
-Requires-Dist: pynndescent>=0.5.10
-Requires-Dist: pyopenssl>=23.2.0
-Requires-Dist: pyparsing>=3.1.1
-Requires-Dist: pysocks>=1.7.1
-Requires-Dist: sphinx>=5.0
-Requires-Dist: python-dateutil>=2.8.2
-Requires-Dist: python-igraph>=0.10.8
-Requires-Dist: pytz>=2023.3.post1
-Requires-Dist: pyzmq>=25.1.1
-Requires-Dist: lightning==2.0.8
-Requires-Dist: numpyro==0.13.0
-Requires-Dist: requests>=2.31.0
-Requires-Dist: anndata==0.8.0
-Requires-Dist: scanpy>=1.9.5
+Requires-Dist: Jinja2>=3.1.0
 Requires-Dist: jax==0.4.20
 Requires-Dist: jaxlib==0.4.20
+Requires-Dist: leidenalg>=0.10.1
+Requires-Dist: lightning>=2.0.8
+Requires-Dist: networkx>=3.1
+Requires-Dist: numba>=0.57.1
+Requires-Dist: numpy==1.26.4
+Requires-Dist: numpyro==0.13.0
+Requires-Dist: pandas>2.0.0
+Requires-Dist: pillow>=9.4.0
+Requires-Dist: psutil>=5.9.5
+Requires-Dist: pycparser>=2.21
+Requires-Dist: pyopenssl>=23.2.0
+Requires-Dist: python-dateutil>=2.8.2
+Requires-Dist: python-igraph>=0.10.8
+Requires-Dist: pynndescent>=0.5.10
+Requires-Dist: pyparsing>=3.1.1
+Requires-Dist: pyro-ppl>=1.8.6
+Requires-Dist: pytz>=2023.3.post1
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: scanpy>=1.9.5
 Requires-Dist: scikit-learn>=1.3.0
 Requires-Dist: scipy>=1.9.3
+Requires-Dist: scvi-tools>=1.0.3
 Requires-Dist: seaborn>=0.12.2
-Requires-Dist: setuptools>=68.0.0
 Requires-Dist: six>=1.16.0
-Requires-Dist: numpy==1.24.4
-Requires-Dist: stack_data>=0.6.2
 Requires-Dist: statsmodels>=0.14.0
-Requires-Dist: stdlib-list>=0.8.0
 Requires-Dist: sympy>=1.11.1
-Requires-Dist: tbb>=2021.8.0
+Requires-Dist: tbb
 Requires-Dist: texttable>=1.6.7
 Requires-Dist: threadpoolctl>=3.2.0
-Requires-Dist: torch==2.0.0
+Requires-Dist: torch>=2.0.0
 Requires-Dist: torchaudio>=2.0.0
 Requires-Dist: torchvision>=0.15.0
 Requires-Dist: tornado>=6.3.3
 Requires-Dist: tqdm>=4.66.1
-Requires-Dist: traitlets>=5.9.0
 Requires-Dist: typing_extensions>=4.7.1
 Requires-Dist: tzdata>=2023c
 Requires-Dist: umap-learn>=0.5.3
-Requires-Dist: wcwidth>=0.2.6
-Requires-Dist: wheel>=0.38.4
-Requires-Dist: pyro-ppl>=1.8.6
-Requires-Dist: scvi-tools>=1.0.3
-Requires-Dist: leidenalg>=0.10.1
-Requires-Dist: recommonmark
+Requires-Dist: uvicorn>=0.23.2
+Provides-Extra: dev
+Requires-Dist: backcall>=0.2.0; extra == "dev"
+Requires-Dist: debugpy>=1.8.0; extra == "dev"
+Requires-Dist: ipykernel>=6.25.2; extra == "dev"
+Requires-Dist: ipython>=8.15.0; extra == "dev"
+Requires-Dist: jedi>=0.19.0; extra == "dev"
+Requires-Dist: jupyter_client>=8.3.1; extra == "dev"
+Requires-Dist: jupyter_core>=4.12.0; extra == "dev"
+Requires-Dist: matplotlib-inline>=0.1.6; extra == "dev"
+Requires-Dist: parso>=0.8.3; extra == "dev"
+Requires-Dist: pickleshare>=0.7.5; extra == "dev"
+Requires-Dist: prompt-toolkit>=3.0.39; extra == "dev"
+Requires-Dist: ptyprocess>=0.7.0; extra == "dev"
+Requires-Dist: pure_eval>=0.2.2; extra == "dev"
+Requires-Dist: pygments>=2.16.1; extra == "dev"
+Requires-Dist: pyzmq>=25.1.1; extra == "dev"
+Requires-Dist: setuptools>=68.0.0; extra == "dev"
+Requires-Dist: stack_data>=0.6.2; extra == "dev"
+Requires-Dist: traitlets>=5.9.0; extra == "dev"
+Requires-Dist: wcwidth>=0.2.6; extra == "dev"
+Requires-Dist: wheel>=0.38.4; extra == "dev"
+Requires-Dist: pip>=23.2.1; extra == "dev"
+Requires-Dist: sphinx>=5.0; extra == "dev"
+Requires-Dist: recommonmark; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
-# UNAGI
+# UNAGI: virtual disease and drug perturbation
 
-UNAGI: Deep Generative Model for Deciphering Cellular Dynamics and In-Silico Drug Discovery in Complex Diseases
+UNAGI is a data-driven virtual disease model powered by deep generative AI for reconstructing longitudial cell dynamics in disease progression and performing **unsupervised** in-silico drug perturbations for drug discovery/repurposing.
 
 Full documentations and tutorials can be accessed at [UNAGI-docs](https://unagi-docs.readthedocs.io/en/latest/index.html).
 
+## Citation
+Zheng, Y., Schupp, J.C., Adams, T. et al. A deep generative model for deciphering cellular dynamics and in silico drug discovery in complex diseases. Nat. Biomed. Eng (2025). https://doi.org/10.1038/s41551-025-01423-7
+
+## Highlights
+* UNAGI supports both time-series scRNA data and control/disease (two-condition) data.
+* UNAGI can construct temporal cell dynamics
+    * trajectories
+    * TFs
+    * temporal marker genes
+* UNAGI can perform **UNSUPERVISED** perturbation for
+    * single gene
+    * gene combinations
+    * pathways
+    * drug and compounds
+
+## News
+* Sept/2025: We are honored to have this work highlighted by Anaconda AI Platform! ([link](https://www.anaconda.com/resources/case-study/mcgill-university))
+* June/2025: We are thrilled to share that UNAGI is published on Nature Biomedical Engineering! ([link](https://www.nature.com/articles/s41551-025-01423-7))
+
 ## Overview 
 <img title="UNAGI Overview" alt="Alt text" src="UNAGI_overview.png">
-UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug discovery framework. UNAGI adeptly deciphers cellular dynamics from human disease time-series single-cell data and facilitates in-silico drug perturbations to earmark therapeutic targets and drugs potentially active against complex human diseases. All outputs, from cellular dynamics to drug perturbations, are rendered in an interactive visual format within the UNAGI framework. Nestled within a deep learning architecture Variational Autoencoder-Generative adversarial network (VAE-GAN), UNAGI is tailored to manage diverse data distributions frequently arising post-normalization. It also innovatively employs disease-informed cell embeddings, harnessing crucial gene markers derived from the disease dataset. On achieving cell embeddings, UNAGI fabricates a graph that chronologically links cell clusters across disease stages, subsequently deducing the gene regulatory network orchestrating these connections. UNAGI is primed to leverage time-series data, enabling a precise portrayal of cellular dynamics and a superior capture of disease markers and regulators. Lastly, the deep generative prowess of the UNAGI framework powers an in-silico drug perturbation module, simulating drug impacts by manipulating the latent space informed by real drug perturbation data from the CMAP database. This allows for an empirical assessment of drug efficacy based on cellular shifts towards healthier states following drug treatment. The in-silico perturbation module can similarly be utilized to investigate therapeutic pathways, employing an approach akin to the one used in drug perturbation analysis.
+<!-- UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug discovery framework. UNAGI adeptly deciphers cellular dynamics from human disease time-series single-cell data and facilitates in-silico drug perturbations to earmark therapeutic targets and drugs potentially active against complex human diseases. All outputs, from cellular dynamics to drug perturbations, are rendered in an interactive visual format within the UNAGI framework. Nestled within a deep learning architecture Variational Autoencoder-Generative adversarial network (VAE-GAN), UNAGI is tailored to manage diverse data distributions frequently arising post-normalization. It also innovatively employs disease-informed cell embeddings, harnessing crucial gene markers derived from the disease dataset. On achieving cell embeddings, UNAGI fabricates a graph that chronologically links cell clusters across disease stages, subsequently deducing the gene regulatory network orchestrating these connections. UNAGI is primed to leverage time-series data, enabling a precise portrayal of cellular dynamics and a superior capture of disease markers and regulators. Lastly, the deep generative prowess of the UNAGI framework powers an in-silico drug perturbation module, simulating drug impacts by manipulating the latent space informed by real drug perturbation data from the CMAP database. This allows for an empirical assessment of drug efficacy based on cellular shifts towards healthier states following drug treatment. The in-silico perturbation module can similarly be utilized to investigate therapeutic pathways, employing an approach akin to the one used in drug perturbation analysis. -->
 
-## Key Capabilities
 -   Learning disease-specific cell embeddings through iterative training processes.
 
 -   Constructing temporal dynamic graphs from time-series single-cell data and reconstructing temporal gene regulatory networks to decipher cellular dynamics.
@@ -88,9 +129,9 @@ UNAGI is a comprehensive unsupervised in-silico cellular dynamics and drug disco
 
 ## Installation
 
-Create a new conda environment
+Create and activate a Python environment before running UNAGI. A conda environment is the most common setup, but a venv works too.
 ```
-conda create -n unagi python=3.9
+conda create -n unagi python=3.10
 conda activate unagi
 ```
 
@@ -102,7 +143,9 @@ UNAGI installation
 pip install scUNAGI
 ```
 
-### Option 2: Install from Github
+This installs the Python package and CLI. The repo-local YAML templates, tutorials, and workflow skill are not part of the standalone pip install.
+
+### Option 2: Install from Github (Recommended)
 
 Installing UNAGI directly from GitHub ensures you have the latest version. **(Please install directly from GitHub to use the provided Jupyter notebooks for tutorials and walkthrough examples.)**
 
@@ -112,8 +155,41 @@ cd UNAGI
 pip install .
 ```
 
+### Local skill install
+
+The Codex/Claude workflow skill lives in `skills/unagi-workflow-orchestrator/`. If you want to install it separately in a local skill workspace, clone the UNAGI repository and point your skill installer at that directory. The skill expects the cloned UNAGI repo to remain available locally, but it can be installed independently from the repo checkout.
+
+### Agent-friendly workflow (new)
+
+Run a full training workflow with a YAML config from the repo checkout:
+
+```bash
+unagi preflight -c configs/unagi_workflow_template.yaml
+unagi run -c configs/unagi_workflow_template.yaml
+```
+
+The preflight step validates paths/keys and normalizes stage files to canonical `0.h5ad..N-1.h5ad` layout before training.
+
+See `configs/unagi_workflow_template.yaml` for a complete template.
+
+### Skill-first workflow
+
+Use the repo-local skill:
+
+- Skill spec: `skills/unagi-workflow-orchestrator/SKILL.md`
+- Job orchestration script: `skills/unagi-workflow-orchestrator/scripts/unagi_job.py`
+- Accessibility evaluator report: `skills/unagi-workflow-orchestrator/reports/accessibility_report.md`
+
+Example:
+
+```bash
+python skills/unagi-workflow-orchestrator/scripts/unagi_job.py submit \
+  --repo-root /path/to/UNAGI \
+  --job-name demo-skill-run
+```
+
 ### Prerequisites
--   Python >=3.9 (Python3.9 is recommended)
+-   Python >=3.9 
 -   pyro-ppl>=1.8.6
 -   scanpy>=1.9.5
 -   **anndata==0.8.0** 
@@ -123,7 +199,7 @@ pip install .
 **Required files**
 
 Preprocessed CMAP database ([Link](https://zenodo.org/records/15692608)) provides drug-gene pairs data to run UNAGI drug perturbation function.
--    Option 1 : 'cmap_drug_traget.npy' uses the direct drug traget genes provided in CMAP LINCS 2020.
+-    Option 1 : 'cmap_drug_target.npy' uses the direct drug target genes provided in CMAP LINCS 2020.
 -    Option 2: 'cmap_drug_treated_res_cutoff.npy' uses genes that are up/down-regulated significantly after individual drug treatments in CMAP LINCS 2020. We kept the top 5% drug-gene pairs based on level 5 MODZ score.
 -    'cmap_direction_df.npy' indicates the direction of gene regulated by drugs after treatments. The drug regulation direction of gene is based on level 5 MODZ score.
 -    Use your own drug-target pairs, please see [this tutorial](https://github.com/mcgilldinglab/UNAGI/blob/main/tutorials/Customize_drug_database_for_perturbation.ipynb).
@@ -142,14 +218,14 @@ git clone https://github.com/phoenixding/idrem.git
 
 **iDREM prerequisites:**
 
-Install the iDREM to the source folder of UNAGI
+Install iDREM locally and keep track of its path. When running UNAGI, provide that path through `run.idrem_dir` or `UNAGI_IDREM_DIR` so the app can find `idrem.jar`, `TFInput/`, and the other iDREM assets.
 
 -   Java
-    To use iDREM, a version of Java 1.7 or later must be installed. If Java 1.7 or later is not currently installed, please refer to http://www.java.com for installation instructions.
+    To use iDREM, a version of Java 1.7 (64-bit) or later **must be installed**. If Java (64-bit) 1.7 or later is not currently installed, please refer to http://www.java.com for installation instructions.
 
 -   JavaScript
     To enable the interactive visualization powered by Javascript.
-    (The users are still able to run the software of-line, but Internet access is needed to view the result interactively.)
+    (The users are still able to run the software off-line, but Internet access is needed to view the result interactively.)
 
 ## Tutorials:
 

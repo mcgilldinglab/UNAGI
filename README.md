@@ -37,7 +37,7 @@ Zheng, Y., Schupp, J.C., Adams, T. et al. A deep generative model for decipherin
 
 ## Installation
 
-Create a new conda environment
+Create and activate a Python environment before running UNAGI. A conda environment is the most common setup, but a venv works too.
 ```
 conda create -n unagi python=3.10
 conda activate unagi
@@ -51,6 +51,8 @@ UNAGI installation
 pip install scUNAGI
 ```
 
+This installs the Python package and CLI. The repo-local YAML templates, tutorials, and workflow skill are not part of the standalone pip install.
+
 ### Option 2: Install from Github (Recommended)
 
 Installing UNAGI directly from GitHub ensures you have the latest version. **(Please install directly from GitHub to use the provided Jupyter notebooks for tutorials and walkthrough examples.)**
@@ -59,6 +61,41 @@ Installing UNAGI directly from GitHub ensures you have the latest version. **(Pl
 git clone https://github.com/mcgilldinglab/UNAGI.git
 cd UNAGI
 pip install .
+```
+
+The repository checkout includes a bundled `idrem/` directory. When you run UNAGI from the cloned repo, UNAGI will prefer that bundled iDREM runtime automatically.
+
+### Local skill install
+
+The Codex/Claude workflow skill lives in `skills/unagi-workflow-orchestrator/`. If you want to install it separately in a local skill workspace, clone the UNAGI repository and point your skill installer at that directory. The skill expects the cloned UNAGI repo to remain available locally, but it can be installed independently from the repo checkout.
+
+### Agent-friendly workflow (new)
+
+Run a full training workflow with a YAML config from the repo checkout:
+
+```bash
+unagi preflight -c configs/unagi_workflow_template.yaml
+unagi run -c configs/unagi_workflow_template.yaml
+```
+
+The preflight step validates paths/keys and normalizes stage files to canonical `0.h5ad..N-1.h5ad` layout before training.
+
+See `configs/unagi_workflow_template.yaml` for a complete template.
+
+### Skill-first workflow
+
+Use the repo-local skill:
+
+- Skill spec: `skills/unagi-workflow-orchestrator/SKILL.md`
+- Job orchestration script: `skills/unagi-workflow-orchestrator/scripts/unagi_job.py`
+- Accessibility evaluator report: `skills/unagi-workflow-orchestrator/reports/accessibility_report.md`
+
+Example:
+
+```bash
+python skills/unagi-workflow-orchestrator/scripts/unagi_job.py submit \
+  --repo-root /path/to/UNAGI \
+  --job-name demo-skill-run
 ```
 
 ### Prerequisites
@@ -83,15 +120,17 @@ Preprocessed IPF snRNA-seq dataset: [One Drive](https://mcgill-my.sharepoint.com
 Example dataset: [Link.](https://github.com/mcgilldinglab/UNAGI/tree/main/UNAGI/data/example)
 -   The dataset for UNAGI walkthrough demonstration. 
 
-**iDREM installation:**
+**iDREM runtime:**
 
-```
-git clone https://github.com/phoenixding/idrem.git
-```
+The GitHub repo includes a bundled `idrem/` directory, and UNAGI will use it automatically when running from the cloned repo.
+
+If you want to use a different iDREM copy, override it with:
+- `run.idrem_dir` in your workflow YAML
+- or `UNAGI_IDREM_DIR` in your shell environment
+
+If you install only the standalone pip package instead of using the cloned repo, you should provide your own iDREM directory through one of those override paths.
 
 **iDREM prerequisites:**
-
-Install the iDREM to the source folder of UNAGI
 
 -   Java
     To use iDREM, a version of Java 1.7 (64-bit) or later **must be installed**. If Java (64-bit) 1.7 or later is not currently installed, please refer to http://www.java.com for installation instructions.

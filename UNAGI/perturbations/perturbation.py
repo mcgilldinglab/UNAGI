@@ -14,18 +14,45 @@ import scipy.sparse as sp
 import time
 from scipy.spatial import distance
 import torch
+from contextlib import nullcontext
 from scipy.sparse import issparse
 #import DataLoader from torch
 from torch.utils.data import DataLoader
 from ..utils.gcn_utils import setup_graph
+from ..utils.progress_logger import ProgressLogger
 import threading
 from ..model.models import VAE, Plain_VAE
 from .analysis_perturbation import perturbationAnalysis
+from .direction_utils import direction_count, direction_values, store_directional_result
 def get_random_genes(adata, n,seed):
     n = int(n)
     np.random.seed(seed)
     genes = adata.var.index.tolist()
     return np.random.choice(genes,n)
+
+
+def _extract_prebuilt_random_gene_set(random_genes, index):
+    """Return one prebuilt random gene-set sample if the input is batched."""
+    if random_genes is None:
+        return None
+    if isinstance(random_genes, np.ndarray):
+        random_genes = random_genes.tolist()
+    if isinstance(random_genes, tuple):
+        random_genes = list(random_genes)
+    if not isinstance(random_genes, list) or not random_genes:
+        return None
+    if index >= len(random_genes):
+        return None
+    sample = random_genes[index]
+    if isinstance(sample, np.ndarray):
+        sample = sample.tolist()
+    if isinstance(sample, tuple):
+        sample = list(sample)
+    if isinstance(sample, list):
+        return sample
+    return None
+
+
 def get_overlap_genes_pathway(adata, pathway):
     genes = adata.var.index
     overlap_genes = []
@@ -50,7 +77,7 @@ def scale_csr_rows(data, indices, indptr, rows, factors):
             if f != 1.0:                 # skip genes with factor 1
                 data[p] *= f
 class perturbator:
-    def __init__(self, model_path,data,config_path):
+    def __init__(self, model_path,data,config_path, device_override=None):
         # torch.load(model_path)
         self.data = data
         if issparse(self.data.X):
@@ -62,6 +89,8 @@ class perturbator:
         self.adj = self.adj.asformat('coo')
         self.adj = setup_graph(self.adj)
         self.config = json.load(open(config_path))
+        if device_override is not None:
+            self.config['device'] = str(device_override)
         self.adj = self.adj.to(self.config['device'])
 
         self.data.var_names_make_unique()
@@ -73,6 +102,9 @@ class perturbator:
         self.model.to(self.config['device'])
         self.model.eval()
         self.data.obsm['embdedding'] = self._obtain_embedding()
+        self._dense_base_tensor = None
+        self._embedding_tensor = None
+        self._repeated_adj_cache = {}
         
         
         
@@ -83,16 +115,140 @@ class perturbator:
         if issparse(data):
             data = data.toarray()
         cell_loader = DataLoader(data.astype('float32'), batch_size=len(data), shuffle=False, num_workers=0)
+        autocast_context = nullcontext()
+        if str(self.config['device']) != 'cpu' and hasattr(torch, "autocast") and not self.config.get('GCN'):
+            try:
+                autocast_context = torch.autocast(device_type="cuda", dtype=torch.float16)
+            except Exception:
+                autocast_context = nullcontext()
 
-        for perturbed_index, x in enumerate(cell_loader):
-            x = x.to(self.config['device'])
-            z = self.model.get_latent_representation(x,self.adj)
+        with torch.inference_mode():
+            with autocast_context:
+                for perturbed_index, x in enumerate(cell_loader):
+                    x = x.to(self.config['device'])
+                    z = self.model.get_latent_representation(x,self.adj)
         # z to np array
         if self.config['device'] != 'cpu':
             z = z.detach().cpu().numpy()
         else:
             z = z.detach().numpy()
         return z
+
+    def _get_base_dense_tensor(self):
+        if self._dense_base_tensor is not None:
+            return self._dense_base_tensor
+        data = self.data.X
+        if issparse(data):
+            dense = data.toarray().astype('float32', copy=False)
+        else:
+            dense = np.asarray(data, dtype='float32')
+        self._dense_base_tensor = torch.as_tensor(dense, device=self.config['device'])
+        return self._dense_base_tensor
+
+    def _get_embedding_tensor(self):
+        if self._embedding_tensor is not None:
+            return self._embedding_tensor
+        self._embedding_tensor = torch.as_tensor(
+            np.asarray(self.data.obsm['embdedding'], dtype=np.float32),
+            device=self.config['device'],
+        )
+        return self._embedding_tensor
+
+    def prepare_track_cache(self, list_of_indices):
+        idx_arrays = [
+            self.data.obs_names.get_indexer(track_indices).astype(np.int64, copy=False)
+            for track_indices in list_of_indices
+        ]
+        embedding = self._get_embedding_tensor()
+        idx_tensors = []
+        original_means = []
+        for idx in idx_arrays:
+            idx_tensor = torch.as_tensor(idx, device=self.config['device'], dtype=torch.long)
+            idx_tensors.append(idx_tensor)
+            original_means.append(embedding.index_select(0, idx_tensor).mean(dim=0))
+        original_means_tensor = torch.stack(original_means, dim=0)
+        original_dist = torch.cdist(original_means_tensor, original_means_tensor)
+        return {
+            'indices': idx_tensors,
+            'original_means': original_means_tensor,
+            'original_dist': original_dist,
+        }
+
+    def _build_repeated_adj(self, batch_size):
+        if batch_size == 1:
+            return self.adj, 'hit'
+        cached = self._repeated_adj_cache.get(batch_size)
+        if cached is not None:
+            return cached, 'hit'
+        base_adj = self.adj.coalesce()
+        base_indices = base_adj.indices()
+        base_values = base_adj.values()
+        node_count = base_adj.size(0)
+        offsets = torch.arange(batch_size, device=base_indices.device, dtype=base_indices.dtype) * node_count
+        repeated_indices = []
+        repeated_values = []
+        for offset in offsets:
+            repeated_indices.append(base_indices + offset)
+            repeated_values.append(base_values)
+        repeated = torch.sparse_coo_tensor(
+            torch.cat(repeated_indices, dim=1),
+            torch.cat(repeated_values, dim=0),
+            size=(node_count * batch_size, node_count * batch_size),
+            device=base_adj.device,
+        ).coalesce()
+        self._repeated_adj_cache[batch_size] = repeated
+        return repeated, 'miss'
+
+    def perturb_input_data_compiled_batched(self, compiled_targets_batch):
+        base = self._get_base_dense_tensor()
+        batch_size = len(compiled_targets_batch)
+        scale_factors = torch.ones(
+            (batch_size, self.data.n_vars),
+            device=self.config['device'],
+            dtype=base.dtype,
+        )
+        for batch_idx, (cols, factors) in enumerate(compiled_targets_batch):
+            if len(cols) == 0:
+                continue
+            cols_tensor = torch.as_tensor(cols, device=self.config['device'], dtype=torch.long)
+            factor_tensor = torch.as_tensor(factors, device=self.config['device'], dtype=base.dtype)
+            scale_factors[batch_idx, cols_tensor] = factor_tensor
+
+        perturbed = base.unsqueeze(0) * scale_factors.unsqueeze(1)
+        flat_perturbed = perturbed.reshape(batch_size * base.shape[0], base.shape[1])
+        autocast_context = nullcontext()
+        if str(self.config['device']) != 'cpu' and hasattr(torch, "autocast") and not self.config.get('GCN'):
+            try:
+                autocast_context = torch.autocast(device_type="cuda", dtype=torch.float16)
+            except Exception:
+                autocast_context = nullcontext()
+        with torch.inference_mode():
+            with autocast_context:
+                if self.config['GCN'] == True:
+                    repeated_adj, cache_state = self._build_repeated_adj(batch_size)
+                    z = self.model.get_latent_representation(flat_perturbed, repeated_adj)
+                else:
+                    repeated_adj = None
+                    cache_state = 'hit'
+                    z = self.model.get_latent_representation(flat_perturbed)
+        latent_dim = z.shape[-1]
+        return z.reshape(batch_size, base.shape[0], latent_dim), cache_state
+
+    def calculate_deltaD_for_tracks_batched(self, perturbed_embedding_batch, prepared_track_cache):
+        perturbed_means = torch.stack(
+            [
+                perturbed_embedding_batch.index_select(1, idx).mean(dim=1)
+                for idx in prepared_track_cache['indices']
+            ],
+            dim=1,
+        )
+        original_means = prepared_track_cache['original_means'].unsqueeze(0).expand(
+            perturbed_embedding_batch.shape[0], -1, -1
+        )
+        deltaD = torch.cdist(perturbed_means, original_means) - prepared_track_cache['original_dist'].unsqueeze(0)
+        diag_idx = torch.arange(deltaD.shape[1], device=deltaD.device)
+        deltaD[:, diag_idx, diag_idx] = 0.0
+        return deltaD.detach().cpu().numpy()
     
     def _run_gene_pca(self,adata):
         genes = adata.var_names.tolist()
@@ -321,6 +477,22 @@ class perturbator:
         # --------- one‑line scale of every non‑zero ------------------
         data *= factors[indices]      # vectorised over the whole matrix
         return adata
+    def compile_direct_targets(self, gene_input_dict):
+        cols = self.data.var_names.get_indexer(gene_input_dict.keys())
+        factors = np.fromiter(
+            (gene_input_dict[key] for key in gene_input_dict.keys()),
+            dtype=np.float32,
+            count=len(gene_input_dict),
+        )
+        return cols.astype(np.int64, copy=False), factors
+    def change_direct_targets_compiled(self, adata, compiled_targets):
+        cols, factors = compiled_targets
+        X = adata.X
+        indptr, indices, data = X.indptr, X.indices, X.data
+        scale_lookup = np.ones(adata.n_vars, dtype=data.dtype)
+        scale_lookup[cols] = factors.astype(data.dtype, copy=False)
+        data *= scale_lookup[indices]
+        return adata
     def perturb_input_data(self, selected_adata_index,perturb_resource, mode = 'direct'):
         data = ad.AnnData(X=self.data.X.copy())
         data.var_names = self.data.var.index.copy()
@@ -334,6 +506,14 @@ class perturbator:
         else:
             raise ValueError('mode should be in [\'direct\', \'GIN\']')
         self.data.obsm['perturbed_embedding'] = self._obtain_embedding(data = temp_data.X)
+    def perturb_input_data_compiled(self, selected_adata_index, compiled_targets, mode='direct'):
+        if mode != 'direct':
+            raise ValueError("Compiled perturbation currently supports direct mode only")
+        data = ad.AnnData(X=self.data.X.copy())
+        data.var_names = self.data.var.index.copy()
+        data.obs.index = self.data.obs.index.copy()
+        temp_data = self.change_direct_targets_compiled(data, compiled_targets)
+        self.data.obsm['perturbed_embedding'] = self._obtain_embedding(data=temp_data.X)
         
         
     def get_perturbed_embedding(self,selected_adata_index=None):
@@ -356,7 +536,16 @@ class perturbator:
         return scores[0]
 
 class perturbation:
-    def __init__(self, data, model_name, idrem_dir, config_path=None):
+    def __init__(
+        self,
+        data,
+        model_name,
+        idrem_dir,
+        config_path=None,
+        device_override=None,
+        gpu_exact_batch_size=None,
+        gpu_exact_force_legacy=False,
+    ):
         self.model_name = Path(model_name)
 
         self.idrem_dir = Path(idrem_dir)
@@ -373,7 +562,122 @@ class perturbation:
         if config_path is None:
             config_path = model_dir / 'training_parameters.json'
 
-        self.pb = perturbator(model_path = self.model_name, data = self.adata, config_path = config_path)
+        self.pb = perturbator(model_path = self.model_name, data = self.adata, config_path = config_path, device_override=device_override)
+        self.gpu_exact_batch_size = gpu_exact_batch_size
+        self.gpu_exact_force_legacy = bool(gpu_exact_force_legacy)
+        self.last_gpu_batch_meta = None
+        self.progress_logger = ProgressLogger(prefix='[UNAGI-PERTURB]')
+
+    @staticmethod
+    def _compiled_directional_items(perturbed_items, temp_perturbed_genes, *, each_direction, mode):
+        compiled_items = []
+        if mode == 'pathway':
+            for item_name, genes in zip(perturbed_items, temp_perturbed_genes):
+                genes_list = genes if isinstance(genes, list) else genes.tolist()
+                compiled_items.append((item_name, dict.fromkeys(genes_list, each_direction)))
+            return compiled_items
+        for item_name, genes in zip(perturbed_items, temp_perturbed_genes):
+            genes_list = genes if isinstance(genes, list) else genes.tolist()
+            plus = each_direction
+            minus = 1 / each_direction
+            gene_input_dict = {}
+            for item in genes_list:
+                name, _, sign = item.partition(':')
+                gene_input_dict[name] = plus if sign == '+' else minus
+            compiled_items.append((item_name, gene_input_dict))
+        return compiled_items
+
+    def _progress_tick(self, mode, finished, total, started_at, extra=None):
+        if self.progress_logger.should_report(finished, total):
+            self.progress_logger.progress(mode, finished, total, started_at, extra=extra)
+
+    def _should_use_batched_gpu_exact(self, *, mode, CUDA, device):
+        if self.gpu_exact_force_legacy:
+            return False
+        if not CUDA:
+            return False
+        if str(device) == 'cpu':
+            return False
+        return mode in {'drug', 'pathway', 'random_drug_background', 'random_pathway_background'}
+
+    def _default_gpu_batch_size(self):
+        if self.gpu_exact_batch_size is not None:
+            return max(1, int(self.gpu_exact_batch_size))
+        return 4 if self.pb.config.get('GCN') else 8
+
+    def _store_delta_result(self, *, storage_key, direction_key, track_name, item_name, deltaD):
+        if storage_key not in self.adata.uns:
+            self.adata.uns[storage_key] = {}
+        if direction_key not in self.adata.uns[storage_key]:
+            self.adata.uns[storage_key][direction_key] = {}
+        if track_name not in self.adata.uns[storage_key][direction_key]:
+            self.adata.uns[storage_key][direction_key][track_name] = {}
+        self.adata.uns[storage_key][direction_key][track_name][item_name] = deltaD
+
+    def _execute_batched_exact_items(self, *, compiled_items, track_tensor_cache, mode):
+        if not compiled_items:
+            return [], {
+                'batched': False,
+                'batch_size': 0,
+                'model_kind': 'gcn' if self.pb.config.get('GCN') else 'plain',
+                'cache': 'n/a',
+                'oom_backoff': False,
+                'fallback': False,
+            }
+        target_batch_size = min(self._default_gpu_batch_size(), len(compiled_items))
+        oom_backoff = False
+        cache_state = 'n/a'
+        while target_batch_size >= 1:
+            try:
+                batch_results = []
+                for batch_start in range(0, len(compiled_items), target_batch_size):
+                    batch = compiled_items[batch_start:batch_start + target_batch_size]
+                    perturbed_embeddings, adj_cache_state = self.pb.perturb_input_data_compiled_batched(
+                        [compiled_targets for _item_name, compiled_targets in batch]
+                    )
+                    cache_state = adj_cache_state
+                    per_item_deltas = [dict() for _ in range(len(batch))]
+                    for track_name, prepared_track_cache in track_tensor_cache.items():
+                        delta_batch = self.pb.calculate_deltaD_for_tracks_batched(
+                            perturbed_embeddings,
+                            prepared_track_cache,
+                        )
+                        for item_idx, deltaD in enumerate(delta_batch):
+                            per_item_deltas[item_idx][track_name] = deltaD
+                    batch_results.extend(per_item_deltas)
+                return batch_results, {
+                    'batched': True,
+                    'batch_size': target_batch_size,
+                    'model_kind': 'gcn' if self.pb.config.get('GCN') else 'plain',
+                    'cache': cache_state,
+                    'oom_backoff': oom_backoff,
+                    'fallback': False,
+                }
+            except RuntimeError as exc:
+                if 'out of memory' not in str(exc).lower():
+                    raise
+                oom_backoff = True
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                if target_batch_size == 1:
+                    break
+                target_batch_size = max(1, target_batch_size // 2)
+        batch_results = []
+        for item_name, compiled_targets in compiled_items:
+            self.pb.perturb_input_data_compiled(self.adata.obs.index, compiled_targets, mode='direct')
+            item_delta = {}
+            for track_name, track_indices in self._legacy_track_cache.items():
+                item_delta[track_name] = self.pb.calculate_deltaD_for_tracks(track_indices)
+            batch_results.append(item_delta)
+            del self.pb.data.obsm['perturbed_embedding']
+        return batch_results, {
+            'batched': False,
+            'batch_size': 1,
+            'model_kind': 'gcn' if self.pb.config.get('GCN') else 'plain',
+            'cache': cache_state,
+            'oom_backoff': oom_backoff,
+            'fallback': True,
+        }
     def read_stagedata(self):
         stageadata = []
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
@@ -434,7 +738,7 @@ class perturbation:
                     track[k]=self.getDescendants(tempcluster,k,edges)
                     tempcluster=track[k]
         return track
-    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = None,CUDA = False,device = 'cuda:0',GIN=False):
+    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = None,CUDA = False,device = 'cuda:0',GIN=False,direction_mode='two_sided'):
         '''
         Perform perturbation.
 
@@ -464,6 +768,13 @@ class perturbation:
             written=True
         else:
             written=False
+        mode_started_at = time.time()
+        self.progress_logger.log(
+            f"mode={mode} status=START tracks={len(self.tracks)} log2fc={log2fc} "
+            f"cuda={CUDA} device={device}"
+        )
+        self.last_gpu_batch_meta = None
+        direction_sequence = direction_values(log2fc, direction_mode)
         
         # --- PRECOMPUTE dictionaries -----------------------------------------
         stage_leiden2rows = {}
@@ -485,116 +796,188 @@ class perturbation:
                                     for l in clusters])
                     for s, clusters in enumerate(track)]
             track_cache[track_name] = rows      # reuse later
+        self._legacy_track_cache = track_cache
+        use_batched_gpu_exact = self._should_use_batched_gpu_exact(mode=mode, CUDA=CUDA, device=device)
+        track_tensor_cache = {}
+        if use_batched_gpu_exact:
+            for track_name, rows in track_cache.items():
+                track_tensor_cache[track_name] = self.pb.prepare_track_cache(rows)
         # --- END PRECOMPUTE ---------------------------------------------------
         if mode == 'drug':
             drug_gene = self.adata.uns['data_drug_overlap_genes']
             perturbed_items = list(drug_gene.keys())
             temp_perturbed_genes = list(drug_gene.values())
-            perturbed_genes = []
-            for each_direction in [log2fc,1/log2fc]:
-                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
-                    gene_input_dict = {}
-                    if type(genes)!= list:
-                        genes = genes.tolist()
-                    
-                    plus  = each_direction          # cache the two possible results
-                    minus = 1 / each_direction
-
-                    for item in genes:              # e.g. "NAT2:-"
-                        name, _, sign = item.partition(':')   # one C‑level split
-                        gene_input_dict[name] = plus if sign == '+' else minus
-
-                    perturb_cells = self.adata.obs.index
-                    import time
-                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
-                    if 'drug_perturbation_deltaD' not in self.adata.uns.keys():
-                        self.adata.uns['drug_perturbation_deltaD'] = {}
-                    if str(each_direction) not in self.adata.uns['drug_perturbation_deltaD'].keys():
-                        self.adata.uns['drug_perturbation_deltaD'][str(each_direction)] = {}
-                    for lastCluster in self.tracks.keys():
-                        
-                        track_indices = []
-                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
-                        track_name = str(track[0][0]) 
-                        for i in range(1,len(track)):
-                            track_name += '-' + str(track[i][0])
-                        track_indices = track_cache[track_name]
-                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
-                        
-                        if track_name not in self.adata.uns['drug_perturbation_deltaD'][str(each_direction)].keys():
-                            self.adata.uns['drug_perturbation_deltaD'][str(each_direction)][track_name] = {}
-                        self.adata.uns['drug_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
-                    del self.pb.data.obsm['perturbed_embedding']
-                    gc.collect() # collect garbage to free memory
+            total = len(temp_perturbed_genes) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
+                compiled_items = [
+                    (item_name, self.pb.compile_direct_targets(gene_input_dict))
+                    for item_name, gene_input_dict in self._compiled_directional_items(
+                        perturbed_items,
+                        temp_perturbed_genes,
+                        each_direction=each_direction,
+                        mode='drug',
+                    )
+                ]
+                if use_batched_gpu_exact:
+                    batched_results, batch_meta = self._execute_batched_exact_items(
+                        compiled_items=compiled_items,
+                        track_tensor_cache=track_tensor_cache,
+                        mode=mode,
+                    )
+                    self.last_gpu_batch_meta = batch_meta
+                    self.progress_logger.log(
+                        f"mode={mode} resolved_backend=gpu_exact batched={str(batch_meta['batched']).lower()} "
+                        f"batch_size={batch_meta['batch_size']} model_kind={batch_meta['model_kind']} "
+                        f"cache={batch_meta['cache']} oom_backoff={str(batch_meta['oom_backoff']).lower()}"
+                    )
+                    for (item_name, _compiled_targets), item_payload in zip(compiled_items, batched_results):
+                        for track_name, deltaD in item_payload.items():
+                            self._store_delta_result(
+                                storage_key='drug_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
+                else:
+                    for perturbation_item_idx, (item_name, compiled_targets) in tqdm(enumerate(compiled_items),total = len(compiled_items)):
+                        perturb_cells = self.adata.obs.index
+                        self.pb.perturb_input_data_compiled(perturb_cells,compiled_targets,mode='direct')
+                        for track_name, track_indices in track_cache.items():
+                            deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                            self._store_delta_result(
+                                storage_key='drug_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        del self.pb.data.obsm['perturbed_embedding']
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
             print('finished')
 
         elif mode == 'pathway':
             pathway_gene = self.adata.uns['data_pathway_overlap_genes']
             perturbed_items = list(pathway_gene.keys())
             temp_perturbed_genes = list(pathway_gene.values())
-            for each_direction in [log2fc,1/log2fc]:
-                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
-                    gene_input_dict = {}
-                    if type(genes)!= list:
-                        genes = genes.tolist()
-                    # for each in genes:
-                    #     gene_input_dict[each] = each_direction
-                    gene_input_dict = dict.fromkeys(genes, each_direction) 
-    
-                    perturb_cells = self.adata.obs.index
-                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
-                    if 'pathway_perturbation_deltaD' not in self.adata.uns.keys():
-                        self.adata.uns['pathway_perturbation_deltaD'] = {}
-                    if str(each_direction) not in self.adata.uns['pathway_perturbation_deltaD'].keys():
-                        self.adata.uns['pathway_perturbation_deltaD'][str(each_direction)] = {}
-                    for lastCluster in self.tracks.keys():
-                        track_indices = []
-                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
-                        track_name = str(track[0][0]) 
-                        for i in range(1,len(track)):
-                            track_name += '-' + str(track[i][0])
-                        track_indices = track_cache[track_name]
-
-                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
-                        if track_name not in self.adata.uns['pathway_perturbation_deltaD'][str(each_direction)].keys():
-                            self.adata.uns['pathway_perturbation_deltaD'][str(each_direction)][track_name] = {}
-                        self.adata.uns['pathway_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
-                    del self.pb.data.obsm['perturbed_embedding']
-                    gc.collect() # collect garbage to free memory
+            total = len(temp_perturbed_genes) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
+                compiled_items = [
+                    (item_name, self.pb.compile_direct_targets(gene_input_dict))
+                    for item_name, gene_input_dict in self._compiled_directional_items(
+                        perturbed_items,
+                        temp_perturbed_genes,
+                        each_direction=each_direction,
+                        mode='pathway',
+                    )
+                ]
+                if use_batched_gpu_exact:
+                    batched_results, batch_meta = self._execute_batched_exact_items(
+                        compiled_items=compiled_items,
+                        track_tensor_cache=track_tensor_cache,
+                        mode=mode,
+                    )
+                    self.last_gpu_batch_meta = batch_meta
+                    self.progress_logger.log(
+                        f"mode={mode} resolved_backend=gpu_exact batched={str(batch_meta['batched']).lower()} "
+                        f"batch_size={batch_meta['batch_size']} model_kind={batch_meta['model_kind']} "
+                        f"cache={batch_meta['cache']} oom_backoff={str(batch_meta['oom_backoff']).lower()}"
+                    )
+                    for (item_name, _compiled_targets), item_payload in zip(compiled_items, batched_results):
+                        for track_name, deltaD in item_payload.items():
+                            self._store_delta_result(
+                                storage_key='pathway_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
+                else:
+                    for perturbation_item_idx, (item_name, compiled_targets) in tqdm(enumerate(compiled_items),total = len(compiled_items)):
+                        perturb_cells = self.adata.obs.index
+                        self.pb.perturb_input_data_compiled(perturb_cells,compiled_targets,mode='direct')
+                        for track_name, track_indices in track_cache.items():
+                            deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                            self._store_delta_result(
+                                storage_key='pathway_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        del self.pb.data.obsm['perturbed_embedding']
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
             print('finished')
         elif mode == 'random_pathway_background':
             pathway_gene = self.adata.uns['data_pathway_overlap_genes']
             perturbed_items = list(pathway_gene.keys())
             temp_perturbed_genes = list(pathway_gene.values())
             perturbed_genes = []
-            for each_direction in [log2fc,1/log2fc]:
-                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
-                    gene_input_dict = {}
+            total = len(temp_perturbed_genes) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
+                compiled_items = []
+                for perturbation_item_idx, genes in enumerate(temp_perturbed_genes):
                     if type(genes)!= list:
                         genes = genes.tolist()
-                    genes = get_random_genes(self.adata, len(genes), perturbation_item_idx) #use random genes
-                    gene_input_dict = dict.fromkeys(genes, each_direction) 
-
-                    perturb_cells = self.adata.obs.index
-                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
-                    
-                    if 'random_background_perturbation_deltaD' not in self.adata.uns.keys():
-                        self.adata.uns['random_background_perturbation_deltaD'] = {}
-                    if str(each_direction) not in self.adata.uns['random_background_perturbation_deltaD'].keys():
-                        self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)] = {}
-                    for lastCluster in self.tracks.keys():
-                        track_indices = []
-                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
-                        track_name = str(track[0][0]) 
-                        for i in range(1,len(track)):
-                            track_name += '-' + str(track[i][0])
-                        track_indices = track_cache[track_name]
-                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
-                        if track_name not in self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)].keys():
-                            self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name] = {}
-                        self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
-                    del self.pb.data.obsm['perturbed_embedding']
-                    gc.collect() # collect garbage to free memory
+                    random_gene_set = get_random_genes(self.adata, len(genes), perturbation_item_idx)
+                    compiled_items.append(
+                        (
+                            perturbed_items[perturbation_item_idx],
+                            self.pb.compile_direct_targets(dict.fromkeys(random_gene_set, each_direction)),
+                        )
+                    )
+                if use_batched_gpu_exact:
+                    batched_results, batch_meta = self._execute_batched_exact_items(
+                        compiled_items=compiled_items,
+                        track_tensor_cache=track_tensor_cache,
+                        mode=mode,
+                    )
+                    self.last_gpu_batch_meta = batch_meta
+                    self.progress_logger.log(
+                        f"mode={mode} resolved_backend=gpu_exact batched={str(batch_meta['batched']).lower()} "
+                        f"batch_size={batch_meta['batch_size']} model_kind={batch_meta['model_kind']} "
+                        f"cache={batch_meta['cache']} oom_backoff={str(batch_meta['oom_backoff']).lower()}"
+                    )
+                    for (item_name, _compiled_targets), item_payload in zip(compiled_items, batched_results):
+                        for track_name, deltaD in item_payload.items():
+                            self._store_delta_result(
+                                storage_key='random_background_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
+                else:
+                    for perturbation_item_idx, (item_name, compiled_targets) in tqdm(enumerate(compiled_items),total = len(compiled_items)):
+                        perturb_cells = self.adata.obs.index
+                        self.pb.perturb_input_data_compiled(perturb_cells,compiled_targets,mode='direct')
+                        for track_name, track_indices in track_cache.items():
+                            deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                            self._store_delta_result(
+                                storage_key='random_background_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        del self.pb.data.obsm['perturbed_embedding']
+                        gc.collect() # collect garbage to free memory
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
             print('finished')
         elif mode == 'random_drug_background':
             if 'random_background_perturbation_deltaD' in self.adata.uns.keys():
@@ -603,46 +986,86 @@ class perturbation:
             perturbed_items = list(drug_gene.keys())
             temp_perturbed_genes = list(drug_gene.values())
             perturbed_genes = []
-            for each_direction in [log2fc,1/log2fc]:
-                for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
-                    if perturbation_item_idx > random_times:
+            effective_n = min(len(temp_perturbed_genes), int(random_times))
+            total = effective_n * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
+                compiled_items = []
+                for perturbation_item_idx, genes in enumerate(temp_perturbed_genes):
+                    if perturbation_item_idx >= random_times:
                         print('Random drug background perturbation stopped as reaching the set random times:', random_times)
                         break
-                    gene_input_dict = {}
                     if type(genes)!= list:
                         genes = genes.tolist()
-                    if random_genes is not None:
-                        genes = get_random_genes(self.adata, random_genes, perturbation_item_idx) #use random genes, # of genes = median number of genes in the customized drug profile
+                    prebuilt_gene_set = _extract_prebuilt_random_gene_set(random_genes, perturbation_item_idx)
+                    if prebuilt_gene_set is not None:
+                        chosen_genes = prebuilt_gene_set
+                        gene_input_dict = {}
+                        for item in chosen_genes:
+                            name, _, sign = str(item).partition(':')
+                            gene_input_dict[name] = each_direction if sign != '-' else 1 / each_direction
+                    elif random_genes is not None:
+                        chosen_genes = get_random_genes(self.adata, random_genes, perturbation_item_idx)
+                        gene_input_dict = dict.fromkeys(chosen_genes, each_direction)
                     else:
-                        genes = get_random_genes(self.adata, len(genes), perturbation_item_idx) #use random genes
-                    gene_input_dict = dict.fromkeys(genes, each_direction) 
-
-                    perturb_cells = self.adata.obs.index
-                    self.pb.perturb_input_data(perturb_cells,gene_input_dict,mode='direct')
-                    
-                    if 'random_background_perturbation_deltaD' not in self.adata.uns.keys():
-                        self.adata.uns['random_background_perturbation_deltaD'] = {}
-                    if str(each_direction) not in self.adata.uns['random_background_perturbation_deltaD'].keys():
-                        self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)] = {}
-                    for lastCluster in self.tracks.keys():
-                        track_indices = []
-                        track = self.getTrack(len(self.stageadata)-1,lastCluster)
-                        track_name = str(track[0][0]) 
-                        for i in range(1,len(track)):
-                            track_name += '-' + str(track[i][0])
-                        track_indices = track_cache[track_name]
-                        deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
-                        if track_name not in self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)].keys():
-                            self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name] = {}
-                        self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
-                    del self.pb.data.obsm['perturbed_embedding']
-                    gc.collect() # collect garbage to free memory
+                        chosen_genes = get_random_genes(self.adata, len(genes), perturbation_item_idx)
+                        gene_input_dict = dict.fromkeys(chosen_genes, each_direction)
+                    compiled_items.append(
+                        (
+                            perturbed_items[perturbation_item_idx],
+                            self.pb.compile_direct_targets(gene_input_dict),
+                        )
+                    )
+                if use_batched_gpu_exact:
+                    batched_results, batch_meta = self._execute_batched_exact_items(
+                        compiled_items=compiled_items,
+                        track_tensor_cache=track_tensor_cache,
+                        mode=mode,
+                    )
+                    self.last_gpu_batch_meta = batch_meta
+                    self.progress_logger.log(
+                        f"mode={mode} resolved_backend=gpu_exact batched={str(batch_meta['batched']).lower()} "
+                        f"batch_size={batch_meta['batch_size']} model_kind={batch_meta['model_kind']} "
+                        f"cache={batch_meta['cache']} oom_backoff={str(batch_meta['oom_backoff']).lower()}"
+                    )
+                    for (item_name, _compiled_targets), item_payload in zip(compiled_items, batched_results):
+                        for track_name, deltaD in item_payload.items():
+                            self._store_delta_result(
+                                storage_key='random_background_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
+                else:
+                    for perturbation_item_idx, (item_name, compiled_targets) in tqdm(enumerate(compiled_items),total = len(compiled_items)):
+                        perturb_cells = self.adata.obs.index
+                        self.pb.perturb_input_data_compiled(perturb_cells,compiled_targets,mode='direct')
+                        for track_name, track_indices in track_cache.items():
+                            deltaD = self.pb.calculate_deltaD_for_tracks(track_indices)
+                            self._store_delta_result(
+                                storage_key='random_background_perturbation_deltaD',
+                                direction_key=str(each_direction),
+                                track_name=track_name,
+                                item_name=item_name,
+                                deltaD=deltaD,
+                            )
+                        del self.pb.data.obsm['perturbed_embedding']
+                        gc.collect() # collect garbage to free memory
+                        finished += 1
+                        self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
         elif mode == 'single_gene':
             all_genes = self.adata.var_names.tolist()
             all_genes = {each: [each] for each in all_genes}
             perturbed_items = list(all_genes.keys())
             temp_perturbed_genes = list(all_genes.values())
-            for each_direction in [log2fc,1/log2fc]:
+            total = len(temp_perturbed_genes) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
                 for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
                     gene_input_dict = {}
                     if type(genes)!= list:
@@ -671,6 +1094,8 @@ class perturbation:
                         self.adata.uns['single_gene_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
                     del self.pb.data.obsm['perturbed_embedding']
                     gc.collect() # collect garbage to free memory
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
             print('Single gene perturbation finished!')
         elif mode =='two_genes':
             all_genes = self.adata.var_names.tolist()
@@ -685,7 +1110,10 @@ class perturbation:
 
             perturbed_items = list(candidate_dict.keys())
             temp_perturbed_genes = list(candidate_dict.values())
-            for each_direction in [log2fc,1/log2fc]:
+            total = len(temp_perturbed_genes) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
                 for perturbation_item_idx, genes in tqdm(enumerate(temp_perturbed_genes),total = len(temp_perturbed_genes)):
                     gene_input_dict = {}
                     if type(genes)!= list:
@@ -714,8 +1142,13 @@ class perturbation:
                         self.adata.uns['two_genes_perturbation_deltaD'][str(each_direction)][track_name][perturbed_items[perturbation_item_idx]] = deltaD
                     del self.pb.data.obsm['perturbed_embedding']
                     gc.collect() # collect garbage to free memory
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
         elif mode == 'random_background':
-            for each_direction in [log2fc,1/log2fc]:
+            total = int(random_times) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
+            for each_direction in direction_sequence:
                 for perturbation_item_idx in tqdm(range(random_times),total = random_times):
                     gene_input_dict = {}
                     genes = get_random_genes(self.adata, random_genes, perturbation_item_idx) #use random genes
@@ -741,8 +1174,13 @@ class perturbation:
                         self.adata.uns['random_background_perturbation_deltaD'][str(each_direction)][track_name][perturbation_item_idx] = deltaD
                     del self.pb.data.obsm['perturbed_embedding']
                     gc.collect() # collect garbage to free memory
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f"direction={each_direction}")
             print('finished')
-    def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None):
+        self.progress_logger.log(
+            f"mode={mode} status=DONE elapsed={ProgressLogger._format_duration(time.time() - mode_started_at)}"
+        )
+    def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None,direction_mode=None):
         '''
         Analysis of perturbation results
         
@@ -760,13 +1198,24 @@ class perturbation:
 
         self.adata.obs['leiden'] = self.adata.obs['leiden'].astype('string')
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
-        analyst = perturbationAnalysis(self.adata,self.idrem_dir, stage=stage,log2fc = log2fc, mode = mode)
+        analyst = perturbationAnalysis(
+            self.adata,
+            self.idrem_dir,
+            stage=stage,
+            log2fc=log2fc,
+            mode=mode,
+            direction_mode=direction_mode,
+        )
        
         
         temp = analyst.main_analysis(perturbed_tracks = perturbed_tracks, overall_perturbation_analysis=overall_perturbation_analysis, score='avg_backScore', items=None)#read item from disk for now
         if '%s_perturbation_score'%mode not in self.adata.uns.keys():
             self.adata.uns['%s_perturbation_score'%mode] = {}
-        
-        self.adata.uns['%s_perturbation_score'%mode][str(log2fc)] = temp
-        self.adata.uns['%s_perturbation_score'%mode][str(1/log2fc)] = temp
+
+        store_directional_result(
+            self.adata.uns['%s_perturbation_score'%mode],
+            log2fc,
+            temp,
+            direction_mode=analyst.direction_mode,
+        )
         self.adata.obs['stage'] = self.adata.obs['stage'].astype(str)

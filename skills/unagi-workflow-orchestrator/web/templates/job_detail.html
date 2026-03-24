@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}{{ job.job_name }} · UNAGI Console{% endblock %}
+
+{% block content %}
+  <section class="hero hero-detail">
+    <div>
+      <p class="hero-kicker">{{ job.job_kind|upper }} · {{ job.status }}</p>
+      <h2>{{ job.job_name }}</h2>
+      <p class="hero-text">Job ID <code>{{ job.job_id }}</code></p>
+    </div>
+    <div class="header-chip">
+      <span>Updated {{ job.updated_at or "unknown" }}</span>
+      <span>{{ "%.1f"|format(job.progress_percent or 0) }}%</span>
+    </div>
+  </section>
+
+  <section
+    id="job-summary-panel"
+    class="panel"
+    hx-get="/partials/jobs/{{ job.job_id }}/summary"
+    hx-trigger="load, every 5s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_summary.html" %}
+  </section>
+
+  <section
+    id="job-log-panel"
+    class="panel"
+    hx-get="/partials/jobs/{{ job.job_id }}/log"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_log.html" %}
+  </section>
+{% endblock %}

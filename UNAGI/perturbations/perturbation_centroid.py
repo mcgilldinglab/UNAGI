@@ -4,16 +4,19 @@ import os
 import random
 import gc
 import json
+import time
 from pathlib import Path
 import torch
 from scipy.sparse import issparse
 #import DataLoader from torch
 from torch.utils.data import DataLoader
 from ..utils.gcn_utils import setup_graph
+from ..utils.progress_logger import ProgressLogger
 import threading
 from ..model.models import VAE, Plain_VAE
 # from .analysis_perturbation import perturbationAnalysis
 from .normalize_analysis_perturbation import perturbationAnalysis
+from .direction_utils import direction_values, store_directional_result
 
 def get_random_genes(adata, n,seed):
     '''
@@ -66,6 +69,11 @@ class perturbation:
         
         self.hiddenReps = []
         self.perturb_stage_data_mean = []
+        self.progress_logger = ProgressLogger(prefix='[UNAGI-PERTURB]')
+
+    def _progress_tick(self, mode, finished, total, started_at, extra=None):
+        if self.progress_logger.should_report(finished, total):
+            self.progress_logger.progress(mode, finished, total, started_at, extra=extra)
 
         
     # def read_mergeadata(self):
@@ -1040,7 +1048,7 @@ class perturbation:
                         for kk in range(self.total_stage):
                             tempout.append(each[len(each)-self.total_stage+kk])
                         self.adata.uns['%s_perturbation_deltaD'%mode][str(bound)][track_name][perturbed_items[od]][str(i)] = tempout
-    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = False,device = 'cuda:0'):
+    def run(self,mode,log2fc,inplace=False,random_times = 100,random_genes = 2,CUDA = False,device = 'cuda:0',direction_mode='two_sided'):
         '''
         Perform perturbation.
 
@@ -1067,18 +1075,34 @@ class perturbation:
             written=True
         else:
             written=False
+        mode_started_at = time.time()
+        self.progress_logger.log(
+            f"mode={mode} status=START tracks={len(self.tracks)} log2fc={log2fc} "
+            f"cuda={CUDA} device={device}"
+        )
+        direction_sequence = direction_values(log2fc, direction_mode)
         if mode == 'drug':
             from tqdm import tqdm
+            total = len(self.tracks) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
             for i in tqdm(self.tracks.keys(),desc='Running drug perturbations....'):
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,mode,written =written,CUDA=CUDA,device=device)
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f'direction={each_direction}')
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'pathway':
             from tqdm import tqdm
+            total = len(self.tracks) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
             for i in tqdm(self.tracks.keys(),desc='Running pathway perturbations....'):
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,mode,written =written,CUDA=CUDA,device=device)
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f'direction={each_direction}')
                 self.hiddenReps = [] 
                 self.perturb_stage_data_mean = []
         elif mode == 'random_pathway_background':
@@ -1088,9 +1112,14 @@ class perturbation:
             perturbed_genes = []
             for idx, each_perturbed_item in enumerate(temp_perturbed_genes):
                 perturbed_genes.append(get_random_genes(self.adata,len(each_perturbed_item),idx))
+            total = len(self.tracks) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
             for i in tqdm(self.tracks.keys(),desc='Running pathway background perturbations....'):
-                self.startAutoPerturbation(i,log2fc,'random_background',written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,'random_background', written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,'random_background',written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f'direction={each_direction}')
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'random_drug_background':
@@ -1101,16 +1130,21 @@ class perturbation:
             for idx, each_perturbed_item in enumerate(temp_perturbed_genes):
                 perturbed_genes.append(get_random_genes(self.adata,len(each_perturbed_item),idx))
             self.adata.uns['random_background_perturbation_deltaD'] = {}
+            total = len(self.tracks) * len(direction_sequence)
+            finished = 0
+            started_at = time.time()
             for i in tqdm(self.tracks.keys(),desc='Running drug background perturbations....'):
-                self.startAutoPerturbation(i,log2fc,'random_background',written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,'random_background', written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,'random_background',written = written,random_times=random_times,random_genes=perturbed_genes,CUDA=CUDA,device=device)
+                    finished += 1
+                    self._progress_tick(mode, finished, total, started_at, extra=f'direction={each_direction}')
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
 
         elif mode == 'random_background':
             for i in self.tracks.keys():
-                self.startAutoPerturbation(i,log2fc,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,mode, written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,mode,written = written,random_times=random_times,random_genes=random_genes,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'online_random_background':
@@ -1120,17 +1154,20 @@ class perturbation:
             for i in self.tracks.keys():
 
                 print(i)
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,mode,written =written,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
         elif mode == 'random_background_cmap':
             for i in self.tracks.keys():
                 print(i)
-                self.startAutoPerturbation(i,log2fc,mode,written =written,CUDA=CUDA,device=device)
-                self.startAutoPerturbation(i,1/log2fc,mode,written =written,CUDA=CUDA,device=device)
+                for each_direction in direction_sequence:
+                    self.startAutoPerturbation(i,each_direction,mode,written =written,CUDA=CUDA,device=device)
                 self.hiddenReps = []
                 self.perturb_stage_data_mean = []
+        self.progress_logger.log(
+            f"mode={mode} status=DONE elapsed={ProgressLogger._format_duration(time.time() - mode_started_at)}"
+        )
     def run_online_speed(self, allTracks:bool,perturbated_gene,perturbated_gene_reversed, unit_name,perturbed_tracks='all',stage = None, lastCluster=None,CUDA=False):
         '''
         Perform online perturbation.
@@ -1272,7 +1309,7 @@ class perturbation:
                 self.perturb_stage_data_mean = []
             perturbation_score, pval,out_deltaD = online_analyst.online_analysis([out1,out2])
         return perturbation_score, pval,out_deltaD
-    def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None):
+    def analysis(self,mode,log2fc,perturbed_tracks='all',overall_perturbation_analysis=True,stage=None,direction_mode=None):
         '''
         Analysis of perturbation results
         
@@ -1290,13 +1327,24 @@ class perturbation:
 
         self.adata.obs['leiden'] = self.adata.obs['leiden'].astype('string')
         self.adata.obs['stage'] = self.adata.obs['stage'].astype('string')
-        analyst = perturbationAnalysis(self.adata,self.idrem_dir, stage=stage,log2fc = log2fc, mode = mode)
+        analyst = perturbationAnalysis(
+            self.adata,
+            self.idrem_dir,
+            stage=stage,
+            log2fc=log2fc,
+            mode=mode,
+            direction_mode=direction_mode,
+        )
        
         
         temp = analyst.main_analysis(perturbed_tracks = perturbed_tracks, overall_perturbation_analysis=overall_perturbation_analysis, score='avg_backScore', items=None)#read item from disk for now
         if '%s_perturbation_score'%mode not in self.adata.uns.keys():
             self.adata.uns['%s_perturbation_score'%mode] = {}
-        
-        self.adata.uns['%s_perturbation_score'%mode][str(log2fc)] = temp
-        self.adata.uns['%s_perturbation_score'%mode][str(1/log2fc)] = temp
+
+        store_directional_result(
+            self.adata.uns['%s_perturbation_score'%mode],
+            log2fc,
+            temp,
+            direction_mode=analyst.direction_mode,
+        )
         

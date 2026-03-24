@@ -1,22 +1,8 @@
-import scanpy as sc
-import os
 import numpy as np
 import torch
-# from pyro.contrib.examples.util import MNIST
-import torch.nn as nn
-import torchvision.transforms as transforms
-import scanpy as sc
-import torch.nn.functional as F
-import pyro
-import pyro.distributions as dist
-# import pyro.contrib.examples.util  # patches torchvision
-from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import Adam
-import matplotlib.pyplot as plt
-from torchvision.utils import make_grid
-from torch.utils.data import Dataset,DataLoader
+from torch.utils.data import Dataset
 from scipy.sparse import csc_matrix
-import umap
+
 from ..dynamic_regulatory_networks.processTFs import mySigmoid
 #NUMGENES=len(adata.var)
 # customized h5ad dataset
@@ -31,13 +17,7 @@ class H5ADDataSet(Dataset):
         return self.data.X.shape[0]
     
     def __getitem__(self,idx):
-
-        x=csc_matrix(self.data.X[idx])[0].toarray()[0]
-        x=x.astype(np.float32)
-        x_tensor=torch.from_numpy(x)
-        if 'gcn_connectivities' not in self.data.obsp.keys():
-            return x_tensor,None,idx
-        return x_tensor,self.data.obsp['gcn_connectivities'][idx].indices.tolist(),idx#,self.data.obs['Sample.ID'][idx]
+        return int(idx)
     def num_genes(self):
         return len(self.data.var)
     def returnadata(self):
@@ -53,13 +33,7 @@ class H5ADPlainDataSet(Dataset):
         return self.data.X.shape[0]
     
     def __getitem__(self,idx):
-
-        x=csc_matrix(self.data.X[idx])[0].toarray()[0]
-        x=x.astype(np.float32)
-        x_tensor=torch.from_numpy(x)
-        if 'gcn_connectivities' not in self.data.obsp.keys():
-            return x_tensor,0,idx
-        return x_tensor,0,idx#,self.data.obs['Sample.ID'][idx]
+        return int(idx)
     def num_genes(self):
         return len(self.data.var)
     def returnadata(self):

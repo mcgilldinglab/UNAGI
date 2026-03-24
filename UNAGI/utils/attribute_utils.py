@@ -179,7 +179,7 @@ def extracth5adcluster(data, ID):
     splitData = []
     for i in range(len(data)):
         
-        if int(data.obs['leiden'][i]) == ID:
+        if int(data.obs['leiden'].iloc[i]) == ID:
             splitDataID.append(i)
     splitData = data[splitDataID]
     
@@ -203,7 +203,7 @@ def extracth5adclusterids(data, ID):
     splitData = []
     for i in range(len(data)):
         
-        if int(data.obs['leiden'][i]) == ID:
+        if int(data.obs['leiden'].iloc[i]) == ID:
             splitDataID+=data[i].obs.index.tolist()
     splitData = data[splitDataID]
     

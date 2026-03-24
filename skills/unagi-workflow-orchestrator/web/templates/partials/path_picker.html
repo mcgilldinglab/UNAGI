@@ -1,0 +1,31 @@
+<div class="section-head compact">
+  <h3>Path Picker</h3>
+  <p class="muted">{{ path }}</p>
+</div>
+
+<div class="action-row">
+  {% if parent_path %}
+    <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target={{ target }}&kind={{ kind }}&path={{ parent_path|urlquote }}" hx-target="#{{ request.headers.get('hx-target', 'path-picker-panel') }}" hx-swap="innerHTML">Parent</button>
+  {% endif %}
+</div>
+
+<div class="path-list">
+  {% for entry in entries %}
+    <div class="path-item path-item-static">
+      <div>
+        <strong>{{ entry.name }}</strong>
+        <span>{{ entry.path }}</span>
+      </div>
+      <div class="link-stack">
+        {% if entry.is_dir %}
+          <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target={{ target }}&kind={{ kind }}&path={{ entry.path|urlquote }}" hx-target="#{{ request.headers.get('hx-target', 'path-picker-panel') }}" hx-swap="innerHTML">Open</button>
+        {% endif %}
+        {% if entry.selectable %}
+          <button class="button-link primary small" type="button" onclick="window.unagiConsole.setPath('{{ target }}', '{{ entry.path }}')">Use</button>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <p class="muted">No entries found.</p>
+  {% endfor %}
+</div>

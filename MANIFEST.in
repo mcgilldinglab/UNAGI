@@ -1,2 +1,6 @@
 include README.md
-include LICENSE
+include LICENSE.txt
+include UNAGI/data/example/0.h5ad
+include UNAGI/data/example/1.h5ad
+include UNAGI/data/example/2.h5ad
+include UNAGI/data/example/3.h5ad

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}New Experiment · UNAGI Console{% endblock %}
+
+{% block content %}
+  <section class="hero hero-detail">
+    <div>
+      <p class="hero-kicker">Training Console</p>
+      <h2>Create A Durable Training Job</h2>
+      <p class="hero-text">Choose an existing dataset path, adjust the common workflow parameters, optionally edit the full merged YAML, validate it in place, then submit the job into the durable runner.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head">
+      <h2>Training Configuration</h2>
+      <p class="muted">Template {{ template_path }}</p>
+    </div>
+
+    <form id="training-form" class="console-form">
+      <div class="form-grid">
+        <label><span>Job Name</span><input type="text" name="job_name" placeholder="Optional display name"></label>
+        <label><span>Template Path</span><input id="template_path" type="text" name="template_path" value="{{ initial['template_path'] }}"></label>
+        <label><span>Data Path</span><input id="data.path" type="text" name="data.path" value="{{ initial['data.path'] }}"></label>
+        <label><span>Stage Key</span><input type="text" name="data.stage_key" value="{{ initial['data.stage_key'] }}"></label>
+        <label><span>Total Stage</span><input type="number" name="data.total_stage" value="{{ initial['data.total_stage'] }}"></label>
+        <label><span>Label Key</span><input type="text" name="data.label_key" value="{{ initial['data.label_key'] }}"></label>
+        <label><span>Random Seed</span><input type="number" name="random_seed" value="{{ initial['random_seed'] }}"></label>
+        <label><span>Task</span><input type="text" name="training.task" value="{{ initial['training.task'] }}"></label>
+        <label><span>Dist</span><input type="text" name="training.dist" value="{{ initial['training.dist'] }}"></label>
+        <label><span>GPU</span>
+          <select name="training.GPU">
+            <option value="true" {% if initial['training.GPU'] == 'true' %}selected{% endif %}>true</option>
+            <option value="false" {% if initial['training.GPU'] != 'true' %}selected{% endif %}>false</option>
+          </select>
+        </label>
+        <label><span>Device</span><input type="text" name="training.device" value="{{ initial['training.device'] }}"></label>
+        <label><span>Epoch Initial</span><input type="number" name="training.epoch_initial" value="{{ initial['training.epoch_initial'] }}"></label>
+        <label><span>Epoch Iter</span><input type="number" name="training.epoch_iter" value="{{ initial['training.epoch_iter'] }}"></label>
+        <label><span>Max Iter</span><input type="number" name="training.max_iter" value="{{ initial['training.max_iter'] }}"></label>
+        <label><span>Batch Size</span><input type="number" name="training.BATCHSIZE" value="{{ initial['training.BATCHSIZE'] }}"></label>
+        <label><span>Adversarial</span>
+          <select name="training.adversarial">
+            <option value="true" {% if initial['training.adversarial'] == 'true' %}selected{% endif %}>true</option>
+            <option value="false" {% if initial['training.adversarial'] != 'true' %}selected{% endif %}>false</option>
+          </select>
+        </label>
+        <label><span>GCN</span>
+          <select name="training.GCN">
+            <option value="true" {% if initial['training.GCN'] == 'true' %}selected{% endif %}>true</option>
+            <option value="false" {% if initial['training.GCN'] != 'true' %}selected{% endif %}>false</option>
+          </select>
+        </label>
+        <label><span>Species</span><input type="text" name="species" value="{{ initial['species'] }}"></label>
+        <label><span>CPO</span>
+          <select name="run.CPO">
+            <option value="true" {% if initial['run.CPO'] == 'true' %}selected{% endif %}>true</option>
+            <option value="false" {% if initial['run.CPO'] != 'true' %}selected{% endif %}>false</option>
+          </select>
+        </label>
+        <label><span>Connect Edges Cutoff</span><input type="text" name="run.connect_edges_cutoff" value="{{ initial['run.connect_edges_cutoff'] }}"></label>
+        <label><span>Max Retries</span><input type="number" name="max_retries" value="0"></label>
+        <label><span>Retry Delay Sec</span><input type="number" name="retry_delay_sec" value="60"></label>
+      </div>
+
+      <label class="full-width">
+        <span>Advanced YAML</span>
+        <textarea name="advanced_yaml" rows="22">{{ advanced_yaml }}</textarea>
+      </label>
+    </form>
+
+    <div class="action-row">
+      <button class="button-link secondary" type="button" onclick="window.unagiConsole.submitForm('training-form', '/api/training/validate', 'training-result', { redirectOnSuccess: false })">Validate</button>
+      <button class="button-link primary" type="button" onclick="window.unagiConsole.submitForm('training-form', '/api/training', 'training-result', { redirectOnSuccess: true })">Submit Training Job</button>
+    </div>
+    <pre id="training-result" class="json-result hidden-result"></pre>
+  </section>
+
+  <section class="panel">
+    <div class="section-head">
+      <h2>Path Picker</h2>
+      <p class="muted">Allowed roots: {{ allowed_roots|join(', ') }}</p>
+    </div>
+    <div class="path-picker-controls">
+      <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target=data.path&kind=training_data" hx-target="#path-picker-panel" hx-swap="innerHTML">Browse Data Paths</button>
+      <button class="button-link secondary small" type="button" hx-get="/partials/path-picker?target=template_path&kind=path" hx-target="#path-picker-panel" hx-swap="innerHTML">Browse Template Paths</button>
+    </div>
+    <div id="path-picker-panel" class="subpanel">
+      <p class="muted">Choose a browser target above.</p>
+    </div>
+  </section>
+{% endblock %}
