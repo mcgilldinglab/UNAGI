@@ -180,6 +180,32 @@ def test_validate_custom_perturbation_payload_resolves_cpu_centroid_when_request
     assert result["normalized"]["resolved_execution_backend"] == "cpu_centroid"
 
 
+def test_validate_custom_perturbation_payload_accepts_stage_scope(tmp_path):
+    analysis_dir = _prepare_analysis_dir(tmp_path)
+
+    result = validate_custom_perturbation_payload(
+        analysis_dir=analysis_dir,
+        analysis_job_id="analyze_test",
+        analysis_iteration=1,
+        raw_payload={
+            "mode": "pathway",
+            "scope_kind": "stage",
+            "stage_key": "1",
+            "perturb_change": 0.5,
+            "direction_mode": "two_sided",
+            "execution_mode": "auto",
+            "target_name": "PathA",
+            "gene_text": "gene0, gene1",
+        },
+        gpu_available=True,
+    )
+
+    assert result["ok"] is True
+    assert result["normalized"]["stage_key"] == "1"
+    assert result["normalized"]["stage_label"] == "stage 1"
+    assert result["normalized"]["stage_index"] == 1
+
+
 def test_perturbation_context_cache_reuses_hot_context(tmp_path):
     skill_root = tmp_path / "skill_root"
     analysis_dir = _prepare_analysis_dir(tmp_path)
@@ -638,6 +664,8 @@ def test_build_form_context_reports_saved_background_direction_mode(tmp_path):
     assert form["default_direction_mode"] == "two_sided"
     assert form["background_direction_mode"] == "two_sided"
     assert "different random backgrounds" in form["background_note"]
+    assert {"value": "stage", "label": "stage"} in form["scope_options"]
+    assert form["stage_options"][1]["value"] == "1"
 
 
 def test_run_request_requires_valid_pvalues(tmp_path):
@@ -688,3 +716,71 @@ def test_run_request_requires_valid_pvalues(tmp_path):
             result_dir=tmp_path / "result_bundle",
             log=lambda _message: None,
         )
+
+
+def test_run_request_passes_stage_scope_to_runner_analysis(tmp_path):
+    analysis_dir = _prepare_analysis_dir(tmp_path)
+    adata, _, _ = custom_perturbation_module._read_analysis_adata(analysis_dir)
+    context = PerturbationContext(
+        skill_root=tmp_path / "skill_root",
+        analysis_dir=analysis_dir,
+        adata=adata,
+        metadata={},
+        model_path=analysis_dir / "model_save" / "example_task_1.pth",
+        training_params_path=analysis_dir / "model_save" / "training_parameters.json",
+        cache_root=tmp_path / "cache",
+        analysis_iteration=1,
+    )
+
+    captured: dict[str, object] = {}
+
+    class _Runner:
+        def __init__(self, adata):
+            self.adata = adata
+            self.last_gpu_batch_meta = {}
+
+        def run(self, *_args, **_kwargs):
+            return None
+
+        def analysis(self, mode, perturb_change, **kwargs):
+            captured["mode"] = mode
+            captured["perturb_change"] = perturb_change
+            captured["kwargs"] = dict(kwargs)
+            self.adata.uns["pathway_perturbation_score"] = {
+                "0.5": {"overall": {"top_compounds": {"0": "PathA"}}}
+            }
+
+    runner = _Runner(adata)
+    context.get_runner = lambda _execution_mode: runner  # type: ignore[method-assign]
+    context._load_or_build_background = lambda **_kwargs: {"0.5": {"overall": {"bg_0": 0.1}}}  # type: ignore[method-assign]
+    context._set_backend_items = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    context._runner_clear_keys = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    context._extract_result_table = lambda *_args, **_kwargs: (  # type: ignore[method-assign]
+        pd.DataFrame({"pathways": ["PathA"], "perturbation score": [0.42], "pval_adjusted": [0.01]}),
+        "overall",
+    )
+
+    summary = context.run_request(
+        {
+            "mode": "pathway",
+            "execution_mode": "centroid",
+            "resolved_execution_backend": "gpu_centroid",
+            "perturb_change": 0.5,
+            "direction_mode": "two_sided",
+            "scope_kind": "stage",
+            "stage_key": "1",
+            "stage_label": "stage 1",
+            "stage_index": 1,
+            "target_spec": {"name": "PathA", "genes": ["GENE0", "GENE1"]},
+            "analysis_iteration": 1,
+            "dataset_path": str(analysis_dir / "dataset.h5ad"),
+            "attribute_path": str(analysis_dir / "attribute.pkl"),
+            "cpu_workers": 1,
+        },
+        result_dir=tmp_path / "result_bundle",
+        log=lambda _message: None,
+    )
+
+    assert captured["mode"] == "pathway"
+    assert captured["kwargs"]["stage"] == 1
+    assert summary["metadata"]["stage_label"] == "stage 1"

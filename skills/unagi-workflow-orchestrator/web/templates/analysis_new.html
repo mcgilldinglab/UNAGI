@@ -50,6 +50,11 @@
           </select>
         </label>
         <label><span>Perturbed Tracks</span><input type="text" name="perturbed_tracks" value="{{ initial['perturbed_tracks'] }}"></label>
+        <label>
+          <span>Perturb Stage</span>
+          <input type="text" name="perturb_stage" value="{{ initial['perturb_stage'] }}" placeholder="blank = all stages">
+          <span class="muted">Use a stage label from the dataset, or a zero-based stage index.</span>
+        </label>
         <label><span>Customized Pathway</span><input id="customized_pathway" type="text" name="customized_pathway" value="{{ initial['customized_pathway'] }}"></label>
         <label><span>Customized Drug</span><input id="customized_drug" type="text" name="customized_drug" value="{{ initial['customized_drug'] }}"></label>
         <label><span>CMAP Dir</span><input id="cmap_dir" type="text" name="cmap_dir" value="{{ initial['cmap_dir'] }}"></label>

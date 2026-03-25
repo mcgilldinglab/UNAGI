@@ -76,7 +76,7 @@ class analyst:
                 training_params_obj = json.load(open(self.training_params_path,'r'))
         self.model_name = training_params_obj['task']+'_'+str(self.iteration)+'.pth'
         self.model_source_path = self.training_params_path.parent / self.model_name
-    def perturbation_analyse_customized_pathway(self,customized_pathway,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu',random_genes=5,random_times=100,direction_mode='two_sided'):
+    def perturbation_analyse_customized_pathway(self,customized_pathway,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=False,device='cpu',random_genes=5,random_times=100,direction_mode='two_sided',perturb_stage=None):
         '''
         Perform perturbation on customized pathway.
 
@@ -113,7 +113,15 @@ class analyst:
         a.run('pathway',bound,inplace=True,CUDA=CUDA,device=device,direction_mode=direction_mode)
         a.run('random_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times,direction_mode=direction_mode)
         print('random background done')
-        a.analysis('pathway',bound,perturbed_tracks,overall_perturbation_analysis,direction_mode=direction_mode)
+        stage_info = self._resolve_perturb_stage(perturb_stage)
+        a.analysis(
+            'pathway',
+            bound,
+            perturbed_tracks,
+            overall_perturbation_analysis,
+            stage=stage_info['index'] if stage_info is not None else None,
+            direction_mode=direction_mode,
+        )
         print('Finish results analysis')
         if save_csv is not None:
             a.uns['pathway_perturbation'].to_csv(Path(save_csv))
@@ -197,7 +205,7 @@ class analyst:
         if save_adata is not None:
             a.adata.write(Path(save_adata),compression='gzip', compression_opts=9)
 
-    def perturbation_analyse_customized_drug(self,customized_drug,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=True,device='cuda:0',random_genes=2,random_times=100,direction_mode='two_sided'):
+    def perturbation_analyse_customized_drug(self,customized_drug,perturbed_tracks='all',overall_perturbation_analysis=True,bound=0.5,save_csv = None,save_adata = None,CUDA=True,device='cuda:0',random_genes=2,random_times=100,direction_mode='two_sided',perturb_stage=None):
         '''
         Perform perturbation on customized drug.
 
@@ -234,7 +242,15 @@ class analyst:
         print('drug perturabtion done')
         a.run('random_drug_background',bound,inplace=True,CUDA=CUDA,device=device,random_genes=random_genes,random_times=random_times,direction_mode=direction_mode)
         print('random background done')
-        a.analysis('drug',bound,perturbed_tracks,overall_perturbation_analysis=overall_perturbation_analysis,direction_mode=direction_mode)
+        stage_info = self._resolve_perturb_stage(perturb_stage)
+        a.analysis(
+            'drug',
+            bound,
+            perturbed_tracks,
+            overall_perturbation_analysis=overall_perturbation_analysis,
+            stage=stage_info['index'] if stage_info is not None else None,
+            direction_mode=direction_mode,
+        )
         print('Finish results analysis')
         if save_csv is not None:
             a.uns['drug_perturbation'].to_csv(Path(save_csv))
@@ -328,6 +344,43 @@ class analyst:
         if isinstance(perturbed_tracks, (list, tuple, set)):
             return [str(each) for each in perturbed_tracks]
         return str(perturbed_tracks)
+
+    def _stage_order(self):
+        ordered = []
+        seen = set()
+        for value in self.adata.obs['stage'].astype(str).tolist():
+            if value in seen:
+                continue
+            seen.add(value)
+            ordered.append(value)
+        return ordered
+
+    def _resolve_perturb_stage(self, perturb_stage):
+        if perturb_stage in (None, '', 'all'):
+            return None
+        raw_value = str(perturb_stage).strip()
+        if raw_value == '':
+            return None
+        stage_order = self._stage_order()
+        if raw_value in stage_order:
+            return {
+                'index': int(stage_order.index(raw_value)),
+                'label': str(raw_value),
+            }
+        try:
+            stage_index = int(raw_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"perturb_stage must match one of the dataset stage labels: {', '.join(stage_order)}"
+            ) from exc
+        if stage_index < 0 or stage_index >= len(stage_order):
+            raise ValueError(
+                f"perturb_stage index {stage_index} is out of range for stages: {', '.join(stage_order)}"
+            )
+        return {
+            'index': int(stage_index),
+            'label': str(stage_order[stage_index]),
+        }
 
     def _signature_hash(self, payload):
         encoded = json.dumps(payload, sort_keys=True).encode('utf-8')
@@ -571,6 +624,7 @@ class analyst:
         direction_mode,
         perturbed_tracks,
         overall_perturbation_analysis,
+        perturb_stage,
         cache_state,
     ):
         pathway_items = self.adata.uns.get('data_pathway_overlap_genes', {})
@@ -590,6 +644,7 @@ class analyst:
             direction_mode=str(direction_mode),
             perturbed_tracks=self._normalize_track_request(perturbed_tracks),
             overall=bool(overall_perturbation_analysis),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
             background_signature=background_signature['signature_hash'],
         )
 
@@ -686,9 +741,23 @@ class analyst:
         started_at = time.time()
         self._log_perturb_stage(logger, 'pathway_score', status='START')
         if perturbed_tracks != 'all':
-            runner.analysis('pathway',perturb_change,perturbed_tracks,overall_perturbation_analysis=False,direction_mode=direction_mode)
+            runner.analysis(
+                'pathway',
+                perturb_change,
+                perturbed_tracks,
+                overall_perturbation_analysis=False,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+                direction_mode=direction_mode,
+            )
         else:
-            runner.analysis('pathway',perturb_change,perturbed_tracks,overall_perturbation_analysis,direction_mode=direction_mode)
+            runner.analysis(
+                'pathway',
+                perturb_change,
+                perturbed_tracks,
+                overall_perturbation_analysis,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+                direction_mode=direction_mode,
+            )
         self._log_perturb_stage(logger, 'pathway_score', status='DONE', started_at=started_at)
         stage_metrics['score'] = {
             'cache': 'miss',
@@ -718,6 +787,7 @@ class analyst:
         direction_mode,
         perturbed_tracks,
         overall_perturbation_analysis,
+        perturb_stage,
         random_times,
         progressionmarker_background_sampling,
         cache_state,
@@ -745,6 +815,7 @@ class analyst:
             direction_mode=str(direction_mode),
             perturbed_tracks=self._normalize_track_request(perturbed_tracks),
             overall=bool(overall_perturbation_analysis),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
             background_signature=background_signature['signature_hash'],
         )
 
@@ -869,9 +940,23 @@ class analyst:
         started_at = time.time()
         self._log_perturb_stage(logger, 'drug_score', status='START')
         if perturbed_tracks!='all':
-            runner.analysis('drug',perturb_change,perturbed_tracks,overall_perturbation_analysis=False,direction_mode=direction_mode)
+            runner.analysis(
+                'drug',
+                perturb_change,
+                perturbed_tracks,
+                overall_perturbation_analysis=False,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+                direction_mode=direction_mode,
+            )
         else:
-            runner.analysis('drug',perturb_change,perturbed_tracks,overall_perturbation_analysis,direction_mode=direction_mode)
+            runner.analysis(
+                'drug',
+                perturb_change,
+                perturbed_tracks,
+                overall_perturbation_analysis,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+                direction_mode=direction_mode,
+            )
         self._log_perturb_stage(logger, 'drug_score', status='DONE', started_at=started_at)
         stage_metrics['score'] = {
             'cache': 'miss',
@@ -930,7 +1015,7 @@ class analyst:
             direction_mode=direction_mode,
         )
         
-    def start_analyse(self,progressionmarker_background_sampling,run_perturbation,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,direction_mode='two_sided',perturbation_schedule='single_gpu_optimized',cpu_workers=None,dynamic_marker_strategy='optimized',dynamic_marker_cpu_workers=None,dynamic_marker_force_serial=False,dynamic_marker_verify_legacy=False,hierarchical_marker_cpu_workers=None):
+    def start_analyse(self,progressionmarker_background_sampling,run_perturbation,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',perturb_stage=None,ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,direction_mode='two_sided',perturbation_schedule='single_gpu_optimized',cpu_workers=None,dynamic_marker_strategy='optimized',dynamic_marker_cpu_workers=None,dynamic_marker_force_serial=False,dynamic_marker_verify_legacy=False,hierarchical_marker_cpu_workers=None):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -969,6 +1054,7 @@ class analyst:
             f"centroid={centroid}, perturb_change={perturb_change}, direction_mode={direction_mode}, "
             f"perturbation_schedule={perturbation_schedule}, dynamic_marker_strategy={dynamic_marker_strategy}"
         )
+        perturb_stage_info = self._resolve_perturb_stage(perturb_stage)
         execution_context = self._resolve_perturb_execution_backend(centroid=centroid, cpu_workers=cpu_workers)
         stage_timings = {}
         hierarchical_workers = (
@@ -978,7 +1064,8 @@ class analyst:
         )
         logger.log(
             f"perturbation_backend={execution_context['backend']} "
-            f"cpu_workers={execution_context['cpu_workers']} device={execution_context['device']}"
+            f"cpu_workers={execution_context['cpu_workers']} device={execution_context['device']} "
+            f"perturb_stage={perturb_stage_info['label'] if perturb_stage_info is not None else 'all'}"
         )
 
         if not ignore_hcmarkers:
@@ -1131,6 +1218,7 @@ class analyst:
                     direction_mode=direction_mode,
                     perturbed_tracks=perturbed_tracks,
                     overall_perturbation_analysis=overall_perturbation_analysis,
+                    perturb_stage=perturb_stage_info,
                     cache_state=perturbation_state,
                 )
                 stage_timings['pathway_background'] = pathway_stage_metrics['background']
@@ -1147,6 +1235,7 @@ class analyst:
                     direction_mode=direction_mode,
                     perturbed_tracks=perturbed_tracks,
                     overall_perturbation_analysis=overall_perturbation_analysis,
+                    perturb_stage=perturb_stage_info,
                     random_times=random_times,
                     progressionmarker_background_sampling=progressionmarker_background_sampling,
                     cache_state=perturbation_state,
@@ -1181,6 +1270,7 @@ class analyst:
             metadata['perturbation_schedule'] = str(perturbation_schedule)
             metadata['resolved_execution_backend'] = str(execution_context['backend'])
             metadata['cpu_workers'] = int(execution_context['cpu_workers'])
+            metadata['perturb_stage'] = perturb_stage_info['label'] if perturb_stage_info is not None else None
             output_adata.uns['analysis_metadata'] = metadata
             output_adata.uns['analysis_direction_mode'] = str(direction_mode)
         if perturbation_state['runner'] is not None:
@@ -1199,6 +1289,7 @@ class analyst:
         metadata['dynamic_marker_force_serial'] = bool(dynamic_marker_force_serial)
         metadata['dynamic_marker_verify_legacy'] = bool(dynamic_marker_verify_legacy)
         metadata['hierarchical_marker_cpu_workers'] = int(hierarchical_workers)
+        metadata['perturb_stage'] = perturb_stage_info['label'] if perturb_stage_info is not None else None
         output_adata.uns['analysis_metadata'] = metadata
         if not ignore_hcmarkers:
             output_adata.uns['hcmarkers'] = hcmarkers 
@@ -1223,6 +1314,7 @@ class analyst:
                 'dynamic_marker_cpu_workers': int(dynamic_marker_workers) if not ignore_dynamic_markers else int(default_cpu_workers(None)),
                 'hierarchical_marker_cpu_workers': int(hierarchical_workers),
                 'run_perturbation': bool(run_perturbation),
+                'perturb_stage': perturb_stage_info['label'] if perturb_stage_info is not None else None,
             },
         )
         logger.log(f"stage=save_outputs status=DONE elapsed={ProgressLogger._format_duration(time.time()-analysis_t0)}")

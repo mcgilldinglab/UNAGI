@@ -45,8 +45,8 @@ class _FakePerturbationRunner:
                 key: {'0-1': {'DR1': np.array([4.0])}}
             }
 
-    def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, direction_mode='two_sided'):
-        type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks)))
+    def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, stage=None, direction_mode='two_sided'):
+        type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks), stage))
         key = str(bound)
         if mode == 'pathway':
             self.adata.uns['pathway_perturbation_score'] = {
@@ -228,6 +228,28 @@ def test_single_gpu_optimized_invalidates_cache_when_perturb_change_changes(monk
     )
 
     assert len(_FakePerturbationRunner.run_modes) == first_run_count * 2
+
+
+def test_single_gpu_optimized_passes_stage_filter_to_pathway_and_drug_scoring(monkeypatch, tmp_path):
+    data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
+    _patch_analysis_dependencies(monkeypatch)
+    _FakePerturbationRunner.reset()
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        perturb_stage="1",
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    assert ("pathway", 0.5, "all", 1) in _FakePerturbationRunner.analysis_modes
+    assert ("drug", 0.5, "all", 1) in _FakePerturbationRunner.analysis_modes
+    saved_uns = _load_saved_uns(target_dir)
+    assert saved_uns["analysis_metadata"]["perturb_stage"] == "1"
 
 
 def test_resource_aware_schedule_is_reserved(monkeypatch, tmp_path):

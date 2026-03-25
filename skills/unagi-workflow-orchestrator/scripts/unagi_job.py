@@ -330,6 +330,7 @@ def _analysis_defaults(iteration: int, data_path: Path, target_dir: Path) -> Dic
         "direction_mode": "two_sided",
         "overall_perturbation_analysis": True,
         "perturbed_tracks": "all",
+        "perturb_stage": None,
         "ignore_pathway_perturabtion": False,
         "ignore_drug_perturabtion": False,
         "centroid": False,
@@ -384,6 +385,11 @@ def _normalize_analysis_params(
         key="overall_perturbation_analysis",
     )
     params["perturbed_tracks"] = str(params.get("perturbed_tracks", "all"))
+    perturb_stage = params.get("perturb_stage")
+    if perturb_stage in (None, ""):
+        params["perturb_stage"] = None
+    else:
+        params["perturb_stage"] = str(perturb_stage).strip()
     params["ignore_pathway_perturabtion"] = _coerce_bool(
         params.get("ignore_pathway_perturabtion", False),
         key="ignore_pathway_perturabtion",
@@ -575,6 +581,7 @@ def main() -> int:
             "cmap_dir": params.get("cmap_dir"),
             "overall_perturbation_analysis": bool(params.get("overall_perturbation_analysis", True)),
             "perturbed_tracks": str(params.get("perturbed_tracks", "all")),
+            "perturb_stage": params.get("perturb_stage"),
             "ignore_pathway_perturabtion": bool(params.get("ignore_pathway_perturabtion", False)),
             "ignore_drug_perturabtion": bool(params.get("ignore_drug_perturabtion", False)),
             "centroid": bool(params.get("centroid", False)),
@@ -605,6 +612,8 @@ def main() -> int:
 
         if "direction_mode" in supported:
             analysis_kwargs["direction_mode"] = str(params.get("direction_mode", "two_sided"))
+        if "perturb_stage" in supported and params.get("perturb_stage") not in (None, ""):
+            analysis_kwargs["perturb_stage"] = params.get("perturb_stage")
 
         if "perturbation_schedule" in supported and params.get("perturbation_schedule") is not None:
             analysis_kwargs["perturbation_schedule"] = str(params.get("perturbation_schedule"))
@@ -686,6 +695,7 @@ def create_analysis_job(
     direction_mode: Optional[str],
     overall_perturbation_analysis: Optional[bool],
     perturbed_tracks: Optional[str],
+    perturb_stage: Optional[str],
     ignore_pathway_perturabtion: Optional[bool],
     ignore_drug_perturabtion: Optional[bool],
     centroid: Optional[bool],
@@ -731,6 +741,7 @@ def create_analysis_job(
         "direction_mode": direction_mode,
         "overall_perturbation_analysis": overall_perturbation_analysis,
         "perturbed_tracks": perturbed_tracks,
+        "perturb_stage": perturb_stage,
         "ignore_pathway_perturabtion": ignore_pathway_perturabtion,
         "ignore_drug_perturabtion": ignore_drug_perturabtion,
         "centroid": centroid,
@@ -1079,6 +1090,7 @@ def _custom_perturbation_signature_payload(payload: Dict[str, Any]) -> dict[str,
         "mode": str(payload.get("mode") or ""),
         "scope_kind": str(payload.get("scope_kind") or ""),
         "track_key": payload.get("track_key"),
+        "stage_key": payload.get("stage_key"),
         "perturb_change": float(payload.get("perturb_change") or 0.0),
         "direction_mode": str(payload.get("direction_mode") or ""),
         "requested_execution_mode": str(payload.get("requested_execution_mode") or ""),
@@ -1247,6 +1259,7 @@ def create_custom_perturbation_job_from_file(
         "cpu_workers": int(normalized.get("cpu_workers") or 1),
         "scope_kind": str(normalized["scope_kind"]),
         "track_key": normalized.get("track_key"),
+        "stage_key": normalized.get("stage_key"),
         "perturbation_mode": str(normalized["mode"]),
         "target_spec": normalized.get("target_spec"),
         "analysis_job_file_path": str(analysis_jf),
@@ -2312,6 +2325,7 @@ def cmd_submit_analysis(args: argparse.Namespace) -> int:
         direction_mode=args.direction_mode,
         overall_perturbation_analysis=args.overall_perturbation_analysis,
         perturbed_tracks=args.perturbed_tracks,
+        perturb_stage=args.perturb_stage,
         ignore_pathway_perturabtion=args.ignore_pathway_perturabtion,
         ignore_drug_perturabtion=args.ignore_drug_perturabtion,
         centroid=args.centroid,
@@ -2350,6 +2364,7 @@ def cmd_submit_perturbation(args: argparse.Namespace) -> int:
         "mode": args.mode,
         "scope_kind": args.scope_kind,
         "track_key": args.track_key,
+        "stage_key": args.stage_key,
         "perturb_change": args.perturb_change,
         "direction_mode": args.direction_mode,
         "execution_mode": args.execution_mode,
@@ -2499,6 +2514,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run perturbation analysis in two-sided (default) or one-sided mode",
     )
     submit_analysis.add_argument("--perturbed-tracks", default=None, help="Tracks to analyze")
+    submit_analysis.add_argument("--perturb-stage", default=None, help="Limit pathway/drug scoring to one stage label or zero-based stage index")
     perturbation_mode = submit_analysis.add_mutually_exclusive_group()
     perturbation_mode.add_argument("--run-perturbation", action="store_true", dest="run_perturbation", help="Enable perturbation stage")
     perturbation_mode.add_argument("--no-perturbation", action="store_false", dest="run_perturbation", help="Disable perturbation stage")
@@ -2548,8 +2564,9 @@ def build_parser() -> argparse.ArgumentParser:
     submit_perturbation.add_argument("--repo-root", default=None, help="UNAGI repository root")
     submit_perturbation.add_argument("--analysis-job-id", required=True, help="Parent analysis job ID")
     submit_perturbation.add_argument("--mode", choices=["gene", "pathway", "drug"], required=True)
-    submit_perturbation.add_argument("--scope-kind", choices=["overall", "track"], default="overall")
+    submit_perturbation.add_argument("--scope-kind", choices=["overall", "track", "stage"], default="overall")
     submit_perturbation.add_argument("--track-key", default=None, help="Temporal track key when scope-kind=track")
+    submit_perturbation.add_argument("--stage-key", default=None, help="Stage label when scope-kind=stage")
     submit_perturbation.add_argument("--perturb-change", type=float, default=0.5)
     submit_perturbation.add_argument("--direction-mode", choices=["two_sided", "one_sided"], default="two_sided")
     submit_perturbation.add_argument("--execution-mode", choices=["auto", "centroid", "cell_exact"], default="auto")

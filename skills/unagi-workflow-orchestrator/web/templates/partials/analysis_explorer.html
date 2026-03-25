@@ -303,6 +303,14 @@
               {% endfor %}
             </select>
           </label>
+          <label class="full-width" data-custom-perturbation-stage-group hidden>
+            <span>Stage</span>
+            <select name="stage_key">
+              {% for option in custom_perturbation_form.stage_options %}
+                <option value="{{ option.value }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
           <label class="full-width" data-custom-perturbation-gene-group>
             <span>Gene List</span>
             <textarea name="gene_text" rows="1" data-custom-perturbation-gene-text placeholder="Comma or newline separated genes"></textarea>

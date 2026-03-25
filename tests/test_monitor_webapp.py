@@ -730,6 +730,8 @@ async def test_analysis_visualization_page_includes_interactive_explorer_and_ren
         assert 'data-custom-perturbation-target-input' in response.text
         assert 'data-custom-perturbation-gene-text' in response.text
         assert 'data-custom-perturbation-target-label' in response.text
+        assert 'name="stage_key"' in response.text
+        assert '>stage<' in response.text
         assert 'name="job_name"' not in response.text
         assert 'name="user_label"' not in response.text
         assert "Selected Custom Perturbation" not in response.text
