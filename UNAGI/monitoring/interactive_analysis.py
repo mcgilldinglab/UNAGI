@@ -5,6 +5,7 @@ import base64
 import io
 import threading
 import textwrap
+from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -29,6 +30,7 @@ from UNAGI.plotting import (
 )
 
 from .visualization_pipeline import INTERACTIVE_UNS_KEYS, _read_analysis_adata
+from UNAGI.perturbations.analysis_perturbation import perturbationAnalysis
 
 EXPLORER_MODES = (
     ("umap", "UMAP"),
@@ -43,6 +45,11 @@ PERTURBATION_MODE_KEYS = {
     "single_gene": "single_gene_perturbation_score",
     "gene_combo": "two_genes_perturbation_score",
 }
+PERTURBATION_SCORING_UNS_KEYS = INTERACTIVE_UNS_KEYS + (
+    "pathway_perturbation_deltaD",
+    "drug_perturbation_deltaD",
+    "random_background_perturbation_deltaD",
+)
 
 GENE_LIMIT = 12
 HIERARCHICAL_DIRECTION_LABELS = {
@@ -90,6 +97,21 @@ def _analysis_iteration_from_dir(analysis_dir: Path) -> str | None:
         if name.startswith('iter') and name[4:].isdigit():
             return name[4:]
     return None
+
+
+def _stage_specific_perturbation_files(analysis_dir: Path) -> list[Path]:
+    base = Path(analysis_dir) / "stage_specific_perturbation"
+    if not base.exists():
+        return []
+    return sorted(path for path in base.glob("stage_*/*.csv") if path.is_file())
+
+
+def _stage_specific_perturbation_identity(analysis_dir: Path) -> tuple[Any, ...]:
+    payload: list[tuple[str, int, int]] = []
+    for path in _stage_specific_perturbation_files(analysis_dir):
+        stat = path.stat()
+        payload.append((str(path.relative_to(analysis_dir)), stat.st_mtime_ns, stat.st_size))
+    return tuple(payload)
 
 
 def _load_temporal_edges_fallback(analysis_dir: Path) -> dict[str, Any] | None:
@@ -375,6 +397,400 @@ def _resolve_stage_map(adata, stage_key: str) -> list[str]:
         present = set(series.astype(str).tolist())
         return [str(value) for value in series.dtype.categories.tolist() if str(value) in present]
     return [str(value) for value in pd.unique(series.astype(str))]
+
+
+def _stage_display_label(stage: Any) -> str:
+    text = str(stage).strip()
+    if not text:
+        return "Stage"
+    return text if text.lower().startswith("stage") else f"Stage {text}"
+
+
+def _is_baseline_stage_value(stage: Any) -> bool:
+    text = str(stage).strip()
+    if not text:
+        return False
+    folded = text.casefold()
+    if folded in {"baseline", "stage 0"}:
+        return True
+    try:
+        return float(text) == 0.0
+    except ValueError:
+        return False
+
+
+def _read_stage_specific_perturbation_table(table_path: str | Path) -> pd.DataFrame:
+    frame = pd.read_csv(table_path)
+    drop_columns = [column for column in frame.columns if str(column).startswith("Unnamed:")]
+    if drop_columns:
+        frame = frame.drop(columns=drop_columns)
+    return frame
+
+
+def _resolve_stage_index(stages: list[str], stage_value: Any) -> int:
+    normalized = str(stage_value).strip()
+    if not normalized:
+        raise ValueError("Stage value is required for stage-scoped perturbation rendering.")
+    if normalized in stages:
+        return stages.index(normalized)
+    try:
+        numeric_value = float(normalized)
+    except ValueError as exc:
+        raise ValueError(f"Unable to resolve stage index for {stage_value!r}.") from exc
+    for index, stage in enumerate(stages):
+        try:
+            if float(str(stage).strip()) == numeric_value:
+                return index
+        except ValueError:
+            continue
+    raise ValueError(f"Unable to resolve stage index for {stage_value!r}. Available stages: {stages}")
+
+
+def _stage_specific_track_table_path(analysis_dir: Path, *, mode: str, stage: str, track: str) -> Path:
+    stage_dir = Path(analysis_dir) / "stage_specific_perturbation" / f"stage_{stage}"
+    return stage_dir / f"{mode}_perturbation_track_{track}_stage_{stage}.csv"
+
+
+def _normalize_stage_track_frame(frame: pd.DataFrame, *, mode: str) -> pd.DataFrame:
+    table = frame.copy()
+    if "compound" in table.columns and mode == "pathway":
+        table = table.rename(columns={"compound": "pathways"})
+    if "drug_regulation" in table.columns:
+        table = table.rename(columns={"drug_regulation": "regulated genes"})
+    if "compound" in table.columns and mode == "single_gene":
+        table = table.rename(columns={"compound": "gene"})
+    if "compound" in table.columns and mode == "gene_combo":
+        table = table.rename(columns={"compound": "gene_combination"})
+    if mode == "pathway" and "perturbation score" in table.columns:
+        table = table.sort_values("perturbation score", ascending=False)
+    elif "pval_adjusted" in table.columns:
+        table = table.sort_values("pval_adjusted", ascending=True)
+    elif "perturbation score" in table.columns:
+        table = table.sort_values("perturbation score", ascending=False)
+    table = table.reset_index(drop=True)
+    if "rank" not in table.columns:
+        table.insert(0, "rank", np.arange(len(table)))
+    return table
+
+
+def _build_stage_track_options(adata, *, stages: list[str], track_values: Iterable[str]) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    raw_values: list[str] = []
+    include_overall = False
+    for value in track_values:
+        text = str(value).strip()
+        if not text:
+            continue
+        if text == "overall":
+            include_overall = True
+            continue
+        if text in seen:
+            continue
+        seen.add(text)
+        raw_values.append(text)
+    if not raw_values and not include_overall:
+        return [{"value": "overall", "label": "Overall"}]
+    raw_labels: dict[str, str] = {}
+    label_counts: dict[str, int] = {}
+    for raw_value in raw_values:
+        try:
+            label = _track_display_label(adata, track=raw_value, stages=stages)
+        except Exception:
+            label = raw_value
+        raw_labels[raw_value] = label
+        label_counts[label] = label_counts.get(label, 0) + 1
+    options = [{"value": "overall", "label": "Overall"}] if include_overall or not raw_values else []
+    for raw_value in raw_values:
+        label = raw_labels[raw_value]
+        if label_counts[label] > 1:
+            label = f"{label} ({raw_value})"
+        options.append({"value": raw_value, "label": label})
+    return options
+
+
+def _normalize_stage_track_group_value(value: Any) -> str:
+    text = str(value).strip()
+    if not text or text == "overall":
+        return "overall"
+    try:
+        return _track_cluster_id(text)
+    except Exception:
+        return text
+
+
+def _first_perturb_change_for_mode(adata, *, mode: str) -> float:
+    uns_key = PERTURBATION_MODE_KEYS[mode]
+    payload = adata.uns.get(uns_key)
+    if not isinstance(payload, dict) or not payload:
+        raise KeyError(f"Missing {uns_key} in adata.uns")
+    return float(_sorted_keys(payload.keys())[0])
+
+
+def _stage_specific_track_group_table_path(analysis_dir: Path, *, mode: str, stage: str, track_group: str) -> Path:
+    stage_dir = Path(analysis_dir) / "stage_specific_perturbation" / f"stage_{stage}"
+    return stage_dir / f"{mode}_perturbation_track_group_{track_group}_stage_{stage}.csv"
+
+
+def _generate_stage_specific_track_group_table(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    stage: str,
+    track_group: str,
+) -> str:
+    analysis_dir = Path(analysis_dir)
+    adata, _dataset_path, _attribute_path = _read_analysis_adata(
+        analysis_dir,
+        backed=True,
+        uns_keys=PERTURBATION_SCORING_UNS_KEYS,
+    )
+    try:
+        stages = _resolve_stage_map(adata, "stage")
+        stage_index = _resolve_stage_index(stages, stage)
+        perturb_change = _first_perturb_change_for_mode(adata, mode=mode)
+        scorer = perturbationAnalysis(
+            adata,
+            analysis_dir / "idrem",
+            log2fc=perturb_change,
+            stage=stage_index,
+            mode=mode,
+            direction_mode=None,
+        )
+        with redirect_stdout(io.StringIO()):
+            results = scorer.main_analysis(
+                perturbed_tracks=[str(track_group)],
+                overall_perturbation_analysis=True,
+                score="avg_backScore",
+                items=None,
+            )
+        payload = results.get("overall")
+        if not isinstance(payload, dict):
+            raise KeyError(f"Unable to generate grouped stage-specific perturbation table for track group {track_group!r}.")
+        table_payload = payload.get("top_compounds")
+        if not isinstance(table_payload, dict):
+            raise KeyError(f"Missing top_compounds for grouped stage-specific perturbation table {track_group!r}.")
+        frame = _normalize_stage_track_frame(pd.DataFrame.from_dict(table_payload), mode=mode)
+        table_path = _stage_specific_track_group_table_path(
+            analysis_dir,
+            mode=mode,
+            stage=str(stage),
+            track_group=str(track_group),
+        )
+        table_path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(table_path, index=False)
+        return str(table_path)
+    finally:
+        if getattr(adata, "isbacked", False):
+            adata.file.close()
+
+
+def _ensure_stage_specific_track_group_perturbation_table(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    stage: str,
+    track_group: str,
+) -> str:
+    if str(track_group) == "overall":
+        raise ValueError("Overall stage-specific perturbation tables should be resolved from the precomputed stage table.")
+    table_path = _stage_specific_track_group_table_path(
+        analysis_dir,
+        mode=mode,
+        stage=str(stage),
+        track_group=str(track_group),
+    )
+    if table_path.exists():
+        return str(table_path)
+    return _generate_stage_specific_track_group_table(
+        analysis_dir,
+        mode=mode,
+        stage=str(stage),
+        track_group=str(track_group),
+    )
+
+
+def _overall_track_group_table_path(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    perturb_change: str,
+    track_group: str,
+) -> Path:
+    root = Path(analysis_dir) / "overall_track_perturbation" / f"{mode}_change_{perturb_change}"
+    return root / f"{mode}_perturbation_track_group_{track_group}.csv"
+
+
+def _generate_overall_track_group_perturbation_tables(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    perturb_change: str,
+) -> dict[str, str]:
+    analysis_dir = Path(analysis_dir)
+    adata, _dataset_path, _attribute_path = _read_analysis_adata(
+        analysis_dir,
+        backed=False,
+        uns_keys=PERTURBATION_SCORING_UNS_KEYS,
+    )
+    idrem_dir = analysis_dir / "idrem"
+    if not idrem_dir.exists():
+        raise FileNotFoundError(f"Missing idrem directory for perturbation analysis: {idrem_dir}")
+    try:
+        bound = float(str(perturb_change))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid perturb_change for overall track perturbation rendering: {perturb_change!r}") from exc
+    scorer = perturbationAnalysis(
+        adata,
+        idrem_dir,
+        stage=None,
+        log2fc=bound,
+        mode=mode,
+        direction_mode=None,
+    )
+    delta_key = PERTURBATION_MODE_KEYS[mode].replace('_score', '_deltaD')
+    delta_payload = adata.uns.get(delta_key, {})
+    raw_tracks = (
+        delta_payload.get(str(bound), {}).keys()
+        if isinstance(delta_payload, dict) and isinstance(delta_payload.get(str(bound), {}), dict)
+        else []
+    )
+    track_groups = []
+    seen = set()
+    for raw_track in _sorted_keys(raw_tracks):
+        if str(raw_track) == "overall":
+            continue
+        group_value = _normalize_stage_track_group_value(raw_track)
+        if group_value == "overall" or group_value in seen:
+            continue
+        seen.add(group_value)
+        track_groups.append(group_value)
+    if not track_groups:
+        raise KeyError("Unable to generate grouped overall perturbation tables.")
+    written: dict[str, str] = {}
+    for track_group in track_groups:
+        with io.StringIO() as buffer, redirect_stdout(buffer):
+            results = scorer.main_analysis(
+                perturbed_tracks=[str(track_group)],
+                overall_perturbation_analysis=True,
+                score='avg_backScore',
+                items=None,
+            )
+        if not isinstance(results, dict):
+            continue
+        bucket = results.get("overall")
+        if not isinstance(bucket, dict):
+            continue
+        table_payload = bucket.get("top_compounds") or bucket.get("down_compounds")
+        if not isinstance(table_payload, dict):
+            continue
+        frame = _normalize_stage_track_frame(pd.DataFrame.from_dict(table_payload), mode=mode)
+        table_path = _overall_track_group_table_path(
+            analysis_dir,
+            mode=mode,
+            perturb_change=str(perturb_change),
+            track_group=str(track_group),
+        )
+        table_path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(table_path, index=False)
+        written[str(track_group)] = str(table_path)
+    return written
+
+
+def _ensure_overall_track_group_perturbation_table(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    perturb_change: str,
+    track_group: str,
+) -> str:
+    table_path = _overall_track_group_table_path(
+        analysis_dir,
+        mode=mode,
+        perturb_change=str(perturb_change),
+        track_group=str(track_group),
+    )
+    if table_path.exists():
+        return str(table_path)
+    written = _generate_overall_track_group_perturbation_tables(
+        analysis_dir,
+        mode=mode,
+        perturb_change=str(perturb_change),
+    )
+    resolved = written.get(str(track_group))
+    if resolved:
+        return resolved
+    raise KeyError(
+        f"Unable to generate grouped overall perturbation table for mode={mode!r}, "
+        f"perturb_change={perturb_change!r}, track_group={track_group!r}."
+    )
+
+
+def _discover_overall_track_group_perturbation_tables(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    perturb_change: str,
+) -> dict[str, str]:
+    root = Path(analysis_dir) / "overall_track_perturbation" / f"{mode}_change_{perturb_change}"
+    if not root.exists():
+        return {}
+    prefix = f"{mode}_perturbation_track_group_"
+    discovered: dict[str, str] = {}
+    for path in sorted(root.glob(f"{mode}_perturbation_track_group_*.csv")):
+        stem = path.stem
+        if not stem.startswith(prefix):
+            continue
+        track_value = stem[len(prefix):].strip()
+        if not track_value:
+            continue
+        discovered[track_value] = str(path)
+    return discovered
+
+
+def _discover_stage_specific_perturbations(analysis_dir: Path) -> dict[str, Any]:
+    mode_prefixes = {
+        "pathway": "pathway_perturbation_overall_stage_",
+        "drug": "drug_perturbation_overall_stage_",
+    }
+    discovered_modes: dict[str, Any] = {}
+    for mode, prefix in mode_prefixes.items():
+        tables_by_stage: dict[str, str] = {}
+        track_tables_by_stage: dict[str, dict[str, str]] = {}
+        for path in sorted((Path(analysis_dir) / "stage_specific_perturbation").glob(f"stage_*/{prefix}*.csv")):
+            stage_dir = path.parent.name
+            if not stage_dir.startswith("stage_"):
+                continue
+            stage_value = stage_dir[len("stage_") :].strip()
+            if not stage_value or _is_baseline_stage_value(stage_value):
+                continue
+            tables_by_stage[stage_value] = str(path)
+        for path in sorted((Path(analysis_dir) / "stage_specific_perturbation").glob(f"stage_*/{mode}_perturbation_track_*_stage_*.csv")):
+            stage_dir = path.parent.name
+            if not stage_dir.startswith("stage_"):
+                continue
+            stage_value = stage_dir[len("stage_") :].strip()
+            if not stage_value or _is_baseline_stage_value(stage_value):
+                continue
+            stem = path.stem
+            prefix_text = f"{mode}_perturbation_track_"
+            suffix_text = f"_stage_{stage_value}"
+            if not stem.startswith(prefix_text) or not stem.endswith(suffix_text):
+                continue
+            track_value = stem[len(prefix_text) : -len(suffix_text)].strip()
+            if not track_value:
+                continue
+            track_tables_by_stage.setdefault(stage_value, {})[track_value] = str(path)
+        if tables_by_stage:
+            ordered_stage_values = _sorted_keys(tables_by_stage.keys())
+            discovered_modes[mode] = {
+                "stage_options": [
+                    {"value": stage_value, "label": _stage_display_label(stage_value)}
+                    for stage_value in ordered_stage_values
+                ],
+                "tables_by_stage": tables_by_stage,
+                "track_tables_by_stage": track_tables_by_stage,
+            }
+    return discovered_modes
 
 
 def _dominant_text(series: pd.Series, *, field_name: str) -> str:
@@ -937,7 +1353,7 @@ def _branch_heatmap_plotly_spec(
     }
 
 
-def _extract_metadata(adata) -> dict[str, Any]:
+def _extract_metadata(adata, analysis_dir: Path | None = None) -> dict[str, Any]:
     stages = _resolve_stage_map(adata, "stage")
     umap_embedding_key = _umap_embedding_key(adata)
     hierarchical_stages: list[dict[str, Any]] = []
@@ -985,18 +1401,14 @@ def _extract_metadata(adata) -> dict[str, Any]:
             track_bucket = payload.get(perturb_change)
             if not isinstance(track_bucket, dict):
                 continue
-            tracks: list[dict[str, str]] = []
             ordered_tracks = [track for track in _sorted_keys(track_bucket.keys()) if str(track) != "overall"]
             if "overall" in track_bucket:
                 ordered_tracks = ["overall"] + ordered_tracks
-            for track in ordered_tracks:
-                raw_track = str(track)
-                tracks.append(
-                    {
-                        "value": raw_track,
-                        "label": "Overall" if raw_track == "overall" else _track_display_label(adata, track=raw_track, stages=stages),
-                    }
-                )
+            tracks = _build_stage_track_options(
+                adata,
+                stages=stages,
+                track_values=ordered_tracks,
+            )
             if tracks:
                 changes[str(perturb_change)] = tracks
         if changes:
@@ -1004,6 +1416,7 @@ def _extract_metadata(adata) -> dict[str, Any]:
                 "perturb_changes": list(changes.keys()),
                 "tracks_by_change": changes,
             }
+    stage_specific_modes = _discover_stage_specific_perturbations(Path(analysis_dir)) if analysis_dir else {}
 
     var_names = [str(name) for name in adata.var_names.astype(str).tolist()]
     default_genes = var_names[: min(3, len(var_names))]
@@ -1036,7 +1449,7 @@ def _extract_metadata(adata) -> dict[str, Any]:
             (mode == "umap" and bool(umap_embedding_key))
             or (mode == "hierarchical" and hierarchical_stages)
             or (mode == "dynamic_markers" and dynamic_panel_available)
-            or (mode == "perturbation" and perturbation_modes)
+            or (mode == "perturbation" and (perturbation_modes or stage_specific_modes))
         )
     ]
     default_mode = next(
@@ -1074,9 +1487,10 @@ def _extract_metadata(adata) -> dict[str, Any]:
             "default_genes": default_genes,
         },
         "perturbation": {
-            "available": bool(perturbation_modes),
+            "available": bool(perturbation_modes or stage_specific_modes),
             "modes": perturbation_modes,
-            "reason": None if perturbation_modes else "No perturbation outputs are available. This usually means perturbation analysis was disabled or the relevant mode was skipped.",
+            "stage_specific_modes": stage_specific_modes,
+            "reason": None if (perturbation_modes or stage_specific_modes) else "No perturbation outputs are available. This usually means perturbation analysis was disabled or the relevant mode was skipped.",
         },
         "default_mode": default_mode,
     }
@@ -1111,6 +1525,7 @@ class AnalysisExplorerService:
             str(analysis_dir),
             _cache_key(dataset_path),
             _cache_key(attribute_path if attribute_path.exists() else None),
+            _stage_specific_perturbation_identity(analysis_dir),
         )
 
     def _load(self, analysis_dir: Path, *, full: bool = False) -> AnalysisRecord:
@@ -1130,7 +1545,7 @@ class AnalysisExplorerService:
             dataset_path=resolved_dataset,
             attribute_path=resolved_attribute,
             adata=adata,
-            metadata=_extract_metadata(adata),
+            metadata=_extract_metadata(adata, analysis_dir=analysis_dir),
             full=bool(full),
         )
         with self._lock:
@@ -1291,14 +1706,14 @@ class AnalysisExplorerService:
         umap = self._resolve_umap_state(record.adata, metadata, form_data)
         hierarchical = self._resolve_hierarchical_state(metadata, form_data)
         dynamic_markers = self._resolve_dynamic_state(record.adata, metadata, form_data)
-        perturbation = self._resolve_perturbation_state(metadata, form_data)
+        perturbation = self._resolve_perturbation_state(analysis_path, record.adata, metadata, form_data)
         if active_mode == "dynamic_markers" and dynamic_markers.get("view_mode") == "custom_genes":
             record = self._load(analysis_path, full=True)
             metadata = record.metadata
             umap = self._resolve_umap_state(record.adata, metadata, form_data)
             hierarchical = self._resolve_hierarchical_state(metadata, form_data)
             dynamic_markers = self._resolve_dynamic_state(record.adata, metadata, form_data)
-            perturbation = self._resolve_perturbation_state(metadata, form_data)
+            perturbation = self._resolve_perturbation_state(analysis_path, record.adata, metadata, form_data)
         result = self._render_result(record, active_mode, umap, hierarchical, dynamic_markers, perturbation)
         return {
             "analysis_dir": str(record.analysis_dir),
@@ -1393,7 +1808,7 @@ class AnalysisExplorerService:
         umap = self._resolve_umap_state(record.adata, metadata, form_data)
         hierarchical = self._resolve_hierarchical_state(metadata, form_data)
         dynamic_markers = self._resolve_dynamic_state(record.adata, metadata, form_data)
-        perturbation = self._resolve_perturbation_state(metadata, form_data)
+        perturbation = self._resolve_perturbation_state(Path(analysis_dir), record.adata, metadata, form_data)
 
         if active_mode == "umap":
             if not umap["available"]:
@@ -1499,7 +1914,20 @@ class AnalysisExplorerService:
             filename = f"dynamic_markers_{ranked['plot_kind']}_{ranked['track']}.csv"
             return table.to_csv(index=False).encode("utf-8"), filename
 
-        raise ValueError("CSV table export is currently available only for hierarchical markers and dynamic markers.")
+        if active_mode == "perturbation":
+            perturbation = self._resolve_perturbation_state(Path(analysis_dir), record.adata, metadata, form_data)
+            if not perturbation["available"]:
+                raise KeyError(perturbation["reason"])
+            _fig, table, _work = self._build_perturbation_content(record.adata, perturbation)
+            scope_suffix = (
+                f"stage_{perturbation['stage']}"
+                if perturbation["scope"] == "stage"
+                else f"{perturbation['track']}_change_{perturbation['perturb_change']}"
+            )
+            filename = f"{perturbation['mode']}_perturbation_{scope_suffix}.csv"
+            return table.to_csv(index=False).encode("utf-8"), filename
+
+        raise ValueError("CSV table export is currently available only for hierarchical markers, dynamic markers, and perturbation.")
 
     def _build_hierarchical_content(self, adata, state: dict[str, Any]):
         dendrogram_fig, _ax = _stage_dendrogram_plot(adata, stage=state["stage"])
@@ -1578,12 +2006,15 @@ class AnalysisExplorerService:
         return fig, table, warnings
 
     def _build_perturbation_content(self, adata, state: dict[str, Any]):
-        table = extract_perturbation_table(
-            adata,
-            mode=state["mode"],
-            perturb_change=state["perturb_change"],
-            track=state["track"],
-        )
+        if state.get("table_path"):
+            table = _read_stage_specific_perturbation_table(state["table_path"])
+        else:
+            table = extract_perturbation_table(
+                adata,
+                mode=state["mode"],
+                perturb_change=state["perturb_change"],
+                track=state["track"],
+            )
         if state["top_n"] > 0:
             table = table.head(state["top_n"]).copy()
         use_pval = state["mode"] != "pathway"
@@ -1757,39 +2188,199 @@ class AnalysisExplorerService:
             "gene_limit": section["gene_limit"],
         }
 
-    def _resolve_perturbation_state(self, metadata: dict[str, Any], form_data: Mapping[str, Any] | None) -> dict[str, Any]:
+    def _resolve_perturbation_state(
+        self,
+        analysis_dir: Path,
+        adata,
+        metadata: dict[str, Any],
+        form_data: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
         section = metadata["perturbation"]
         if not section["available"]:
             return {"available": False, "reason": section["reason"]}
-        mode = _resolve_string(
-            list(section["modes"].keys()),
-            form_data.get("pert_mode") if form_data else None,
-            default=list(section["modes"].keys())[0],
+        stage_specific_modes = section.get("stage_specific_modes") or {}
+        standard_modes = section.get("modes") or {}
+        scope_options: list[str] = []
+        if standard_modes:
+            scope_options.append("overall")
+        if stage_specific_modes:
+            scope_options.append("stage")
+        scope = _resolve_string(
+            scope_options,
+            form_data.get("pert_scope") if form_data else None,
+            default="stage" if stage_specific_modes and not standard_modes else "overall",
         )
-        mode_entry = section["modes"][mode]
+        top_n = _int_value(form_data.get("pert_top_n") if form_data else None, default=20, minimum=1, maximum=100)
+
+        if scope == "stage":
+            mode_options = list(stage_specific_modes.keys())
+            if not mode_options:
+                scope = "overall"
+            else:
+                mode = _resolve_string(
+                    mode_options,
+                    form_data.get("pert_mode") if form_data else None,
+                    default=mode_options[0],
+                )
+                mode_entry = stage_specific_modes[mode]
+                stage_options = mode_entry["stage_options"]
+                stage = _resolve_string(
+                    [item["value"] for item in stage_options],
+                    form_data.get("pert_stage") if form_data else None,
+                    default=stage_options[0]["value"],
+                )
+                stage_entry = next(item for item in stage_options if item["value"] == stage)
+                representative_tracks: dict[str, str] = {}
+                for item in metadata.get("dynamic_markers", {}).get("tracks", []):
+                    raw_value = str(item["value"])
+                    representative_tracks.setdefault(_normalize_stage_track_group_value(raw_value), raw_value)
+                standard_mode_entry = (standard_modes.get(mode) or {})
+                for track_list in (standard_mode_entry.get("tracks_by_change") or {}).values():
+                    for item in track_list:
+                        raw_value = str(item["value"])
+                        if raw_value == "overall":
+                            continue
+                        representative_tracks.setdefault(_normalize_stage_track_group_value(raw_value), raw_value)
+                for raw_value in _sorted_keys(
+                    (mode_entry.get("track_tables_by_stage", {}) or {}).get(stage, {}).keys()
+                ):
+                    representative_tracks.setdefault(_normalize_stage_track_group_value(raw_value), raw_value)
+                track_options = [{"value": "overall", "label": "Overall"}]
+                for group_value in _sorted_keys(key for key in representative_tracks.keys() if key != "overall"):
+                    representative_track = representative_tracks[group_value]
+                    try:
+                        label = _track_display_label(
+                            adata,
+                            track=representative_track,
+                            stages=metadata["umap"]["stages"],
+                        )
+                    except Exception:
+                        label = f"track {group_value}"
+                    track_options.append({"value": group_value, "label": label})
+                requested_track = _normalize_stage_track_group_value(
+                    form_data.get("pert_track") if form_data else None
+                )
+                track = _resolve_string(
+                    [item["value"] for item in track_options],
+                    requested_track,
+                    default="overall",
+                )
+                if track == "overall":
+                    table_path = mode_entry["tables_by_stage"][stage]
+                else:
+                    table_path = _ensure_stage_specific_track_group_perturbation_table(
+                        Path(analysis_dir),
+                        mode=mode,
+                        stage=stage,
+                        track_group=track,
+                    )
+                return {
+                    "available": True,
+                    "reason": None,
+                    "scope": "stage",
+                    "scope_options": scope_options,
+                    "mode": mode,
+                    "mode_options": mode_options,
+                    "stage": stage,
+                    "stage_label": stage_entry["label"],
+                    "stage_options": stage_options,
+                    "table_path": table_path,
+                    "perturb_change": None,
+                    "perturb_change_options": [],
+                    "track": track,
+                    "track_label": next((item["label"] for item in track_options if item["value"] == track), track),
+                    "track_options": track_options,
+                    "top_n": top_n,
+                }
+
+        mode_options = list(standard_modes.keys())
+        mode = _resolve_string(
+            mode_options,
+            form_data.get("pert_mode") if form_data else None,
+            default=mode_options[0],
+        )
+        mode_entry = standard_modes[mode]
         perturb_change = _resolve_string(
             mode_entry["perturb_changes"],
             form_data.get("perturb_change") if form_data else None,
             default=mode_entry["perturb_changes"][0],
         )
-        track_options = mode_entry["tracks_by_change"][perturb_change]
+        available_track_options = mode_entry["tracks_by_change"][perturb_change]
+        raw_non_overall_values = [
+            str(item["value"])
+            for item in available_track_options
+            if str(item["value"]) != "overall"
+        ]
+        normalized_non_overall_values = [
+            _normalize_stage_track_group_value(value)
+            for value in raw_non_overall_values
+        ]
+        precomputed_group_values = set()
+        if raw_non_overall_values and (
+            len(set(raw_non_overall_values)) == len(set(normalized_non_overall_values))
+            and set(raw_non_overall_values) == set(normalized_non_overall_values)
+        ):
+            precomputed_group_values = set(raw_non_overall_values)
+        generated_track_tables = _discover_overall_track_group_perturbation_tables(
+            Path(analysis_dir),
+            mode=mode,
+            perturb_change=perturb_change,
+        )
+        if not precomputed_group_values and not generated_track_tables:
+            try:
+                generated_track_tables = _generate_overall_track_group_perturbation_tables(
+                    Path(analysis_dir),
+                    mode=mode,
+                    perturb_change=perturb_change,
+                )
+            except Exception:
+                generated_track_tables = {}
+        track_values = ["overall"]
+        if precomputed_group_values:
+            track_values.extend(_sorted_keys(precomputed_group_values))
+        else:
+            track_values.extend(_sorted_keys(generated_track_tables.keys()))
+        track_options = _build_stage_track_options(
+            adata,
+            stages=metadata["umap"]["stages"],
+            track_values=track_values,
+        )
+        requested_track = _normalize_stage_track_group_value(
+            form_data.get("pert_track") if form_data else None
+        )
         track = _resolve_string(
             [item["value"] for item in track_options],
-            form_data.get("pert_track") if form_data else None,
+            requested_track,
             default="overall" if any(item["value"] == "overall" for item in track_options) else track_options[0]["value"],
         )
         track_entry = next(item for item in track_options if item["value"] == track)
+        table_path = ""
+        if track != "overall" and track not in precomputed_group_values:
+            table_path = generated_track_tables.get(str(track), "")
+            if not table_path:
+                table_path = _ensure_overall_track_group_perturbation_table(
+                    Path(analysis_dir),
+                    mode=mode,
+                    perturb_change=perturb_change,
+                    track_group=track,
+                )
         return {
             "available": True,
             "reason": None,
+            "scope": "overall",
+            "scope_options": scope_options,
             "mode": mode,
-            "mode_options": list(section["modes"].keys()),
+            "mode_options": mode_options,
             "perturb_change": perturb_change,
             "perturb_change_options": mode_entry["perturb_changes"],
             "track": track,
             "track_label": track_entry["label"],
             "track_options": track_options,
-            "top_n": _int_value(form_data.get("pert_top_n") if form_data else None, default=20, minimum=1, maximum=100),
+            "stage": "",
+            "stage_label": "",
+            "stage_options": [],
+            "table_path": table_path,
+            "top_n": top_n,
         }
 
     def _render_result(
@@ -2007,12 +2598,23 @@ class AnalysisExplorerService:
         if not state["available"]:
             return {"status": "unavailable", "title": "Perturbation", "message": state["reason"]}
         fig, table, _work = self._build_perturbation_content(adata, state)
-        track_text = state["track_label"] if state["track"] != "overall" else "Overall"
-        title = f"{state['mode']} perturbation | perturb_change={state['perturb_change']} | {track_text}"
+        if state["scope"] == "stage":
+            if state["track"] == "overall":
+                track_text = state["stage_label"]
+                title = f"{state['mode']} perturbation | {track_text}"
+                subtitle = f"scope=stage | mode={state['mode']} | {track_text}"
+            else:
+                track_text = f"{state['stage_label']} | {state['track_label']}"
+                title = f"{state['mode']} perturbation | {track_text}"
+                subtitle = f"scope=stage | mode={state['mode']} | {state['stage_label']} | {state['track_label']}"
+        else:
+            track_text = state["track_label"] if state["track"] != "overall" else "Overall"
+            title = f"{state['mode']} perturbation | perturb_change={state['perturb_change']} | {track_text}"
+            subtitle = f"scope=overall | mode={state['mode']} | perturb_change={state['perturb_change']} | {track_text}"
         return {
             "status": "ok",
             "title": "Perturbation Explorer",
-            "subtitle": f"mode={state['mode']} | perturb_change={state['perturb_change']} | {track_text}",
+            "subtitle": subtitle,
             "plots": [
                 {
                     "label": "Ranked bar plot",
@@ -2021,16 +2623,20 @@ class AnalysisExplorerService:
                     "publication_query": {
                         "mode": "perturbation",
                         "figure_key": "ranked_bar",
+                        "pert_scope": state["scope"],
                         "pert_mode": state["mode"],
                         "perturb_change": state["perturb_change"],
                         "pert_track": state["track"],
+                        "pert_stage": state["stage"],
                         "pert_top_n": state["top_n"],
                     },
                     "table_download_query": {
                         "mode": "perturbation",
+                        "pert_scope": state["scope"],
                         "pert_mode": state["mode"],
                         "perturb_change": state["perturb_change"],
                         "pert_track": state["track"],
+                        "pert_stage": state["stage"],
                         "pert_top_n": state["top_n"],
                     },
                 }

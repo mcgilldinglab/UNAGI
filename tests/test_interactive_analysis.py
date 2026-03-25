@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import matplotlib
+import pickle
 import pandas as pd
 import UNAGI.monitoring.idrem_summary as idrem_summary_module
 import UNAGI.monitoring.interactive_analysis as interactive_analysis_module
@@ -34,8 +35,175 @@ def test_explorer_metadata_discovers_hierarchical_dynamic_and_perturbation_optio
     assert view["dynamic_markers"]["genes"]["track_options"][0]["label"] == "track 0 AT1"
     assert view["perturbation"]["available"] is True
     assert "pathway" in view["perturbation"]["mode_options"]
+    assert view["perturbation"]["scope"] == "overall"
+    assert view["perturbation"]["scope_options"] == ["overall"]
     assert view["perturbation"]["perturb_change_options"] == ["0.5"]
     assert view["perturbation"]["track_options"][0]["label"] == "Overall"
+
+
+def test_explorer_discovers_and_renders_stage_specific_perturbation_results(tmp_path):
+    analysis_dir = write_analysis_dataset(
+        tmp_path / "analysis" / "iter1",
+        include_stage_specific_perturbation=True,
+    )
+    explorer = AnalysisExplorerService()
+
+    view = explorer.build_view(
+        analysis_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_scope": "stage",
+            "pert_mode": "pathway",
+            "pert_stage": "1",
+            "pert_top_n": "2",
+        },
+    )
+
+    assert view["perturbation"]["available"] is True
+    assert view["perturbation"]["scope"] == "stage"
+    assert view["perturbation"]["scope_options"] == ["overall", "stage"]
+    assert view["perturbation"]["stage"] == "1"
+    assert [item["value"] for item in view["perturbation"]["stage_options"]] == ["1", "2"]
+    assert view["perturbation"]["stage_options"][0]["label"] == "Stage 1"
+    assert view["result"]["status"] == "ok"
+    assert "scope=stage" in view["result"]["subtitle"]
+    assert "Stage 1" in view["result"]["subtitle"]
+    assert view["result"]["plots"][0]["publication_query"]["pert_scope"] == "stage"
+    assert view["result"]["plots"][0]["table_download_query"]["pert_stage"] == "1"
+
+
+def test_explorer_uses_grouped_overall_track_labels(tmp_path):
+    analysis_dir = write_analysis_dataset(tmp_path / "analysis" / "iter1")
+
+    explorer = AnalysisExplorerService()
+    view = explorer.build_view(
+        analysis_dir,
+        form_data={"mode": "perturbation", "pert_mode": "pathway", "perturb_change": "0.5"},
+    )
+
+    labels = {
+        item["value"]: item["label"]
+        for item in view["perturbation"]["track_options"]
+    }
+    assert labels["0"] == "track 0 AT1"
+
+
+def test_perturbation_track_options_do_not_repeat_overall(tmp_path):
+    analysis_dir = write_analysis_dataset(tmp_path / "analysis" / "iter1")
+    explorer = AnalysisExplorerService()
+
+    view = explorer.build_view(
+        analysis_dir,
+        form_data={"mode": "perturbation", "pert_mode": "pathway", "perturb_change": "0.5"},
+    )
+
+    overall_options = [
+        item for item in view["perturbation"]["track_options"]
+        if item["value"] == "overall"
+    ]
+    assert overall_options == [{"value": "overall", "label": "Overall"}]
+
+
+def test_explorer_renders_stage_specific_track_perturbation_results(tmp_path, monkeypatch):
+    analysis_dir = write_analysis_dataset(
+        tmp_path / "analysis" / "iter1",
+        include_stage_specific_perturbation=True,
+    )
+    stage_dir = analysis_dir / "stage_specific_perturbation" / "stage_1"
+    track_table_path = stage_dir / "pathway_perturbation_track_group_0_stage_1.csv"
+
+    def fake_generate_stage_track_table(analysis_dir_arg, *, mode, stage, track_group):
+        frame = pd.DataFrame(
+            {
+                "rank": [0, 1],
+                "pathways": ["PathTrackA", "PathTrackB"],
+                "perturbation score": [1.8, 1.1],
+                "pval_adjusted": [0.003, 0.02],
+                "regulated genes": ["['GENE0']", "['GENE1']"],
+                "idrem_suggestion": ["['GENE0:+']", "['GENE1:-']"],
+            }
+        )
+        track_table_path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(track_table_path, index=False)
+        return str(track_table_path)
+
+    monkeypatch.setattr(
+        interactive_analysis_module,
+        "_ensure_stage_specific_track_group_perturbation_table",
+        fake_generate_stage_track_table,
+    )
+
+    explorer = AnalysisExplorerService()
+    view = explorer.build_view(
+        analysis_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_scope": "stage",
+            "pert_mode": "pathway",
+            "pert_stage": "1",
+            "pert_track": "0",
+            "pert_top_n": "2",
+        },
+    )
+
+    assert view["perturbation"]["scope"] == "stage"
+    assert view["perturbation"]["track"] == "0"
+    assert view["perturbation"]["track_label"] == "track 0 AT1"
+    assert view["perturbation"]["track_options"][0]["value"] == "overall"
+    assert any(item["value"] == "0" for item in view["perturbation"]["track_options"])
+    assert view["result"]["status"] == "ok"
+    assert "track 0 AT1" in view["result"]["subtitle"]
+    assert view["result"]["plots"][0]["publication_query"]["pert_track"] == "0"
+    assert view["result"]["plots"][0]["table_download_query"]["pert_track"] == "0"
+
+
+def test_explorer_backfills_overall_track_perturbation_results_for_existing_analysis(tmp_path, monkeypatch):
+    analysis_dir = write_analysis_dataset(tmp_path / "analysis" / "iter1")
+    attribute_path = analysis_dir / "attribute.pkl"
+    with attribute_path.open("rb") as handle:
+        uns_payload = pickle.load(handle)
+    uns_payload["drug_perturbation_score"]["0.5"] = {
+        "overall": uns_payload["drug_perturbation_score"]["0.5"]["overall"]
+    }
+    with attribute_path.open("wb") as handle:
+        pickle.dump(uns_payload, handle)
+
+    track_table_path = analysis_dir / "overall_track_perturbation" / "drug_change_0.5" / "drug_perturbation_track_group_0.csv"
+
+    def fake_generate_overall_track_tables(analysis_dir_arg, *, mode, perturb_change):
+        frame = pd.DataFrame(
+            {
+                "compound": ["DrugTrackA", "DrugTrackB"],
+                "perturbation score": [2.2, 1.4],
+                "pval_adjusted": [0.004, 0.03],
+            }
+        )
+        track_table_path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(track_table_path, index=False)
+        return {"0": str(track_table_path)}
+
+    monkeypatch.setattr(
+        interactive_analysis_module,
+        "_generate_overall_track_group_perturbation_tables",
+        fake_generate_overall_track_tables,
+    )
+
+    explorer = AnalysisExplorerService()
+    view = explorer.build_view(
+        analysis_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_mode": "drug",
+            "perturb_change": "0.5",
+            "pert_track": "0",
+            "pert_top_n": "2",
+        },
+    )
+
+    assert any(item["value"] == "0" for item in view["perturbation"]["track_options"])
+    assert view["perturbation"]["track"] == "0"
+    assert view["result"]["status"] == "ok"
+    assert "track 0 AT1" in view["result"]["subtitle"]
 
 
 def test_explorer_renders_all_supported_modes(tmp_path):
@@ -327,6 +495,36 @@ def test_publication_pdf_export_supports_explorer_modes(tmp_path):
     )
     assert filename == "custom_genes_progression_track.csv"
     assert "gene" in csv_bytes.decode("utf-8").splitlines()[0].lower()
+
+    csv_bytes, filename = explorer.export_table_csv(
+        analysis_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_mode": "pathway",
+            "perturb_change": "0.5",
+            "pert_track": "overall",
+            "pert_top_n": "2",
+        },
+    )
+    assert filename == "pathway_perturbation_overall_change_0.5.csv"
+    assert "perturbation score" in csv_bytes.decode("utf-8").splitlines()[0]
+
+    stage_dir = write_analysis_dataset(
+        tmp_path / "analysis" / "iter2",
+        include_stage_specific_perturbation=True,
+    )
+    csv_bytes, filename = explorer.export_table_csv(
+        stage_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_scope": "stage",
+            "pert_mode": "drug",
+            "pert_stage": "2",
+            "pert_top_n": "2",
+        },
+    )
+    assert filename == "drug_perturbation_stage_2.csv"
+    assert "DrugStage2A" in csv_bytes.decode("utf-8")
 
 
 def test_custom_gene_validation_handles_missing_and_over_limit_requests(tmp_path):

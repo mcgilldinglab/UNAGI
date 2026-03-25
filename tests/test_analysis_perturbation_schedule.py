@@ -45,22 +45,23 @@ class _FakePerturbationRunner:
                 key: {'0-1': {'DR1': np.array([4.0])}}
             }
 
-<<<<<<< HEAD
     def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, stage=None, direction_mode='two_sided'):
         type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks), stage))
-=======
-    def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, direction_mode='two_sided'):
-        type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks)))
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         key = str(bound)
+        is_overall_all = overall_perturbation_analysis and perturbed_tracks == 'all'
+        is_grouped_track = overall_perturbation_analysis and perturbed_tracks != 'all'
         if mode == 'pathway':
             self.adata.uns['pathway_perturbation_score'] = {
                 key: {
-                    'overall': {
+                    (
+                        'overall'
+                        if is_overall_all or is_grouped_track
+                        else '0-1'
+                    ): {
                         'top_compounds': {
-                            'compound': {'0': 'PW1'},
-                            'perturbation score': {'0': 1.0},
-                            'pval_adjusted': {'0': 0.05},
+                            'compound': {'0': 'PW1' if is_overall_all else ('PW1_group' if is_grouped_track else 'PW1_track')},
+                            'perturbation score': {'0': 1.0 if is_overall_all else (0.9 if is_grouped_track else 0.8)},
+                            'pval_adjusted': {'0': 0.05 if is_overall_all else (0.06 if is_grouped_track else 0.07)},
                         }
                     }
                 }
@@ -68,11 +69,15 @@ class _FakePerturbationRunner:
         elif mode == 'drug':
             self.adata.uns['drug_perturbation_score'] = {
                 key: {
-                    'overall': {
+                    (
+                        'overall'
+                        if is_overall_all or is_grouped_track
+                        else '0-1'
+                    ): {
                         'top_compounds': {
-                            'compound': {'0': 'DR1'},
-                            'perturbation score': {'0': 2.0},
-                            'pval_adjusted': {'0': 0.01},
+                            'compound': {'0': 'DR1' if is_overall_all else ('DR1_group' if is_grouped_track else 'DR1_track')},
+                            'perturbation score': {'0': 2.0 if is_overall_all else (1.8 if is_grouped_track else 1.6)},
+                            'pval_adjusted': {'0': 0.01 if is_overall_all else (0.02 if is_grouped_track else 0.03)},
                         }
                     }
                 }
@@ -235,7 +240,6 @@ def test_single_gpu_optimized_invalidates_cache_when_perturb_change_changes(monk
     assert len(_FakePerturbationRunner.run_modes) == first_run_count * 2
 
 
-<<<<<<< HEAD
 def test_single_gpu_optimized_passes_stage_filter_to_pathway_and_drug_scoring(monkeypatch, tmp_path):
     data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
     _patch_analysis_dependencies(monkeypatch)
@@ -258,8 +262,32 @@ def test_single_gpu_optimized_passes_stage_filter_to_pathway_and_drug_scoring(mo
     assert saved_uns["analysis_metadata"]["perturb_stage"] == "1"
 
 
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
+def test_single_gpu_optimized_persists_overall_and_grouped_track_scores(monkeypatch, tmp_path):
+    data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
+    _patch_analysis_dependencies(monkeypatch)
+    _FakePerturbationRunner.reset()
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    assert ("pathway", 0.5, "all", None) in _FakePerturbationRunner.analysis_modes
+    assert ("drug", 0.5, "all", None) in _FakePerturbationRunner.analysis_modes
+    saved_uns = _load_saved_uns(target_dir)
+    pathway_bucket = saved_uns["pathway_perturbation_score"]["0.5"]
+    drug_bucket = saved_uns["drug_perturbation_score"]["0.5"]
+    assert {"overall", "0"} <= set(pathway_bucket.keys())
+    assert {"overall", "0"} <= set(drug_bucket.keys())
+    assert pathway_bucket["0"]["top_compounds"]["compound"]["0"] == "PW1_group"
+    assert drug_bucket["0"]["top_compounds"]["compound"]["0"] == "DR1_group"
+
+
 def test_resource_aware_schedule_is_reserved(monkeypatch, tmp_path):
     data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
     _patch_analysis_dependencies(monkeypatch)

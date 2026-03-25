@@ -116,7 +116,7 @@ def build_mock_analysis_adata(
                             "pval_adjusted": [0.001, 0.02],
                         }
                     },
-                    "0-2-4": {
+                    "0": {
                         "top_compounds": {
                             "compound": ["PathTrack"],
                             "perturbation score": [2.1],
@@ -170,6 +170,7 @@ def write_analysis_dataset(
     include_hierarchical: bool = True,
     include_dynamic: bool = True,
     include_perturbation: bool = True,
+    include_stage_specific_perturbation: bool = False,
     include_umap: bool = True,
     stage_labels: tuple[str, ...] = ("0", "1", "2"),
     cells_per_stage: int = 24,
@@ -188,4 +189,31 @@ def write_analysis_dataset(
     adata.write_h5ad(result_dir / "dataset.h5ad")
     with (result_dir / "attribute.pkl").open("wb") as handle:
         pickle.dump(uns_payload, handle)
+    if include_stage_specific_perturbation:
+        stage_root = result_dir / "stage_specific_perturbation"
+        for stage in stage_labels:
+            stage_dir = stage_root / f"stage_{stage}"
+            stage_dir.mkdir(parents=True, exist_ok=True)
+            pathway_frame = pd.DataFrame(
+                {
+                    "rank": [0, 1],
+                    "pathways": [f"PathwayStage{stage}A", f"PathwayStage{stage}B"],
+                    "perturbation score": [3.5 - 0.1 * int(stage), 2.2 - 0.1 * int(stage)],
+                    "pval_adjusted": [0.001, 0.02],
+                    "regulated genes": ["['GENE0']", "['GENE1']"],
+                    "idrem_suggestion": ["['GENE0:+']", "['GENE1:-']"],
+                }
+            )
+            drug_frame = pd.DataFrame(
+                {
+                    "rank": [0, 1],
+                    "compound": [f"DrugStage{stage}A", f"DrugStage{stage}B"],
+                    "perturbation score": [4.0 - 0.1 * int(stage), 3.1 - 0.1 * int(stage)],
+                    "pval_adjusted": [0.0005, 0.04],
+                    "regulated genes": ["['GENE2:+']", "['GENE3:-']"],
+                    "idrem_suggestion": ["['GENE2:+']", "['GENE3:-']"],
+                }
+            )
+            pathway_frame.to_csv(stage_dir / f"pathway_perturbation_overall_stage_{stage}.csv", index=False)
+            drug_frame.to_csv(stage_dir / f"drug_perturbation_overall_stage_{stage}.csv", index=False)
     return result_dir

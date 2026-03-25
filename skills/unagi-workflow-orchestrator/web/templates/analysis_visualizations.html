@@ -45,6 +45,16 @@
   {% endif %}
 
   {% if visualization.stage_umap or visualization.temporal_graph or visualization.stage_composition %}
+    {% set default_overview_panel = (
+      'stage-umap-panel-' ~ job.job_id
+      if visualization.stage_umap else (
+        'temporal-graph-panel-' ~ job.job_id
+        if visualization.temporal_graph else (
+          'stage-composition-panel-' ~ job.job_id
+          if visualization.stage_composition else ''
+        )
+      )
+    ) %}
     <section class="panel">
       <div class="section-head">
         <div>
@@ -60,30 +70,33 @@
         <div class="module-tab-nav overview-tab-nav" role="tablist" aria-label="Temporal dynamics overview">
           {% if visualization.stage_umap %}
             <button
-              class="module-tab-button"
+              class="module-tab-button{% if default_overview_panel == 'stage-umap-panel-' ~ job.job_id %} is-active{% endif %}"
               type="button"
               role="tab"
               data-tab-target="stage-umap-panel-{{ job.job_id }}"
+              aria-selected="{% if default_overview_panel == 'stage-umap-panel-' ~ job.job_id %}true{% else %}false{% endif %}"
             >
               Stage UMAP
             </button>
           {% endif %}
           {% if visualization.temporal_graph %}
             <button
-              class="module-tab-button"
+              class="module-tab-button{% if default_overview_panel == 'temporal-graph-panel-' ~ job.job_id %} is-active{% endif %}"
               type="button"
               role="tab"
               data-tab-target="temporal-graph-panel-{{ job.job_id }}"
+              aria-selected="{% if default_overview_panel == 'temporal-graph-panel-' ~ job.job_id %}true{% else %}false{% endif %}"
             >
               Temporal dynamics graph
             </button>
           {% endif %}
           {% if visualization.stage_composition %}
             <button
-              class="module-tab-button"
+              class="module-tab-button{% if default_overview_panel == 'stage-composition-panel-' ~ job.job_id %} is-active{% endif %}"
               type="button"
               role="tab"
               data-tab-target="stage-composition-panel-{{ job.job_id }}"
+              aria-selected="{% if default_overview_panel == 'stage-composition-panel-' ~ job.job_id %}true{% else %}false{% endif %}"
             >
               Stage composition
             </button>
@@ -92,7 +105,7 @@
         <div class="overview-tab-panels">
           {% if visualization.stage_umap %}
             {% set stage_umap_artifact = visualization.stage_umap.artifacts[0] if visualization.stage_umap.artifacts else None %}
-            <section class="tab-panel overview-tab-panel" data-tab-panel="stage-umap-panel-{{ job.job_id }}" role="tabpanel">
+            <section class="tab-panel overview-tab-panel{% if default_overview_panel == 'stage-umap-panel-' ~ job.job_id %} is-active{% endif %}" data-tab-panel="stage-umap-panel-{{ job.job_id }}" role="tabpanel">
               <article class="artifact-card overview-umap-card">
                 <div class="artifact-head">
                   <strong>{{ visualization.stage_umap.title }}</strong>
@@ -113,7 +126,7 @@
 
           {% if visualization.temporal_graph %}
             {% set graph_artifact = visualization.temporal_graph.artifacts[0] if visualization.temporal_graph.artifacts else None %}
-            <section class="tab-panel overview-tab-panel" data-tab-panel="temporal-graph-panel-{{ job.job_id }}" role="tabpanel">
+            <section class="tab-panel overview-tab-panel{% if default_overview_panel == 'temporal-graph-panel-' ~ job.job_id %} is-active{% endif %}" data-tab-panel="temporal-graph-panel-{{ job.job_id }}" role="tabpanel">
               <article class="artifact-card overview-graph-card">
                 <div class="artifact-head">
                   <strong>{{ visualization.temporal_graph.title }}</strong>
@@ -138,7 +151,7 @@
 
           {% if visualization.stage_composition %}
             {% set composition_artifact = visualization.stage_composition.artifacts[0] if visualization.stage_composition.artifacts else None %}
-            <section class="tab-panel overview-tab-panel" data-tab-panel="stage-composition-panel-{{ job.job_id }}" role="tabpanel">
+            <section class="tab-panel overview-tab-panel{% if default_overview_panel == 'stage-composition-panel-' ~ job.job_id %} is-active{% endif %}" data-tab-panel="stage-composition-panel-{{ job.job_id }}" role="tabpanel">
               <article class="artifact-card overview-composition-card">
                 <div class="artifact-head">
                   <strong>{{ visualization.stage_composition.title }}</strong>

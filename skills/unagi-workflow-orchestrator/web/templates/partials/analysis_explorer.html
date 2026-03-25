@@ -184,6 +184,18 @@
               </select>
             </label>
             {% if perturbation_panel_mode != "custom" %}
+            {% if explorer.perturbation.scope_options|length > 1 %}
+            <label>
+              <span>Scope</span>
+              <select name="pert_scope">
+                {% for item in explorer.perturbation.scope_options %}
+                  <option value="{{ item }}" {% if explorer.perturbation.scope == item %}selected{% endif %}>
+                    {% if item == "stage" %}individual stage{% else %}overall / track{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+            {% endif %}
             <label>
               <span>Mode</span>
               <select name="pert_mode">
@@ -192,6 +204,24 @@
                 {% endfor %}
               </select>
             </label>
+            {% if explorer.perturbation.scope == "stage" %}
+            <label>
+              <span>Stage</span>
+              <select name="pert_stage">
+                {% for item in explorer.perturbation.stage_options %}
+                  <option value="{{ item.value }}" {% if explorer.perturbation.stage == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Track</span>
+              <select name="pert_track">
+                {% for item in explorer.perturbation.track_options %}
+                  <option value="{{ item.value }}" {% if explorer.perturbation.track == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            {% else %}
             <label>
               <span>Perturb Change</span>
               <select name="perturb_change">
@@ -208,6 +238,7 @@
                 {% endfor %}
               </select>
             </label>
+            {% endif %}
             <label>
               <span>Top N</span>
               <input type="number" name="pert_top_n" min="1" max="100" value="{{ explorer.perturbation.top_n }}">
@@ -303,7 +334,6 @@
               {% endfor %}
             </select>
           </label>
-<<<<<<< HEAD
           <label class="full-width" data-custom-perturbation-stage-group hidden>
             <span>Stage</span>
             <select name="stage_key">
@@ -312,8 +342,6 @@
               {% endfor %}
             </select>
           </label>
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
           <label class="full-width" data-custom-perturbation-gene-group>
             <span>Gene List</span>
             <textarea name="gene_text" rows="1" data-custom-perturbation-gene-text placeholder="Comma or newline separated genes"></textarea>

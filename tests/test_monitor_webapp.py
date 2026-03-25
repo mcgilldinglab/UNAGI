@@ -9,9 +9,11 @@ from pathlib import Path
 
 import anyio
 import httpx
+import pandas as pd
 import pytest
 
 import UNAGI.monitoring.idrem_summary as idrem_summary_module
+import UNAGI.monitoring.interactive_analysis as interactive_analysis_module
 import UNAGI.monitoring.webapp as webapp_module
 from UNAGI.monitoring.explorer_cache import UmapViewportCache
 import UNAGI.monitoring.service as service_module
@@ -304,7 +306,7 @@ async def test_analysis_share_bundle_export_route_and_page(tmp_path, monkeypatch
         with_visualization_manifest=True,
         log_text="[ANALYSIS] DONE\n",
     )
-    write_analysis_dataset(analysis["result_dir"])
+    write_analysis_dataset(analysis["result_dir"], include_stage_specific_perturbation=True)
     write_mock_idrem_track(analysis["result_dir"], track_key="0-2-4")
 
     def fake_export(analysis_dir, *, force=False, analysis_label=None):
@@ -375,7 +377,7 @@ def test_custom_perturbation_queue_diagnostics_for_stuck_job(tmp_path, monkeypat
         status="succeeded",
         log_text="[ANALYSIS] DONE\n",
     )
-    write_analysis_dataset(analysis["result_dir"])
+    write_analysis_dataset(analysis["result_dir"], include_stage_specific_perturbation=True)
     create_custom_perturbation_job(
         analysis["job_dir"],
         analysis["result_dir"],
@@ -426,8 +428,30 @@ async def test_analysis_visualization_page_includes_interactive_explorer_and_ren
         with_visualization_manifest=True,
         log_text="[ANALYSIS] DONE\n",
     )
-    write_analysis_dataset(analysis["result_dir"])
+    write_analysis_dataset(analysis["result_dir"], include_stage_specific_perturbation=True)
     write_mock_idrem_track(analysis["result_dir"], track_key="0-2-4")
+    track_table_path = analysis["result_dir"] / "stage_specific_perturbation" / "stage_1" / "pathway_perturbation_track_group_0_stage_1.csv"
+
+    def fake_generate_stage_track_table(analysis_dir_arg, *, mode, stage, track_group):
+        frame = pd.DataFrame(
+            {
+                "rank": [0, 1],
+                "pathways": ["PathTrackA", "PathTrackB"],
+                "perturbation score": [1.8, 1.1],
+                "pval_adjusted": [0.003, 0.02],
+                "regulated genes": ["['GENE0']", "['GENE1']"],
+                "idrem_suggestion": ["['GENE0:+']", "['GENE1:-']"],
+            }
+        )
+        track_table_path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(track_table_path, index=False)
+        return str(track_table_path)
+
+    monkeypatch.setattr(
+        interactive_analysis_module,
+        "_ensure_stage_specific_track_group_perturbation_table",
+        fake_generate_stage_track_table,
+    )
     create_custom_perturbation_job(
         analysis["job_dir"],
         analysis["result_dir"],
@@ -704,10 +728,74 @@ async def test_analysis_visualization_page_includes_interactive_explorer_and_ren
         assert response.status_code == 200
         assert "Perturbation Explorer" in response.text
         assert 'name="pert_panel_mode"' in response.text
+        assert 'name="pert_scope"' in response.text
         assert "Custom Perturbation" not in response.text
         assert 'data-custom-perturbation-form' not in response.text
         assert 'data-plotly-widget' in response.text
         assert "perturbation score" in response.text
+
+        response = await client.post(
+            "/partials/analysis/analyze_explorer/explorer/render",
+            data={
+                "mode": "perturbation",
+                "pert_scope": "stage",
+                "pert_mode": "pathway",
+                "pert_stage": "2",
+                "pert_top_n": "2",
+            },
+        )
+        assert response.status_code == 200
+        assert 'name="pert_stage"' in response.text
+        assert ">Stage 0<" not in response.text
+        assert "individual stage" in response.text
+        assert "scope=stage" in response.text
+        assert "Stage 2" in response.text
+        assert "/analysis/analyze_explorer/explorer/table.csv?" in response.text
+
+        response = await client.post(
+            "/partials/analysis/analyze_explorer/explorer/render",
+            data={
+                "mode": "perturbation",
+                "pert_scope": "stage",
+                "pert_mode": "pathway",
+                "pert_stage": "1",
+                "pert_track": "0",
+                "pert_top_n": "2",
+            },
+        )
+        assert response.status_code == 200
+        assert 'name="pert_track"' in response.text
+        assert "track 0 AT1" in response.text
+        assert "scope=stage" in response.text
+
+        response = await client.get(
+            "/analysis/analyze_explorer/explorer/table.csv",
+            params={
+                "mode": "perturbation",
+                "pert_scope": "stage",
+                "pert_mode": "drug",
+                "pert_stage": "1",
+                "pert_top_n": "2",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/csv")
+        assert "DrugStage1A" in response.text
+
+        response = await client.get(
+            "/analysis/analyze_explorer/explorer/table.csv",
+            params={
+                "mode": "perturbation",
+                "pert_scope": "stage",
+                "pert_mode": "pathway",
+                "pert_stage": "1",
+                "pert_track": "0",
+                "pert_top_n": "2",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/csv")
+        assert "PathTrackA" in response.text
 
         response = await client.post(
             "/partials/analysis/analyze_explorer/explorer/render",
@@ -730,11 +818,8 @@ async def test_analysis_visualization_page_includes_interactive_explorer_and_ren
         assert 'data-custom-perturbation-target-input' in response.text
         assert 'data-custom-perturbation-gene-text' in response.text
         assert 'data-custom-perturbation-target-label' in response.text
-<<<<<<< HEAD
         assert 'name="stage_key"' in response.text
-        assert '>stage<' in response.text
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
+        assert '>Stage<' in response.text
         assert 'name="job_name"' not in response.text
         assert 'name="user_label"' not in response.text
         assert "Selected Custom Perturbation" not in response.text
