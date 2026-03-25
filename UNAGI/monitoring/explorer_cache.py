@@ -789,7 +789,7 @@ class UmapViewportCache:
             _stable_seed(analysis_path, stage_shard.stage, color_by, len(visible_indices))
         )
         sampled_chunks: list[np.ndarray] = []
-        for category_code, target in zip(categories, desired, strict=False):
+        for category_code, target in zip(categories, desired):
             category_indices = visible_indices[visible_codes == category_code]
             target = int(target)
             if len(category_indices) <= target:

@@ -36,6 +36,7 @@ SHARE_BUNDLE_VERSION = 4
 OFFLINE_MARKER_TOP_N = 20
 SHARE_BUNDLE_PUBLICATION_EXPORTS = {
     "stage_composition",
+    "temporal_dynamics_graph",
     "pathway_ranked_bar",
     "drug_ranked_bar",
     "single_gene_ranked_bar",
@@ -431,7 +432,7 @@ def _collect_entries(
                 for artifact in entry["artifacts"]:
                     if str(artifact.get("type") or "") == "image":
                         artifact["download_path"] = _relpath(destination, bundle_dir)
-                        artifact["download_label"] = "Download plot (PDF)"
+                        artifact["download_label"] = "Download PDF"
                         break
         for raw in success.get("files", []) or []:
             src = Path(raw)
@@ -776,8 +777,15 @@ def _render_download_catalog(entries: Iterable[Mapping[str, Any]]) -> str:
         title = html.escape(str(entry.get("title") or entry.get("name") or "Artifact"))
         links: list[str] = []
         for artifact in entry.get("artifacts", []) or []:
-            path = html.escape(str(artifact.get("path") or ""))
-            label = html.escape(str(artifact.get("label") or artifact.get("type") or "file"))
+            path = html.escape(str(artifact.get("download_path") or artifact.get("path") or ""))
+            label = html.escape(
+                str(
+                    artifact.get("download_label")
+                    or artifact.get("label")
+                    or artifact.get("type")
+                    or "file"
+                )
+            )
             links.append(f'<a href="{path}" download>{label}</a>')
         if links:
             items.append(
@@ -808,8 +816,14 @@ def _render_report_html(
     temporal_entry = entry_map.get("temporal_dynamics_graph")
     if temporal_entry:
         for artifact in temporal_entry.get("artifacts", []) or []:
+            download_path = str(artifact.get("download_path") or artifact.get("path") or "")
+            download_label = str(
+                artifact.get("download_label")
+                or artifact.get("label")
+                or "file"
+            )
             temporal_downloads.append(
-                f'<a href="{html.escape(str(artifact.get("path") or ""))}" download>{html.escape(str(artifact.get("label") or "file"))}</a>'
+                f'<a href="{html.escape(download_path)}" download>{html.escape(download_label)}</a>'
             )
 
     graph_json = json.dumps(temporal_graph or {}, separators=(",", ":")).replace("</script>", "<\\/script>")
