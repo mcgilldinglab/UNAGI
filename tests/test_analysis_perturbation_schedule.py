@@ -45,8 +45,13 @@ class _FakePerturbationRunner:
                 key: {'0-1': {'DR1': np.array([4.0])}}
             }
 
+<<<<<<< HEAD
     def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, stage=None, direction_mode='two_sided'):
         type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks), stage))
+=======
+    def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, direction_mode='two_sided'):
+        type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks)))
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         key = str(bound)
         if mode == 'pathway':
             self.adata.uns['pathway_perturbation_score'] = {
@@ -230,6 +235,7 @@ def test_single_gpu_optimized_invalidates_cache_when_perturb_change_changes(monk
     assert len(_FakePerturbationRunner.run_modes) == first_run_count * 2
 
 
+<<<<<<< HEAD
 def test_single_gpu_optimized_passes_stage_filter_to_pathway_and_drug_scoring(monkeypatch, tmp_path):
     data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
     _patch_analysis_dependencies(monkeypatch)
@@ -252,6 +258,8 @@ def test_single_gpu_optimized_passes_stage_filter_to_pathway_and_drug_scoring(mo
     assert saved_uns["analysis_metadata"]["perturb_stage"] == "1"
 
 
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 def test_resource_aware_schedule_is_reserved(monkeypatch, tmp_path):
     data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
     _patch_analysis_dependencies(monkeypatch)

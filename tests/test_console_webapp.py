@@ -375,6 +375,7 @@ async def test_console_routes_support_forms_actions_visualizations_and_path_pick
         assert response.json()["normalized"]["target_spec"]["signed_genes"] == ["GENE0:+", "GENE1:-"]
 
         response = await client.post(
+<<<<<<< HEAD
             "/api/analysis/analyze_001/perturbations/validate",
             data={
                 "mode": "pathway",
@@ -391,6 +392,8 @@ async def test_console_routes_support_forms_actions_visualizations_and_path_pick
         assert response.json()["normalized"]["stage_index"] == 1
 
         response = await client.post(
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
             "/api/analysis/analyze_001/perturbations",
             data={
                 "job_name": "Queued perturbation",

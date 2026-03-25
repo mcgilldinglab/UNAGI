@@ -33,7 +33,10 @@ from .interactive_analysis import (
     _extract_metadata,
     _preview_frame,
     _resolve_gene_list,
+<<<<<<< HEAD
     _resolve_stage_map,
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     _track_cluster_id,
 )
 from .visualization_pipeline import _read_analysis_adata
@@ -48,7 +51,11 @@ FORM_CONTEXT_CACHE_SIZE = 4
 METADATA_CACHE_FILE = "custom_perturbation_metadata.json"
 
 SUPPORTED_MODES = ("gene", "pathway", "drug")
+<<<<<<< HEAD
 SUPPORTED_SCOPE_KINDS = ("overall", "track", "stage")
+=======
+SUPPORTED_SCOPE_KINDS = ("overall", "track")
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 SUPPORTED_EXECUTION_MODES = ("auto", "centroid", "cell_exact")
 SUPPORTED_DIRECTION_MODES = ("one_sided", "two_sided")
 SUPPORTED_RESOLVED_BACKENDS = ("gpu_exact", "gpu_centroid", "cpu_exact_parallel", "cpu_centroid")
@@ -216,7 +223,11 @@ def _extract_analysis_direction_metadata(adata, *, perturb_change: float | None 
 def _normalize_scope_kind(raw: Any) -> str:
     value = str(raw or "overall").strip().lower()
     if value not in SUPPORTED_SCOPE_KINDS:
+<<<<<<< HEAD
         raise ValueError("scope_kind must be one of: overall, track, stage")
+=======
+        raise ValueError("scope_kind must be one of: overall, track")
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     return value
 
 
@@ -397,7 +408,10 @@ def _metadata_cache_path(analysis_dir: str | Path) -> Path:
 
 def _build_form_context_from_adata(adata) -> dict[str, Any]:
     track_options = _extract_track_options(adata)
+<<<<<<< HEAD
     stage_options = _extract_stage_options(adata)
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     analysis_direction = _extract_analysis_direction_metadata(adata)
     background_direction_mode = str(analysis_direction.get("background_direction_mode") or "")
     default_direction_mode = str(
@@ -419,7 +433,10 @@ def _build_form_context_from_adata(adata) -> dict[str, Any]:
         "scope_options": [
             {"value": "overall", "label": "overall"},
             {"value": "track", "label": "temporal track"},
+<<<<<<< HEAD
             {"value": "stage", "label": "stage"},
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         ],
         "execution_mode_options": [
             {"value": "auto", "label": "auto"},
@@ -431,7 +448,10 @@ def _build_form_context_from_adata(adata) -> dict[str, Any]:
             {"value": "one_sided", "label": "one_sided"},
         ],
         "track_options": track_options,
+<<<<<<< HEAD
         "stage_options": stage_options,
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         "gene_limit": GENE_LIMIT,
         "default_direction_mode": default_direction_mode,
         "background_direction_mode": background_direction_mode,
@@ -720,6 +740,7 @@ def _extract_track_options(adata) -> list[dict[str, str]]:
     return [{"value": str(item["value"]), "label": str(item["label"])} for item in tracks]
 
 
+<<<<<<< HEAD
 def _extract_stage_options(adata) -> list[dict[str, str]]:
     return [
         {"value": str(stage), "label": f"stage {stage}"}
@@ -727,6 +748,8 @@ def _extract_stage_options(adata) -> list[dict[str, str]]:
     ]
 
 
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 def _resolve_track_option(track_options: list[dict[str, str]], raw_track: str) -> dict[str, str]:
     for item in track_options:
         if item["value"] == raw_track:
@@ -734,6 +757,7 @@ def _resolve_track_option(track_options: list[dict[str, str]], raw_track: str) -
     raise ValueError(f"Unknown temporal track: {raw_track}")
 
 
+<<<<<<< HEAD
 def _resolve_stage_option(stage_options: list[dict[str, str]], raw_stage: str) -> dict[str, str]:
     for item in stage_options:
         if item["value"] == raw_stage:
@@ -752,6 +776,8 @@ def _stage_scope_cell_count(adata, raw_stage: str) -> int:
     return int(np.count_nonzero(adata.obs["stage"].astype(str) == str(raw_stage)))
 
 
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 def _canonicalize_target_spec(
     adata,
     *,
@@ -874,11 +900,14 @@ def build_form_context(analysis_dir: str | Path) -> dict[str, Any]:
     else:
         adata, _dataset_path, _attribute_path = _read_analysis_adata(analysis_path)
         form_context = _build_form_context_from_adata(adata)
+<<<<<<< HEAD
     if "stage_options" not in form_context or "scope_options" not in form_context:
         adata, _dataset_path, _attribute_path = _read_analysis_adata(analysis_path)
         rebuilt = _build_form_context_from_adata(adata)
         for key, value in rebuilt.items():
             form_context.setdefault(key, value)
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     with _FORM_CONTEXT_LOCK:
         _FORM_CONTEXT_CACHE[cache_key] = copy.deepcopy(form_context)
         _FORM_CONTEXT_CACHE.move_to_end(cache_key)
@@ -898,7 +927,10 @@ def validate_custom_perturbation_payload(
     analysis_path = Path(analysis_dir).expanduser().resolve()
     adata, dataset_path, attribute_path = _read_analysis_adata(analysis_path)
     track_options = _extract_track_options(adata)
+<<<<<<< HEAD
     stage_options = _extract_stage_options(adata)
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     mode = _normalize_mode(raw_payload.get("mode"))
     scope_kind = _normalize_scope_kind(raw_payload.get("scope_kind"))
     direction_mode = _normalize_direction_mode(raw_payload.get("direction_mode"))
@@ -912,9 +944,12 @@ def validate_custom_perturbation_payload(
     selected_track = ""
     selected_track_label = ""
     selected_track_cluster = ""
+<<<<<<< HEAD
     selected_stage = ""
     selected_stage_label = ""
     selected_stage_index = None
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     scope_cell_count = int(adata.n_obs)
     if scope_kind == "track":
         selected_track = str(raw_payload.get("track_key") or "").strip()
@@ -924,6 +959,7 @@ def validate_custom_perturbation_payload(
         selected_track_label = track_entry["label"]
         selected_track_cluster = _track_cluster_id(selected_track)
         scope_cell_count = _track_scope_cell_count(adata, selected_track)
+<<<<<<< HEAD
     elif scope_kind == "stage":
         selected_stage = str(raw_payload.get("stage_key") or "").strip()
         if not selected_stage:
@@ -933,6 +969,8 @@ def validate_custom_perturbation_payload(
         selected_stage_label = stage_entry["label"]
         selected_stage_index = next(index for index, item in enumerate(stage_options) if item["value"] == selected_stage)
         scope_cell_count = _stage_scope_cell_count(adata, selected_stage)
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 
     target_spec, warnings = _canonicalize_target_spec(
         adata,
@@ -960,9 +998,12 @@ def validate_custom_perturbation_payload(
         "track_key": selected_track or None,
         "track_label": selected_track_label or None,
         "track_cluster_id": selected_track_cluster or None,
+<<<<<<< HEAD
         "stage_key": selected_stage or None,
         "stage_label": selected_stage_label or None,
         "stage_index": int(selected_stage_index) if selected_stage_index is not None else None,
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         "perturb_change": float(perturb_change),
         "direction_mode": direction_mode,
         "requested_execution_mode": requested_execution_mode,
@@ -984,7 +1025,10 @@ def validate_custom_perturbation_payload(
         "cpu_workers": int(cpu_workers),
         "queue_key": queue_key,
         "track_options": track_options,
+<<<<<<< HEAD
         "stage_options": stage_options,
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     }
 
 
@@ -1432,9 +1476,12 @@ class PerturbationContext:
             if active_request_payload["scope_kind"] == "track":
                 perturbed_tracks = [str(active_request_payload["track_cluster_id"])]
                 overall = False
+<<<<<<< HEAD
             perturb_stage = None
             if active_request_payload["scope_kind"] == "stage":
                 perturb_stage = int(active_request_payload["stage_index"])
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 
             log("[UNAGI-CUSTOM-PERTURB] stage=score status=START")
             runner.analysis(
@@ -1442,7 +1489,10 @@ class PerturbationContext:
                 float(active_request_payload["perturb_change"]),
                 perturbed_tracks=perturbed_tracks,
                 overall_perturbation_analysis=overall,
+<<<<<<< HEAD
                 stage=perturb_stage,
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
                 direction_mode=str(active_request_payload["direction_mode"]),
             )
             log("[UNAGI-CUSTOM-PERTURB] stage=score status=DONE")
@@ -1465,7 +1515,10 @@ class PerturbationContext:
             metadata = {
                 "resolved_track_key": resolved_track_key,
                 "track_label": active_request_payload.get("track_label") or "Overall",
+<<<<<<< HEAD
                 "stage_label": active_request_payload.get("stage_label"),
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
                 "analysis_iteration": self.analysis_iteration,
                 "execution_mode": execution_mode,
                 "resolved_execution_backend": resolved_execution_backend,

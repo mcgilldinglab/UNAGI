@@ -74,7 +74,10 @@ ANALYSIS_GUIDED_FIELDS = [
     "direction_mode",
     "overall_perturbation_analysis",
     "perturbed_tracks",
+<<<<<<< HEAD
     "perturb_stage",
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     "customized_pathway",
     "customized_drug",
     "cmap_dir",
@@ -455,7 +458,10 @@ def _custom_perturbation_payload_from_form(form_data) -> dict[str, Any]:
         "mode": str(form_data.get("mode") or "gene"),
         "scope_kind": str(form_data.get("scope_kind") or "overall"),
         "track_key": str(form_data.get("track_key") or "").strip() or None,
+<<<<<<< HEAD
         "stage_key": str(form_data.get("stage_key") or "").strip() or None,
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         "perturb_change": str(form_data.get("perturb_change") or "0.5"),
         "direction_mode": str(form_data.get("direction_mode") or "two_sided"),
         "execution_mode": str(form_data.get("execution_mode") or "auto"),
@@ -650,7 +656,10 @@ def _empty_custom_perturbation_form_context(*, error: str | None = None) -> tupl
             "scope_options": [
                 {"value": "overall", "label": "overall"},
                 {"value": "track", "label": "temporal track"},
+<<<<<<< HEAD
                 {"value": "stage", "label": "stage"},
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
             ],
             "execution_mode_options": [
                 {"value": "auto", "label": "auto"},
@@ -662,7 +671,10 @@ def _empty_custom_perturbation_form_context(*, error: str | None = None) -> tupl
                 {"value": "one_sided", "label": "one_sided"},
             ],
             "track_options": [],
+<<<<<<< HEAD
             "stage_options": [],
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
             "gene_limit": 50,
             "default_direction_mode": "two_sided",
             "background_direction_mode": "two_sided",

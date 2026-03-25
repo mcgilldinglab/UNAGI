@@ -2023,7 +2023,10 @@
     const targetName = form.querySelector("[data-custom-perturbation-target-name]");
     const targetLabel = form.querySelector("[data-custom-perturbation-target-label]");
     const trackGroup = form.querySelector("[data-custom-perturbation-track-group]");
+<<<<<<< HEAD
     const stageGroup = form.querySelector("[data-custom-perturbation-stage-group]");
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     const geneGroup = form.querySelector("[data-custom-perturbation-gene-group]");
     const drugGroup = form.querySelector("[data-custom-perturbation-drug-group]");
     const signedLabel = form.querySelector("[data-custom-perturbation-signed-label]");
@@ -2043,9 +2046,12 @@
     if (trackGroup) {
       trackGroup.hidden = scopeKind !== "track";
     }
+<<<<<<< HEAD
     if (stageGroup) {
       stageGroup.hidden = scopeKind !== "stage";
     }
+=======
+>>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
     if (geneGroup) {
       geneGroup.hidden = mode !== "pathway";
     }
