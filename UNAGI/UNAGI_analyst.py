@@ -297,6 +297,9 @@ class analyst:
         except Exception:
             return False
     def _resolve_perturb_execution_backend(self, *, centroid, cpu_workers=None):
+        # Prefer GPU whenever it is available. cpu_workers controls CPU
+        # parallelism for CPU execution and GPU fallback, but it does not
+        # disable GPU by itself.
         gpu_available = self._gpu_available()
         if centroid:
             backend = 'gpu_centroid' if gpu_available else 'cpu_centroid'
@@ -308,6 +311,41 @@ class analyst:
             'device': 'cuda:0' if backend.startswith('gpu_') else 'cpu',
             'cpu_workers': default_cpu_workers(cpu_workers),
         }
+
+    @staticmethod
+    def _is_gpu_execution_backend(execution_backend):
+        return str(execution_backend).startswith('gpu_')
+
+    @staticmethod
+    def _cpu_fallback_backend(execution_backend):
+        return 'cpu_centroid' if str(execution_backend) == 'gpu_centroid' else 'cpu_exact_parallel'
+
+    @staticmethod
+    def _is_gpu_runtime_error(exc):
+        seen = set()
+        current = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(current, torch.OutOfMemoryError):
+                return True
+            message = str(current).lower()
+            if any(
+                token in message
+                for token in (
+                    'cuda',
+                    'cublas',
+                    'cudnn',
+                    'device-side assert',
+                    'no kernel image',
+                    'not compiled with cuda',
+                    'invalid device',
+                    'not compatible with the current pytorch installation',
+                    'sm_',
+                )
+            ):
+                return True
+            current = current.__cause__ or current.__context__
+        return False
 
     def _normalize_dynamic_marker_strategy(self, dynamic_marker_strategy):
         strategy = str(dynamic_marker_strategy or 'optimized').strip().lower()
@@ -572,7 +610,8 @@ class analyst:
 
     def _ensure_perturbation_runner(self, *, execution_backend, logger, cache_state):
         runner_mode = 'exact' if execution_backend in {'gpu_exact', 'cpu_exact_parallel'} else 'centroid'
-        runner = cache_state.get(f'runner:{runner_mode}')
+        cache_key = f'runner:{execution_backend}'
+        runner = cache_state.get(cache_key)
         if runner is not None:
             return runner
         started_at = time.time()
@@ -602,7 +641,7 @@ class analyst:
                     raise
         else:
             runner = perturbation_centroid(self.adata, self.target_dir/'model_save'/self.model_name,self.target_dir/'idrem')
-        cache_state[f'runner:{runner_mode}'] = runner
+        cache_state[cache_key] = runner
         cache_state['runner'] = runner
         cache_state['runner_builds'] = cache_state.get('runner_builds', 0) + 1
         self._log_perturb_stage(
@@ -1068,6 +1107,29 @@ class analyst:
             f"perturb_stage={perturb_stage_info['label'] if perturb_stage_info is not None else 'all'}"
         )
 
+        def _fallback_to_cpu_if_needed(exc, *, task_name):
+            if not self._is_gpu_execution_backend(execution_context['backend']):
+                raise exc
+            if not self._is_gpu_runtime_error(exc):
+                raise exc
+            fallback_backend = self._cpu_fallback_backend(execution_context['backend'])
+            logger.log(
+                f"task={task_name} status=GPU_FALLBACK "
+                f"from_backend={execution_context['backend']} "
+                f"to_backend={fallback_backend} reason={type(exc).__name__}"
+            )
+            cache_state_key = f"runner:{execution_context['backend']}"
+            perturbation_state.pop(cache_state_key, None)
+            perturbation_state.pop('runner', None)
+            gc.collect()
+            execution_context['backend'] = fallback_backend
+            execution_context['use_cuda'] = False
+            execution_context['device'] = 'cpu'
+            logger.log(
+                f"perturbation_backend={execution_context['backend']} "
+                f"cpu_workers={execution_context['cpu_workers']} device={execution_context['device']}"
+            )
+
         if not ignore_hcmarkers:
             logger.log('stage=hierarchical_markers status=START')
             stage_started_at = time.time()
@@ -1210,36 +1272,66 @@ class analyst:
             logger.log('stage=perturbation_compute status=START')
             gc.collect()
             if not ignore_pathway_perturabtion:
-                _pathway_payload, pathway_background_payload, pathway_stage_metrics = self._run_or_load_pathway_task(
-                    logger=logger,
-                    execution_backend=execution_context['backend'],
-                    cpu_workers=execution_context['cpu_workers'],
-                    perturb_change=perturb_change,
-                    direction_mode=direction_mode,
-                    perturbed_tracks=perturbed_tracks,
-                    overall_perturbation_analysis=overall_perturbation_analysis,
-                    perturb_stage=perturb_stage_info,
-                    cache_state=perturbation_state,
-                )
+                try:
+                    _pathway_payload, pathway_background_payload, pathway_stage_metrics = self._run_or_load_pathway_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        cpu_workers=execution_context['cpu_workers'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        cache_state=perturbation_state,
+                    )
+                except Exception as exc:
+                    _fallback_to_cpu_if_needed(exc, task_name='pathway_perturbation')
+                    _pathway_payload, pathway_background_payload, pathway_stage_metrics = self._run_or_load_pathway_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        cpu_workers=execution_context['cpu_workers'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        cache_state=perturbation_state,
+                    )
                 stage_timings['pathway_background'] = pathway_stage_metrics['background']
                 stage_timings['pathway_forward'] = pathway_stage_metrics['forward']
                 stage_timings['pathway_scoring'] = pathway_stage_metrics['score']
             else:
                 logger.log('task=pathway_perturbation status=SKIP')
             if not ignore_drug_perturabtion:
-                _drug_payload, drug_background_payload, drug_stage_metrics = self._run_or_load_drug_task(
-                    logger=logger,
-                    execution_backend=execution_context['backend'],
-                    cpu_workers=execution_context['cpu_workers'],
-                    perturb_change=perturb_change,
-                    direction_mode=direction_mode,
-                    perturbed_tracks=perturbed_tracks,
-                    overall_perturbation_analysis=overall_perturbation_analysis,
-                    perturb_stage=perturb_stage_info,
-                    random_times=random_times,
-                    progressionmarker_background_sampling=progressionmarker_background_sampling,
-                    cache_state=perturbation_state,
-                )
+                try:
+                    _drug_payload, drug_background_payload, drug_stage_metrics = self._run_or_load_drug_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        cpu_workers=execution_context['cpu_workers'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        progressionmarker_background_sampling=progressionmarker_background_sampling,
+                        cache_state=perturbation_state,
+                    )
+                except Exception as exc:
+                    _fallback_to_cpu_if_needed(exc, task_name='drug_perturbation')
+                    _drug_payload, drug_background_payload, drug_stage_metrics = self._run_or_load_drug_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        cpu_workers=execution_context['cpu_workers'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        progressionmarker_background_sampling=progressionmarker_background_sampling,
+                        cache_state=perturbation_state,
+                    )
                 stage_timings['drug_background'] = drug_stage_metrics['background']
                 stage_timings['drug_forward'] = drug_stage_metrics['forward']
                 stage_timings['drug_scoring'] = drug_stage_metrics['score']
@@ -1301,7 +1393,12 @@ class analyst:
         output_adata.obs['leiden'] = output_adata.obs['leiden'].astype(str)
         output_adata.obs['stage'] = output_adata.obs['stage'].astype(str)
         output_adata.obs['ident'] = output_adata.obs['ident'].astype(str)
-        output_adata.write(self.target_dir/'dataset.h5ad',compression='gzip', compression_opts=9)
+        dataset_path = Path(self.target_dir) / 'dataset.h5ad'
+        temp_dataset_path = Path(self.target_dir) / f".dataset.{os.getpid()}.{int(time.time())}.h5ad"
+        # Write to a unique temporary file first so readers of an older
+        # dataset.h5ad do not block the final analysis save on HDF5 locks.
+        output_adata.write(temp_dataset_path, compression='gzip', compression_opts=9)
+        os.replace(temp_dataset_path, dataset_path)
         self._record_analysis_stage(stage_timings, 'save_merge', save_started_at)
         self._write_analysis_stage_timings(
             stage_timings,
