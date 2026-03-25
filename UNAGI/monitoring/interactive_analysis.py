@@ -66,6 +66,14 @@ def _sorted_keys(values: Iterable[Any]) -> list[str]:
     return [str(value) for value in sorted(values, key=sort_key)]
 
 
+def _ordered_dynamic_directions(values: Iterable[Any]) -> list[str]:
+    ordered = _sorted_keys(values)
+    preferred = ["increasing", "decreasing"]
+    front = [name for name in preferred if name in ordered]
+    tail = [name for name in ordered if name not in preferred]
+    return front + tail
+
+
 def _cache_key(path: Path | None) -> tuple[str, int | None, int | None]:
     if path is None:
         return ("", None, None)
@@ -820,7 +828,7 @@ def _stage_composition_plotly_spec(
         fractions = fraction_table[cell_type].astype(float).to_numpy()
         counts = count_table[cell_type].astype(int).to_numpy()
         text = [f"{value * 100:.1f}%" if value >= min_label_fraction else "" for value in fractions]
-        customdata = [[int(count), f"{value * 100:.1f}%"] for count, value in zip(counts, fractions, strict=False)]
+        customdata = [[int(count), f"{value * 100:.1f}%"] for count, value in zip(counts, fractions)]
         traces.append(
             {
                 "type": "bar",
@@ -963,7 +971,7 @@ def _extract_metadata(adata) -> dict[str, Any]:
                     {
                         "value": str(track),
                         "label": _track_display_label(adata, track=str(track), stages=stages),
-                        "directions": _sorted_keys(bucket.keys()),
+                        "directions": _ordered_dynamic_directions(bucket.keys()),
                     }
                 )
 
@@ -1664,7 +1672,7 @@ class AnalysisExplorerService:
             direction_options = track_entry["directions"] or ["increasing"]
             directions = [item for item in _form_list(form_data, "dyn_directions") if item in direction_options]
             if not directions:
-                directions = [direction_options[0]]
+                directions = ["increasing"] if "increasing" in direction_options else [direction_options[0]]
             ranked_state = {
                 "available": True,
                 "reason": None,

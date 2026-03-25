@@ -91,6 +91,41 @@ def _detect_gpu_available() -> bool:
         return False
 
 
+def _is_gpu_runtime_error(exc: Exception) -> bool:
+    try:
+        import torch
+    except Exception:
+        torch = None
+    seen: set[int] = set()
+    current: Exception | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if torch is not None and isinstance(current, torch.OutOfMemoryError):
+            return True
+        message = str(current).lower()
+        if any(
+            token in message
+            for token in (
+                "cuda",
+                "cublas",
+                "cudnn",
+                "device-side assert",
+                "no kernel image",
+                "not compiled with cuda",
+                "invalid device",
+                "not compatible with the current pytorch installation",
+                "sm_",
+            )
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _cpu_fallback_backend(execution_backend: str) -> str:
+    return "cpu_centroid" if str(execution_backend) == "gpu_centroid" else "cpu_exact_parallel"
+
+
 def _sanitize_queue_key(queue_key: str) -> str:
     return str(queue_key).replace(":", "_").replace("/", "_")
 
@@ -974,8 +1009,9 @@ class PerturbationContext:
 
     def get_runner(self, execution_backend: str):
         with self._lock:
+            cache_key = f"runner:{execution_backend}"
             runner_mode = "exact" if execution_backend in {"gpu_exact", "cpu_exact_parallel", "cell_exact"} else "centroid"
-            runner = self._runner_cache.get(runner_mode)
+            runner = self._runner_cache.get(cache_key)
             if runner is not None:
                 return runner
             if runner_mode == "exact":
@@ -1005,8 +1041,12 @@ class PerturbationContext:
                     self.model_path,
                     self.analysis_dir / "idrem",
                 )
-            self._runner_cache[runner_mode] = runner
+            self._runner_cache[cache_key] = runner
             return runner
+
+    def _discard_runner(self, execution_backend: str) -> None:
+        with self._lock:
+            self._runner_cache.pop(f"runner:{execution_backend}", None)
 
     def _runner_clear_keys(self, runner, *, backend_mode: str) -> None:
         keys = ["random_background_perturbation_deltaD"]
@@ -1314,133 +1354,158 @@ class PerturbationContext:
         result_dir: Path,
         log: Callable[[str], None],
     ) -> dict[str, Any]:
-        backend_mode = BACKEND_MODE_BY_MODE[str(request_payload["mode"])]
+        def _execute_with_backend(active_request_payload: Mapping[str, Any]) -> dict[str, Any]:
+            backend_mode = BACKEND_MODE_BY_MODE[str(active_request_payload["mode"])]
+            execution_mode = str(active_request_payload["execution_mode"])
+            resolved_execution_backend = str(active_request_payload.get("resolved_execution_backend") or execution_mode)
+            runner = self.get_runner(resolved_execution_backend)
+            self._runner_clear_keys(runner, backend_mode=backend_mode)
+            use_cuda = resolved_execution_backend.startswith("gpu_")
+            device = "cuda:0" if use_cuda else "cpu"
+            cpu_workers = int(active_request_payload.get("cpu_workers") or default_cpu_workers())
+
+            log("[UNAGI-CUSTOM-PERTURB] stage=load_context status=START")
+            log(
+                f"[UNAGI-CUSTOM-PERTURB] stage=load_context status=DONE "
+                f"execution_mode={execution_mode} resolved_backend={resolved_execution_backend} "
+                f"device={device} cpu_workers={cpu_workers}"
+            )
+            log("[UNAGI-CUSTOM-PERTURB] stage=resolve_targets status=START")
+            items = _normalized_target_items(active_request_payload)
+            self._set_backend_items(runner, mode=backend_mode, items=items)
+            log(
+                f"[UNAGI-CUSTOM-PERTURB] stage=resolve_targets status=DONE mode={active_request_payload['mode']} "
+                f"targets={len(items)}"
+            )
+
+            background = self._load_or_build_background(
+                runner=runner,
+                backend_mode=backend_mode,
+                execution_mode=resolved_execution_backend,
+                direction_mode=str(active_request_payload["direction_mode"]),
+                perturb_change=float(active_request_payload["perturb_change"]),
+                sizes=_signature_sizes(active_request_payload),
+                use_cuda=use_cuda,
+                device=device,
+                log=log,
+            )
+            runner.adata.uns["random_background_perturbation_deltaD"] = copy.deepcopy(background)
+            self._set_backend_items(runner, mode=backend_mode, items=items)
+
+            log(f"[UNAGI-CUSTOM-PERTURB] stage=run status=START total={len(items)}")
+            run_mode = backend_mode
+            if resolved_execution_backend == "cpu_exact_parallel":
+                delta_payload = run_exact_parallel_delta(
+                    dataset_path=Path(str(active_request_payload["dataset_path"])).expanduser().resolve(),
+                    attribute_path=Path(str(active_request_payload["attribute_path"])).expanduser().resolve()
+                    if active_request_payload.get("attribute_path")
+                    else None,
+                    model_path=self.model_path,
+                    training_params_path=self.training_params_path,
+                    idrem_dir=self.analysis_dir / "idrem",
+                    backend_mode=backend_mode,
+                    items=items,
+                    perturb_change=float(active_request_payload["perturb_change"]),
+                    direction_mode=str(active_request_payload["direction_mode"]),
+                    cpu_workers=cpu_workers,
+                )
+                runner.adata.uns[f"{backend_mode}_perturbation_deltaD"] = copy.deepcopy(delta_payload)
+            else:
+                runner.run(
+                    run_mode,
+                    float(active_request_payload["perturb_change"]),
+                    inplace=True,
+                    CUDA=use_cuda,
+                    device=device,
+                    direction_mode=str(active_request_payload["direction_mode"]),
+                )
+            batch_meta = getattr(runner, "last_gpu_batch_meta", None) or {}
+            log(
+                f"[UNAGI-CUSTOM-PERTURB] stage=run finished={len(items)}/{len(items)} total={len(items)} "
+                f"backend={resolved_execution_backend} batch_size={batch_meta.get('batch_size', 1)} "
+                f"batched={str(batch_meta.get('batched', False)).lower()}"
+            )
+            log(f"[UNAGI-CUSTOM-PERTURB] stage=run status=DONE total={len(items)}")
+
+            perturbed_tracks: Any = "all"
+            overall = True
+            if active_request_payload["scope_kind"] == "track":
+                perturbed_tracks = [str(active_request_payload["track_cluster_id"])]
+                overall = False
+            perturb_stage = None
+            if active_request_payload["scope_kind"] == "stage":
+                perturb_stage = int(active_request_payload["stage_index"])
+
+            log("[UNAGI-CUSTOM-PERTURB] stage=score status=START")
+            runner.analysis(
+                run_mode,
+                float(active_request_payload["perturb_change"]),
+                perturbed_tracks=perturbed_tracks,
+                overall_perturbation_analysis=overall,
+                stage=perturb_stage,
+                direction_mode=str(active_request_payload["direction_mode"]),
+            )
+            log("[UNAGI-CUSTOM-PERTURB] stage=score status=DONE")
+            table, resolved_track_key = self._extract_result_table(
+                runner,
+                request_payload=active_request_payload,
+                backend_mode=backend_mode,
+            )
+            if "pval_adjusted" not in table.columns and "pval" in table.columns:
+                table = table.copy()
+                table["pval_adjusted"] = _bh_adjust(pd.to_numeric(table["pval"], errors="coerce").fillna(1.0).tolist())
+            if "pval_adjusted" not in table.columns or not pd.to_numeric(table["pval_adjusted"], errors="coerce").notna().any():
+                raise ValueError(
+                    "The custom perturbation did not produce valid p-values against the random background."
+                )
+            if table.empty:
+                raise ValueError("The custom perturbation produced an empty result table.")
+
+            log("[UNAGI-CUSTOM-PERTURB] stage=save status=START")
+            metadata = {
+                "resolved_track_key": resolved_track_key,
+                "track_label": active_request_payload.get("track_label") or "Overall",
+                "stage_label": active_request_payload.get("stage_label"),
+                "analysis_iteration": self.analysis_iteration,
+                "execution_mode": execution_mode,
+                "resolved_execution_backend": resolved_execution_backend,
+                "cpu_workers": int(cpu_workers),
+                "direction_mode": active_request_payload["direction_mode"],
+                "scope_kind": active_request_payload["scope_kind"],
+            }
+            summary = _write_result_bundle(
+                result_dir=result_dir,
+                normalized_request=dict(active_request_payload),
+                table=table,
+                metadata=metadata,
+            )
+            gc.collect()
+            log("[UNAGI-CUSTOM-PERTURB] stage=save status=DONE")
+            return summary
+
         execution_mode = str(request_payload["execution_mode"])
         resolved_execution_backend = str(request_payload.get("resolved_execution_backend") or execution_mode)
-        runner = self.get_runner(resolved_execution_backend)
-        self._runner_clear_keys(runner, backend_mode=backend_mode)
-        use_cuda = resolved_execution_backend.startswith("gpu_")
-        device = "cuda:0" if use_cuda else "cpu"
-        cpu_workers = int(request_payload.get("cpu_workers") or default_cpu_workers())
-
-        log("[UNAGI-CUSTOM-PERTURB] stage=load_context status=START")
-        log(
-            f"[UNAGI-CUSTOM-PERTURB] stage=load_context status=DONE "
-            f"execution_mode={execution_mode} resolved_backend={resolved_execution_backend} "
-            f"device={device} cpu_workers={cpu_workers}"
-        )
-        log("[UNAGI-CUSTOM-PERTURB] stage=resolve_targets status=START")
-        items = _normalized_target_items(request_payload)
-        self._set_backend_items(runner, mode=backend_mode, items=items)
-        log(
-            f"[UNAGI-CUSTOM-PERTURB] stage=resolve_targets status=DONE mode={request_payload['mode']} "
-            f"targets={len(items)}"
-        )
-
-        background = self._load_or_build_background(
-            runner=runner,
-            backend_mode=backend_mode,
-            execution_mode=resolved_execution_backend,
-            direction_mode=str(request_payload["direction_mode"]),
-            perturb_change=float(request_payload["perturb_change"]),
-            sizes=_signature_sizes(request_payload),
-            use_cuda=use_cuda,
-            device=device,
-            log=log,
-        )
-        runner.adata.uns["random_background_perturbation_deltaD"] = copy.deepcopy(background)
-        self._set_backend_items(runner, mode=backend_mode, items=items)
-
-        log(f"[UNAGI-CUSTOM-PERTURB] stage=run status=START total={len(items)}")
-        run_mode = backend_mode
-        if resolved_execution_backend == "cpu_exact_parallel":
-            delta_payload = run_exact_parallel_delta(
-                dataset_path=Path(str(request_payload["dataset_path"])).expanduser().resolve(),
-                attribute_path=Path(str(request_payload["attribute_path"])).expanduser().resolve()
-                if request_payload.get("attribute_path")
-                else None,
-                model_path=self.model_path,
-                training_params_path=self.training_params_path,
-                idrem_dir=self.analysis_dir / "idrem",
-                backend_mode=backend_mode,
-                items=items,
-                perturb_change=float(request_payload["perturb_change"]),
-                direction_mode=str(request_payload["direction_mode"]),
-                cpu_workers=cpu_workers,
+        try:
+            return _execute_with_backend(request_payload)
+        except Exception as exc:
+            if not resolved_execution_backend.startswith("gpu_") or not _is_gpu_runtime_error(exc):
+                raise
+            fallback_backend = _cpu_fallback_backend(resolved_execution_backend)
+            self._discard_runner(resolved_execution_backend)
+            gc.collect()
+            log(
+                f"[UNAGI-CUSTOM-PERTURB] stage=fallback status=START "
+                f"from_backend={resolved_execution_backend} to_backend={fallback_backend} "
+                f"reason={type(exc).__name__}"
             )
-            runner.adata.uns[f"{backend_mode}_perturbation_deltaD"] = copy.deepcopy(delta_payload)
-        else:
-            runner.run(
-                run_mode,
-                float(request_payload["perturb_change"]),
-                inplace=True,
-                CUDA=use_cuda,
-                device=device,
-                direction_mode=str(request_payload["direction_mode"]),
+            fallback_request_payload = dict(request_payload)
+            fallback_request_payload["resolved_execution_backend"] = fallback_backend
+            summary = _execute_with_backend(fallback_request_payload)
+            log(
+                f"[UNAGI-CUSTOM-PERTURB] stage=fallback status=DONE "
+                f"from_backend={resolved_execution_backend} to_backend={fallback_backend}"
             )
-        batch_meta = getattr(runner, "last_gpu_batch_meta", None) or {}
-        log(
-            f"[UNAGI-CUSTOM-PERTURB] stage=run finished={len(items)}/{len(items)} total={len(items)} "
-            f"backend={resolved_execution_backend} batch_size={batch_meta.get('batch_size', 1)} "
-            f"batched={str(batch_meta.get('batched', False)).lower()}"
-        )
-        log(f"[UNAGI-CUSTOM-PERTURB] stage=run status=DONE total={len(items)}")
-
-        perturbed_tracks: Any = "all"
-        overall = True
-        if request_payload["scope_kind"] == "track":
-            perturbed_tracks = [str(request_payload["track_cluster_id"])]
-            overall = False
-        perturb_stage = None
-        if request_payload["scope_kind"] == "stage":
-            perturb_stage = int(request_payload["stage_index"])
-
-        log("[UNAGI-CUSTOM-PERTURB] stage=score status=START")
-        runner.analysis(
-            run_mode,
-            float(request_payload["perturb_change"]),
-            perturbed_tracks=perturbed_tracks,
-            overall_perturbation_analysis=overall,
-            stage=perturb_stage,
-            direction_mode=str(request_payload["direction_mode"]),
-        )
-        log("[UNAGI-CUSTOM-PERTURB] stage=score status=DONE")
-        table, resolved_track_key = self._extract_result_table(
-            runner,
-            request_payload=request_payload,
-            backend_mode=backend_mode,
-        )
-        if "pval_adjusted" not in table.columns and "pval" in table.columns:
-            table = table.copy()
-            table["pval_adjusted"] = _bh_adjust(pd.to_numeric(table["pval"], errors="coerce").fillna(1.0).tolist())
-        if "pval_adjusted" not in table.columns or not pd.to_numeric(table["pval_adjusted"], errors="coerce").notna().any():
-            raise ValueError(
-                "The custom perturbation did not produce valid p-values against the random background."
-            )
-        if table.empty:
-            raise ValueError("The custom perturbation produced an empty result table.")
-
-        log("[UNAGI-CUSTOM-PERTURB] stage=save status=START")
-        metadata = {
-            "resolved_track_key": resolved_track_key,
-            "track_label": request_payload.get("track_label") or "Overall",
-            "stage_label": request_payload.get("stage_label"),
-            "analysis_iteration": self.analysis_iteration,
-            "execution_mode": execution_mode,
-            "resolved_execution_backend": resolved_execution_backend,
-            "cpu_workers": int(cpu_workers),
-            "direction_mode": request_payload["direction_mode"],
-            "scope_kind": request_payload["scope_kind"],
-        }
-        summary = _write_result_bundle(
-            result_dir=result_dir,
-            normalized_request=dict(request_payload),
-            table=table,
-            metadata=metadata,
-        )
-        gc.collect()
-        log("[UNAGI-CUSTOM-PERTURB] stage=save status=DONE")
-        return summary
+            return summary
 
 
 class PerturbationContextCache:
