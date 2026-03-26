@@ -679,6 +679,7 @@ class analyst:
             perturb_change=float(perturb_change),
             direction_mode=str(direction_mode),
             size_signature=self._background_size_signature(pathway_items),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
         )
         result_signature = self._stage_signature(
             'pathway_result',
@@ -864,6 +865,7 @@ class analyst:
             size_signature=background_size_signature,
             random_times=int(random_times),
             customized_drug=bool(self.customized_drug is not None),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
         )
         result_signature = self._stage_signature(
             'drug_result',

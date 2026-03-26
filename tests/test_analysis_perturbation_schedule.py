@@ -8,6 +8,7 @@ import pytest
 from anndata import AnnData
 
 import UNAGI.UNAGI_analyst as analyst_module
+from UNAGI.perturbations.analysis_perturbation import _bh_adjust, perturbationAnalysis
 
 
 class _FakePerturbationRunner:
@@ -262,6 +263,43 @@ def test_single_gpu_optimized_passes_stage_filter_to_pathway_and_drug_scoring(mo
     assert saved_uns["analysis_metadata"]["perturb_stage"] == "1"
 
 
+def test_single_gpu_optimized_stage_background_cache_is_separate_from_overall(monkeypatch, tmp_path):
+    data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
+    _patch_analysis_dependencies(monkeypatch)
+    _FakePerturbationRunner.reset()
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    _FakePerturbationRunner.run_modes = []
+    _FakePerturbationRunner.analysis_modes = []
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        perturb_stage="1",
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    assert [mode for mode, _bound in _FakePerturbationRunner.run_modes] == [
+        'random_pathway_background',
+        'pathway',
+        'random_drug_background',
+        'drug',
+    ]
+
+
 def test_single_gpu_optimized_persists_overall_and_grouped_track_scores(monkeypatch, tmp_path):
     data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
     _patch_analysis_dependencies(monkeypatch)
@@ -286,6 +324,55 @@ def test_single_gpu_optimized_persists_overall_and_grouped_track_scores(monkeypa
     assert {"overall", "0"} <= set(drug_bucket.keys())
     assert pathway_bucket["0"]["top_compounds"]["compound"]["0"] == "PW1_group"
     assert drug_bucket["0"]["top_compounds"]["compound"]["0"] == "DR1_group"
+
+
+def test_core_perturbation_results_store_raw_and_fdr_adjusted_pvalues():
+    adata = AnnData(np.zeros((1, 1), dtype=np.float32))
+    adata.obs = pd.DataFrame(index=["cell0"])
+    adata.var = pd.DataFrame(index=["GENE1"])
+    analysis = perturbationAnalysis(adata, ".", log2fc=0.5, mode="pathway")
+
+    analysis.calculateAvg = lambda objectdic, sanity=False, tracklist='all': objectdic
+    analysis.conver_object_track_score_to_track_object_score = (
+        lambda pathways, perturbationresultdic, sanity_perturbationresultdic, scoreindex, track: (
+            {'overall': [1.0, 0.8, 0.7]},
+            {'overall': [0.1, 0.2, 0.3]},
+        )
+    )
+    analysis.getTendencyFromIDREM = lambda: {'1': np.array([1.0])}
+    score_lookup = {
+        "PathA": (1.0, 0.01),
+        "PathB": (0.8, 0.04),
+        "PathC": (0.7, 0.03),
+    }
+    analysis.getTrackObjectCDF = lambda eachpathway, *args, **kwargs: score_lookup[eachpathway]
+
+    objectranking = {("overall", "top_compounds"): ["PathA", "PathB", "PathC"]}
+    objectdic = {"PathA": {}, "PathB": {}, "PathC": {}}
+    gene_in_object = {
+        "PathA": ["GENE1:+"],
+        "PathB": ["GENE1:+"],
+        "PathC": ["GENE1:+"],
+    }
+
+    results = analysis.getSummarizedResults(
+        "all",
+        objectranking,
+        objectdic,
+        objectdic,
+        {"0-1": 1.0},
+        gene_in_object,
+        "avg_backScore",
+        {"GENE1": 1.0},
+        True,
+    )
+
+    top = results["overall"]["top_compounds"]
+    raw = [top["pval"][str(index)] for index in range(3)]
+    adjusted = [top["pval_adjusted"][str(index)] for index in range(3)]
+
+    assert raw == pytest.approx([0.01, 0.04, 0.03])
+    assert adjusted == pytest.approx(_bh_adjust(raw))
 
 
 def test_resource_aware_schedule_is_reserved(monkeypatch, tmp_path):

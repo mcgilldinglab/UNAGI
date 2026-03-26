@@ -157,6 +157,39 @@ def test_explorer_renders_stage_specific_track_perturbation_results(tmp_path, mo
     assert view["result"]["plots"][0]["table_download_query"]["pert_track"] == "0"
 
 
+def test_stage_specific_track_dropdown_normalizes_group_cache_labels(tmp_path):
+    analysis_dir = write_analysis_dataset(
+        tmp_path / "analysis" / "iter1",
+        include_stage_specific_perturbation=True,
+    )
+    stage_dir = analysis_dir / "stage_specific_perturbation" / "stage_1"
+    grouped_table_path = stage_dir / "pathway_perturbation_track_group_0_stage_1.csv"
+    grouped_frame = pd.DataFrame(
+        {
+            "rank": [0, 1],
+            "pathways": ["PathTrackA", "PathTrackB"],
+            "perturbation score": [1.8, 1.1],
+            "pval_adjusted": [0.003, 0.02],
+        }
+    )
+    grouped_frame.to_csv(grouped_table_path, index=False)
+
+    explorer = AnalysisExplorerService()
+    view = explorer.build_view(
+        analysis_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_scope": "stage",
+            "pert_mode": "pathway",
+            "pert_stage": "1",
+        },
+    )
+
+    track_labels = {item["value"]: item["label"] for item in view["perturbation"]["track_options"]}
+    assert "group_0" not in track_labels
+    assert track_labels["0"] == "track 0 AT1"
+
+
 def test_explorer_backfills_overall_track_perturbation_results_for_existing_analysis(tmp_path, monkeypatch):
     analysis_dir = write_analysis_dataset(tmp_path / "analysis" / "iter1")
     attribute_path = analysis_dir / "attribute.pkl"

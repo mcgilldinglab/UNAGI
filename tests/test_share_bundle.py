@@ -11,7 +11,7 @@ from .monitor_test_helpers import fake_toppgene_enrichment_table, write_mock_idr
 
 def test_export_analysis_share_bundle_writes_index_and_zip(tmp_path, monkeypatch):
     analysis_dir = tmp_path / "analysis" / "iter1" / "results"
-    write_analysis_dataset(analysis_dir)
+    write_analysis_dataset(analysis_dir, include_stage_specific_perturbation=True)
     write_mock_idrem_track(analysis_dir, track_key="0-2-4")
     monkeypatch.setattr(
         "UNAGI.monitoring.idrem_summary.ToppGeneEnrichmentClient.fetch",
@@ -41,6 +41,14 @@ def test_export_analysis_share_bundle_writes_index_and_zip(tmp_path, monkeypatch
     assert "Offline Share Bundle" in html_text
     assert "Temporal Dynamics Graph" in html_text
     assert "0-2-4" in html_text
+    assert 'id="perturb-scope-pathway"' in html_text
+    assert 'id="perturb-change-pathway"' in html_text
+    assert 'id="perturb-stage-pathway"' in html_text
+    assert 'id="perturb-track-pathway"' in html_text
+    assert 'id="perturb-plot-pathway"' in html_text
+    assert "track 0 AT1" in html_text
+    assert "Individual stage" in html_text
+    assert "Stage 1" in html_text
     assert "Download detailed table" in html_text
     assert "Download plot (PDF)" in html_text
     assert "stage_composition_publication.pdf" in html_text

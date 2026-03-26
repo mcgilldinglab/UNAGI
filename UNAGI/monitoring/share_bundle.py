@@ -17,12 +17,24 @@ import pandas as pd
 from UNAGI.plotting import (
     extract_dynamic_marker_table,
     extract_hierarchical_marker_table,
+    extract_perturbation_table,
     plot_temporal_dynamics_graph,
+    plot_perturbation_ranked_bar,
     plot_stage_umap_grid,
 )
 
 from .figure_export import export_static_publication_pdf
-from .interactive_analysis import _extract_metadata
+from .interactive_analysis import (
+    PERTURBATION_MODE_KEYS,
+    _build_stage_track_options,
+    _discover_stage_specific_perturbations,
+    _discover_overall_track_group_perturbation_tables,
+    _ensure_overall_track_group_perturbation_table,
+    _ensure_stage_specific_track_group_perturbation_table,
+    _extract_metadata,
+    _generate_overall_track_group_perturbation_tables,
+    _normalize_stage_track_group_value,
+)
 from .idrem_summary import IdremTrackSummaryCache
 from .visualization_pipeline import (
     INTERACTIVE_UNS_KEYS,
@@ -34,6 +46,7 @@ from .visualization_pipeline import (
 SHARE_BUNDLE_DIR_NAME = "share_bundle"
 SHARE_BUNDLE_VERSION = 4
 OFFLINE_MARKER_TOP_N = 20
+OFFLINE_PERTURBATION_TOP_N = 20
 SHARE_BUNDLE_PUBLICATION_EXPORTS = {
     "stage_composition",
     "temporal_dynamics_graph",
@@ -257,6 +270,17 @@ def _frame_table_payload(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _sorted_keys(values: Iterable[Any]) -> list[str]:
+    def sort_key(value: Any) -> tuple[int, Any]:
+        text = str(value)
+        try:
+            return (0, float(text))
+        except ValueError:
+            return (1, text)
+
+    return [str(value) for value in sorted(values, key=sort_key)]
+
+
 def _build_dynamic_marker_bundle(
     adata,
     *,
@@ -382,6 +406,326 @@ def _build_hierarchical_marker_bundle(
         "available": bool(serialized_stages),
         "stages": serialized_stages,
         "tables": table_payloads,
+    }
+
+
+def _perturbation_mode_title(mode: str) -> str:
+    titles = {
+        "pathway": "Pathway Perturbation",
+        "drug": "Drug Perturbation",
+        "single_gene": "Single Gene Perturbation",
+        "gene_combo": "Gene Combination Perturbation",
+    }
+    return titles.get(str(mode), _humanize_entry_name(mode))
+
+
+def _load_grouped_perturbation_table(
+    analysis_dir: Path,
+    adata,
+    *,
+    mode: str,
+    perturb_change: str,
+    track: str,
+    generated_tables: dict[str, str],
+    precomputed_group_values: set[str],
+) -> tuple[pd.DataFrame, str | None]:
+    if str(track) == "overall" or str(track) in precomputed_group_values:
+        frame = extract_perturbation_table(
+            adata,
+            mode=mode,
+            perturb_change=float(str(perturb_change)),
+            track=str(track),
+        )
+        return frame, None
+    table_path = generated_tables.get(str(track), "")
+    if not table_path:
+        table_path = _ensure_overall_track_group_perturbation_table(
+            analysis_dir,
+            mode=mode,
+            perturb_change=str(perturb_change),
+            track_group=str(track),
+        )
+    return pd.read_csv(table_path), table_path
+
+
+def _write_perturbation_bundle_assets(
+    frame: pd.DataFrame,
+    *,
+    mode: str,
+    asset_name: str,
+    bundle_dir: Path,
+) -> dict[str, Any]:
+    asset_stem = _safe_name(asset_name)
+    table_dir = bundle_dir / "assets" / "perturbation_tables"
+    figure_dir = bundle_dir / "assets" / "perturbation_figures"
+    publication_dir = bundle_dir / "assets" / "publication"
+
+    csv_path = table_dir / f"{asset_stem}.csv"
+    png_path = figure_dir / f"{asset_stem}.png"
+    pdf_path = publication_dir / f"{asset_stem}.pdf"
+
+    _write_generated_csv(frame, csv_path)
+
+    plot_table = frame.head(OFFLINE_PERTURBATION_TOP_N).copy()
+    use_pval = str(mode) != "pathway"
+    fig, _ax, _work = plot_perturbation_ranked_bar(
+        plot_table,
+        top_n=min(OFFLINE_PERTURBATION_TOP_N, len(plot_table)),
+        use_neglog10_pval=use_pval,
+        show=False,
+    )
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(png_path, dpi=180, bbox_inches="tight")
+    fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    return {
+        "table_download_path": _relpath(csv_path, bundle_dir),
+        "plot_path": _relpath(png_path, bundle_dir),
+        "plot_download_path": _relpath(pdf_path, bundle_dir),
+    }
+
+
+def _load_stage_specific_grouped_perturbation_table(
+    analysis_dir: Path,
+    *,
+    mode: str,
+    stage: str,
+    track: str,
+    stage_mode_entry: Mapping[str, Any],
+) -> tuple[pd.DataFrame, str]:
+    if str(track) == "overall":
+        table_path = str((stage_mode_entry.get("tables_by_stage") or {}).get(str(stage)) or "")
+        if not table_path:
+            raise KeyError(f"Missing stage-specific perturbation table for mode={mode!r}, stage={stage!r}.")
+        return pd.read_csv(table_path), table_path
+    table_path = str((((stage_mode_entry.get("track_tables_by_stage") or {}).get(str(stage)) or {}).get(str(track))) or "")
+    if not table_path:
+        table_path = _ensure_stage_specific_track_group_perturbation_table(
+            analysis_dir,
+            mode=mode,
+            stage=str(stage),
+            track_group=str(track),
+        )
+    return pd.read_csv(table_path), table_path
+
+
+def _build_perturbation_bundle(
+    analysis_dir: Path,
+    adata,
+    *,
+    bundle_dir: Path,
+) -> dict[str, Any]:
+    metadata = _extract_metadata(adata, analysis_dir=analysis_dir)
+    perturbation_section = metadata.get("perturbation") or {}
+    standard_modes = perturbation_section.get("modes") or {}
+    stage_specific_modes = perturbation_section.get("stage_specific_modes") or {}
+    stages = list((metadata.get("umap") or {}).get("stages") or [])
+
+    tables: dict[str, Any] = {}
+    modes_out: list[dict[str, Any]] = []
+
+    for mode in ("pathway", "drug"):
+        uns_key = PERTURBATION_MODE_KEYS.get(mode)
+        payload = adata.uns.get(uns_key) if uns_key else None
+        stage_mode_entry = stage_specific_modes.get(mode) or {}
+        has_overall = isinstance(payload, dict) and bool(payload)
+        has_stage_specific = bool(stage_mode_entry.get("tables_by_stage"))
+        if not has_overall and not has_stage_specific:
+            continue
+
+        scope_options: list[str] = []
+        if has_overall:
+            scope_options.append("overall")
+        if has_stage_specific:
+            scope_options.append("stage")
+        perturb_changes_out: list[str] = []
+        tracks_by_change: dict[str, list[dict[str, str]]] = {}
+        stage_options: list[dict[str, str]] = []
+        resolved_stage_options: list[dict[str, str]] = []
+        tracks_by_stage: dict[str, list[dict[str, str]]] = {}
+
+        if has_overall:
+            for perturb_change in _sorted_keys(payload.keys()):
+                track_bucket = payload.get(perturb_change)
+                if not isinstance(track_bucket, dict):
+                    continue
+                available_track_options = (standard_modes.get(mode, {}).get("tracks_by_change", {}) or {}).get(
+                    str(perturb_change),
+                    [],
+                )
+                raw_non_overall_values = [
+                    str(item.get("value"))
+                    for item in available_track_options
+                    if str(item.get("value")) != "overall"
+                ]
+                normalized_non_overall_values = [
+                    _normalize_stage_track_group_value(value)
+                    for value in raw_non_overall_values
+                ]
+                precomputed_group_values: set[str] = set()
+                if raw_non_overall_values and (
+                    len(set(raw_non_overall_values)) == len(set(normalized_non_overall_values))
+                    and set(raw_non_overall_values) == set(normalized_non_overall_values)
+                ):
+                    precomputed_group_values = set(raw_non_overall_values)
+
+                generated_track_tables = _discover_overall_track_group_perturbation_tables(
+                    analysis_dir,
+                    mode=mode,
+                    perturb_change=str(perturb_change),
+                )
+                if not precomputed_group_values and not generated_track_tables:
+                    try:
+                        generated_track_tables = _generate_overall_track_group_perturbation_tables(
+                            analysis_dir,
+                            mode=mode,
+                            perturb_change=str(perturb_change),
+                        )
+                    except Exception:
+                        generated_track_tables = {}
+
+                track_values = ["overall"]
+                if precomputed_group_values:
+                    track_values.extend(_sorted_keys(precomputed_group_values))
+                else:
+                    track_values.extend(_sorted_keys(generated_track_tables.keys()))
+                track_options = _build_stage_track_options(
+                    adata,
+                    stages=stages,
+                    track_values=track_values,
+                )
+                if not track_options:
+                    continue
+
+                resolved_track_options: list[dict[str, str]] = []
+                for option in track_options:
+                    track_value = str(option.get("value") or "")
+                    try:
+                        frame, _table_path = _load_grouped_perturbation_table(
+                            analysis_dir,
+                            adata,
+                            mode=mode,
+                            perturb_change=str(perturb_change),
+                            track=track_value,
+                            generated_tables=generated_track_tables,
+                            precomputed_group_values=precomputed_group_values,
+                        )
+                    except Exception:
+                        continue
+                    if frame.empty:
+                        continue
+                    assets = _write_perturbation_bundle_assets(
+                        frame,
+                        mode=mode,
+                        asset_name=f"{mode}_perturbation_overall_{perturb_change}_{track_value}",
+                        bundle_dir=bundle_dir,
+                    )
+                    key = f"{mode}::overall::{perturb_change}::{track_value}"
+                    tables[key] = {
+                        "scope": "overall",
+                        "mode": mode,
+                        "perturb_change": str(perturb_change),
+                        "track": track_value,
+                        "track_label": str(option.get("label") or track_value),
+                        **assets,
+                    }
+                    resolved_track_options.append({"value": track_value, "label": str(option.get("label") or track_value)})
+
+                if resolved_track_options:
+                    perturb_changes_out.append(str(perturb_change))
+                    tracks_by_change[str(perturb_change)] = resolved_track_options
+
+        if has_stage_specific:
+            stage_options = list(stage_mode_entry.get("stage_options") or [])
+            for stage_option in stage_options:
+                stage_value = str(stage_option.get("value") or "")
+                if not stage_value:
+                    continue
+                representative_tracks: dict[str, str] = {}
+                for item in metadata.get("dynamic_markers", {}).get("tracks", []):
+                    raw_value = str(item.get("value") or "")
+                    if raw_value:
+                        representative_tracks.setdefault(_normalize_stage_track_group_value(raw_value), raw_value)
+                standard_mode_entry = standard_modes.get(mode) or {}
+                for track_list in (standard_mode_entry.get("tracks_by_change") or {}).values():
+                    for item in track_list:
+                        raw_value = str(item.get("value") or "")
+                        if not raw_value or raw_value == "overall":
+                            continue
+                        representative_tracks.setdefault(_normalize_stage_track_group_value(raw_value), raw_value)
+                for raw_value in _sorted_keys(((stage_mode_entry.get("track_tables_by_stage") or {}).get(stage_value) or {}).keys()):
+                    if raw_value:
+                        representative_tracks.setdefault(_normalize_stage_track_group_value(raw_value), raw_value)
+
+                stage_track_values = ["overall"]
+                stage_track_values.extend(
+                    _sorted_keys(key for key in representative_tracks.keys() if key != "overall")
+                )
+                track_options = _build_stage_track_options(
+                    adata,
+                    stages=stages,
+                    track_values=stage_track_values,
+                )
+                if not track_options:
+                    continue
+                resolved_track_options: list[dict[str, str]] = []
+                for option in track_options:
+                    track_value = str(option.get("value") or "")
+                    try:
+                        frame, _table_path = _load_stage_specific_grouped_perturbation_table(
+                            analysis_dir,
+                            mode=mode,
+                            stage=stage_value,
+                            track=track_value,
+                            stage_mode_entry=stage_mode_entry,
+                        )
+                    except Exception:
+                        continue
+                    if frame.empty:
+                        continue
+                    assets = _write_perturbation_bundle_assets(
+                        frame,
+                        mode=mode,
+                        asset_name=f"{mode}_perturbation_stage_{stage_value}_{track_value}",
+                        bundle_dir=bundle_dir,
+                    )
+                    key = f"{mode}::stage::{stage_value}::{track_value}"
+                    tables[key] = {
+                        "scope": "stage",
+                        "mode": mode,
+                        "stage": stage_value,
+                        "stage_label": str(stage_option.get("label") or stage_value),
+                        "track": track_value,
+                        "track_label": str(option.get("label") or track_value),
+                        **assets,
+                    }
+                    resolved_track_options.append({"value": track_value, "label": str(option.get("label") or track_value)})
+
+                if resolved_track_options:
+                    tracks_by_stage[stage_value] = resolved_track_options
+                    resolved_stage_options.append(
+                        {"value": stage_value, "label": str(stage_option.get("label") or stage_value)}
+                    )
+
+        if perturb_changes_out or resolved_stage_options:
+            modes_out.append(
+                {
+                    "value": mode,
+                    "title": _perturbation_mode_title(mode),
+                    "scope_options": scope_options,
+                    "perturb_changes": perturb_changes_out,
+                    "tracks_by_change": tracks_by_change,
+                    "stage_options": resolved_stage_options,
+                    "tracks_by_stage": tracks_by_stage,
+                }
+            )
+
+    return {
+        "available": bool(modes_out),
+        "modes": modes_out,
+        "tables": tables,
     }
 
 
@@ -707,8 +1051,9 @@ def _render_entry_cards(entries: Iterable[Mapping[str, Any]]) -> str:
     return "".join(parts)
 
 
-def _perturbation_mode_groups(entries: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _perturbation_mode_groups(entries: Iterable[Mapping[str, Any]], *, skip_modes: Iterable[str] = ()) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
+    skip = {str(mode) for mode in skip_modes}
     title_map = {
         "pathway": "Pathway Perturbation",
         "drug": "Drug Perturbation",
@@ -723,6 +1068,8 @@ def _perturbation_mode_groups(entries: Iterable[Mapping[str, Any]]) -> list[dict
         elif name.endswith("_perturbation_table"):
             mode = name[: -len("_perturbation_table")]
         if not mode:
+            continue
+        if mode in skip:
             continue
         group = groups.setdefault(
             mode,
@@ -743,9 +1090,44 @@ def _perturbation_mode_groups(entries: Iterable[Mapping[str, Any]]) -> list[dict
     return [groups[mode] for mode in ordered_modes if mode in groups]
 
 
-def _render_perturbation_section(entries: Iterable[Mapping[str, Any]]) -> str:
+def _render_offline_perturbation_cards(perturbation_bundle: Mapping[str, Any]) -> str:
+    if not perturbation_bundle.get("available"):
+        return ""
     cards: list[str] = []
-    for group in _perturbation_mode_groups(entries):
+    for mode_entry in perturbation_bundle.get("modes", []) or []:
+        mode_value = str(mode_entry.get("value") or "")
+        safe_mode = html.escape(mode_value)
+        title = html.escape(str(mode_entry.get("title") or _perturbation_mode_title(mode_value)))
+        cards.append(
+            "<section class=\"report-card marker-panel\">"
+            f"<h3>{title}</h3>"
+            "<div class=\"control-grid\">"
+            f"<div class=\"control\" id=\"perturb-scope-control-{safe_mode}\"><label for=\"perturb-scope-{safe_mode}\">Scope</label><select id=\"perturb-scope-{safe_mode}\"></select></div>"
+            f"<div class=\"control\"><label for=\"perturb-change-{safe_mode}\">Perturb change</label><select id=\"perturb-change-{safe_mode}\"></select></div>"
+            f"<div class=\"control\" id=\"perturb-stage-control-{safe_mode}\"><label for=\"perturb-stage-{safe_mode}\">Stage</label><select id=\"perturb-stage-{safe_mode}\"></select></div>"
+            f"<div class=\"control\"><label for=\"perturb-track-{safe_mode}\">Track</label><select id=\"perturb-track-{safe_mode}\"></select></div>"
+            "</div>"
+            f"<img id=\"perturb-plot-{safe_mode}\" class=\"artifact-image\" alt=\"{title}\">"
+            f"<div id=\"perturb-summary-{safe_mode}\" class=\"graph-help\"></div>"
+            "<div class=\"download-links\">"
+            f"<a id=\"perturb-plot-download-{safe_mode}\" href=\"#\" download>Download plot (PDF)</a>"
+            f"<a id=\"perturb-table-download-{safe_mode}\" href=\"#\" download>Download detailed table</a>"
+            "</div>"
+            "</section>"
+        )
+    return "".join(cards)
+
+
+def _render_perturbation_section(
+    entries: Iterable[Mapping[str, Any]],
+    perturbation_bundle: Mapping[str, Any],
+) -> str:
+    cards: list[str] = []
+    bundle_modes = {str(item.get("value") or "") for item in perturbation_bundle.get("modes", []) or []}
+    offline_cards = _render_offline_perturbation_cards(perturbation_bundle)
+    if offline_cards:
+        cards.append(offline_cards)
+    for group in _perturbation_mode_groups(entries, skip_modes=bundle_modes):
         plot_artifact = group.get("plot_artifact")
         table_artifact = group.get("table_artifact")
         actions: list[str] = []
@@ -804,6 +1186,7 @@ def _render_report_html(
     bundle_title: str,
     generated_at: str,
     entries: list[dict[str, Any]],
+    perturbation_bundle: Mapping[str, Any],
     temporal_graph: Mapping[str, Any] | None,
     track_summaries: Mapping[str, Any],
     dynamic_markers: Mapping[str, Any],
@@ -828,6 +1211,7 @@ def _render_report_html(
 
     graph_json = json.dumps(temporal_graph or {}, separators=(",", ":")).replace("</script>", "<\\/script>")
     summary_json = json.dumps(track_summaries, separators=(",", ":")).replace("</script>", "<\\/script>")
+    perturbation_json = json.dumps(perturbation_bundle or {}, separators=(",", ":")).replace("</script>", "<\\/script>")
     dynamic_json = json.dumps(dynamic_markers or {}, separators=(",", ":")).replace("</script>", "<\\/script>")
     hierarchical_json = json.dumps(hierarchical_markers or {}, separators=(",", ":")).replace("</script>", "<\\/script>")
 
@@ -1013,7 +1397,7 @@ def _render_report_html(
       <section id="perturbation" class="section">
         <h2>Perturbation</h2>
         <div class="section-grid">
-          {_render_perturbation_section(perturbation_entries)}
+          {_render_perturbation_section(perturbation_entries, perturbation_bundle)}
         </div>
       </section>
 
@@ -1094,12 +1478,14 @@ def _render_report_html(
 
     <script id="unagi-share-temporal" type="application/json">{graph_json}</script>
     <script id="unagi-share-tracks" type="application/json">{summary_json}</script>
+    <script id="unagi-share-perturbation" type="application/json">{perturbation_json}</script>
     <script id="unagi-share-dynamic" type="application/json">{dynamic_json}</script>
     <script id="unagi-share-hierarchical" type="application/json">{hierarchical_json}</script>
     <script>
       (function () {{
         const graphPayload = JSON.parse(document.getElementById("unagi-share-temporal").textContent || "{{}}");
         const trackPayload = JSON.parse(document.getElementById("unagi-share-tracks").textContent || "{{}}");
+        const perturbationPayload = JSON.parse(document.getElementById("unagi-share-perturbation").textContent || "{{}}");
         const dynamicPayload = JSON.parse(document.getElementById("unagi-share-dynamic").textContent || "{{}}");
         const hierarchicalPayload = JSON.parse(document.getElementById("unagi-share-hierarchical").textContent || "{{}}");
         const container = document.getElementById("temporal-graph-container");
@@ -1406,6 +1792,128 @@ def _render_report_html(
             select.appendChild(element);
           }});
           return current;
+        }}
+
+        function findPerturbationMode(modeValue) {{
+          return (perturbationPayload.modes || []).find(function (item) {{
+            return String(item.value) === String(modeValue);
+          }});
+        }}
+
+        function renderPerturbationPanel(modeValue) {{
+          const mode = findPerturbationMode(modeValue);
+          const scopeSelect = document.getElementById(`perturb-scope-${{modeValue}}`);
+          const scopeControl = document.getElementById(`perturb-scope-control-${{modeValue}}`);
+          const changeSelect = document.getElementById(`perturb-change-${{modeValue}}`);
+          const stageControl = document.getElementById(`perturb-stage-control-${{modeValue}}`);
+          const stageSelect = document.getElementById(`perturb-stage-${{modeValue}}`);
+          const trackSelect = document.getElementById(`perturb-track-${{modeValue}}`);
+          const plot = document.getElementById(`perturb-plot-${{modeValue}}`);
+          const summary = document.getElementById(`perturb-summary-${{modeValue}}`);
+          const plotDownload = document.getElementById(`perturb-plot-download-${{modeValue}}`);
+          const tableDownload = document.getElementById(`perturb-table-download-${{modeValue}}`);
+          if (!mode || !scopeSelect || !changeSelect || !stageSelect || !trackSelect || !plot || !summary || !plotDownload || !tableDownload) {{
+            return;
+          }}
+
+          const scopeOptions = (mode.scope_options || []).map(function (value) {{
+            return {{
+              value: value,
+              label: value === 'stage' ? 'Individual stage' : 'Overall',
+            }};
+          }});
+          const selectedScope = setSelectOptions(scopeSelect, scopeOptions, scopeSelect.value);
+          if (scopeControl) {{
+            scopeControl.style.display = scopeOptions.length > 1 ? '' : 'none';
+          }}
+
+          let key = '';
+          let summaryText = '';
+          if (selectedScope === 'stage') {{
+            const stageOptions = (mode.stage_options || []).map(function (option) {{
+              return {{ value: option.value, label: option.label || option.value }};
+            }});
+            const selectedStage = setSelectOptions(stageSelect, stageOptions, stageSelect.value);
+            const trackOptions = (((mode.tracks_by_stage || {{}})[selectedStage]) || []).map(function (option) {{
+              return {{ value: option.value, label: option.label || option.value }};
+            }});
+            const selectedTrack = setSelectOptions(trackSelect, trackOptions, trackSelect.value);
+            if (stageControl) {{
+              stageControl.style.display = '';
+            }}
+            if (changeSelect && changeSelect.parentElement) {{
+              changeSelect.parentElement.style.display = 'none';
+            }}
+            key = `${{modeValue}}::stage::${{selectedStage}}::${{selectedTrack}}`;
+            const stageLabel = ((mode.stage_options || []).find(function (option) {{
+              return String(option.value) === String(selectedStage);
+            }}) || {{}}).label || selectedStage;
+            const trackLabel = ((trackOptions || []).find(function (option) {{
+              return String(option.value) === String(selectedTrack);
+            }}) || {{}}).label || selectedTrack;
+            summaryText = `Preview shows the top ${OFFLINE_PERTURBATION_TOP_N} ranked entries for ${{stageLabel}} in ${{trackLabel}}.`;
+          }} else {{
+            const changeOptions = (mode.perturb_changes || []).map(function (value) {{
+              return {{ value: value, label: `Perturb change ${{value}}` }};
+            }});
+            const selectedChange = setSelectOptions(changeSelect, changeOptions, changeSelect.value);
+            const trackOptions = (((mode.tracks_by_change || {{}})[selectedChange]) || []).map(function (option) {{
+              return {{ value: option.value, label: option.label || option.value }};
+            }});
+            const selectedTrack = setSelectOptions(trackSelect, trackOptions, trackSelect.value);
+            if (stageControl) {{
+              stageControl.style.display = 'none';
+            }}
+            if (changeSelect && changeSelect.parentElement) {{
+              changeSelect.parentElement.style.display = '';
+            }}
+            key = `${{modeValue}}::overall::${{selectedChange}}::${{selectedTrack}}`;
+            const trackLabel = ((trackOptions || []).find(function (option) {{
+              return String(option.value) === String(selectedTrack);
+            }}) || {{}}).label || selectedTrack;
+            summaryText = `Preview shows the top ${OFFLINE_PERTURBATION_TOP_N} ranked entries for perturb change ${{selectedChange}} in ${{trackLabel}}.`;
+          }}
+          const state = (perturbationPayload.tables || {{}})[key];
+          if (!state) {{
+            plot.removeAttribute('src');
+            plot.alt = `${{mode.title || modeValue}}`;
+            summary.textContent = 'No perturbation result is available for this selection.';
+            plotDownload.removeAttribute('href');
+            tableDownload.removeAttribute('href');
+            return;
+          }}
+
+          plot.src = String(state.plot_path || '');
+          plot.alt = `${{mode.title || modeValue}} | ${{state.track_label || state.track || ''}}`;
+          plotDownload.href = String(state.plot_download_path || '#');
+          tableDownload.href = String(state.table_download_path || '#');
+          summary.textContent = summaryText;
+        }}
+
+        function initializePerturbationPanels() {{
+          (perturbationPayload.modes || []).forEach(function (mode) {{
+            const modeValue = String(mode.value || '');
+            const scopeSelect = document.getElementById(`perturb-scope-${{modeValue}}`);
+            const changeSelect = document.getElementById(`perturb-change-${{modeValue}}`);
+            const stageSelect = document.getElementById(`perturb-stage-${{modeValue}}`);
+            const trackSelect = document.getElementById(`perturb-track-${{modeValue}}`);
+            if (!scopeSelect || !changeSelect || !stageSelect || !trackSelect) {{
+              return;
+            }}
+            scopeSelect.addEventListener('change', function () {{
+              renderPerturbationPanel(modeValue);
+            }});
+            changeSelect.addEventListener('change', function () {{
+              renderPerturbationPanel(modeValue);
+            }});
+            stageSelect.addEventListener('change', function () {{
+              renderPerturbationPanel(modeValue);
+            }});
+            trackSelect.addEventListener('change', function () {{
+              renderPerturbationPanel(modeValue);
+            }});
+            renderPerturbationPanel(modeValue);
+          }});
         }}
 
         function formatAxisTick(value) {{
@@ -1871,6 +2379,7 @@ def _render_report_html(
 
         renderLegend((graphPayload && graphPayload.nodes) || []);
         renderTemporalGraph(graphPayload || {{}});
+        initializePerturbationPanels();
 
         setSelectOptions(dynamicTrack, (dynamicPayload.tracks || []).map(function (track) {{
           return {{ value: track.value, label: track.label || track.value }};
@@ -1959,6 +2468,7 @@ def export_analysis_share_bundle(
     _override_stage_umap_entry(entries, bundle_dir=bundle_dir, adata=adata)
     temporal_graph = _build_temporal_graph_payload(analysis_path, adata)
     track_summaries = _build_track_summaries(analysis_path, temporal_graph, bundle_dir=bundle_dir)
+    perturbation_bundle = _build_perturbation_bundle(analysis_path, adata, bundle_dir=bundle_dir)
     dynamic_markers = _build_dynamic_marker_bundle(adata, bundle_dir=bundle_dir)
     hierarchical_markers = _build_hierarchical_marker_bundle(adata, bundle_dir=bundle_dir)
 
@@ -1972,6 +2482,7 @@ def export_analysis_share_bundle(
         bundle_title=bundle_title,
         generated_at=generated_at,
         entries=entries,
+        perturbation_bundle=perturbation_bundle,
         temporal_graph=temporal_graph,
         track_summaries=track_summaries,
         dynamic_markers=dynamic_markers,

@@ -427,6 +427,19 @@ def _read_stage_specific_perturbation_table(table_path: str | Path) -> pd.DataFr
     return frame
 
 
+def _strip_track_group_prefix(value: Any) -> str:
+    text = str(value).strip()
+    if not text:
+        return text
+    lowered = text.casefold()
+    for prefix in ("track_group_", "group_"):
+        if lowered.startswith(prefix):
+            return text[len(prefix):].strip()
+    if lowered.startswith("track group "):
+        return text[len("track group "):].strip()
+    return text
+
+
 def _resolve_stage_index(stages: list[str], stage_value: Any) -> int:
     normalized = str(stage_value).strip()
     if not normalized:
@@ -512,6 +525,7 @@ def _normalize_stage_track_group_value(value: Any) -> str:
     text = str(value).strip()
     if not text or text == "overall":
         return "overall"
+    text = _strip_track_group_prefix(text)
     try:
         return _track_cluster_id(text)
     except Exception:
@@ -779,7 +793,14 @@ def _discover_stage_specific_perturbations(analysis_dir: Path) -> dict[str, Any]
             track_value = stem[len(prefix_text) : -len(suffix_text)].strip()
             if not track_value:
                 continue
-            track_tables_by_stage.setdefault(stage_value, {})[track_value] = str(path)
+            normalized_track_value = _normalize_stage_track_group_value(track_value)
+            if normalized_track_value == "overall":
+                continue
+            stage_bucket = track_tables_by_stage.setdefault(stage_value, {})
+            if "_track_group_" in path.name:
+                stage_bucket[normalized_track_value] = str(path)
+            else:
+                stage_bucket.setdefault(normalized_track_value, str(path))
         if tables_by_stage:
             ordered_stage_values = _sorted_keys(tables_by_stage.keys())
             discovered_modes[mode] = {
@@ -805,7 +826,7 @@ def _dominant_text(series: pd.Series, *, field_name: str) -> str:
 
 
 def _track_cluster_id(track: str) -> str:
-    token = str(track).split("-")[0].strip()
+    token = _strip_track_group_prefix(str(track)).split("-")[0].strip()
     if not token or "n" in token:
         raise ValueError(
             f"Track {track!r} must start with exactly one stage-0 cluster id to build a display label."

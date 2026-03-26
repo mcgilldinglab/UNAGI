@@ -12,6 +12,24 @@ from scipy.stats import norm
 from .direction_utils import normalize_direction_mode, select_direction_payloads
 from ..utils.idrem_helper import readIdremJson as read_cached_idrem_json
 
+
+def _bh_adjust(pvalues):
+    if not pvalues:
+        return []
+    order = np.argsort(np.asarray(pvalues, dtype=float))
+    ordered = np.asarray(pvalues, dtype=float)[order]
+    adjusted = np.empty(len(ordered), dtype=float)
+    total = float(len(ordered))
+    running = 1.0
+    for reverse_index, pvalue in enumerate(ordered[::-1], start=1):
+        rank = total - reverse_index + 1.0
+        candidate = min(running, float(pvalue) * total / rank)
+        running = candidate
+        adjusted[len(ordered) - reverse_index] = min(1.0, candidate)
+    restored = np.empty_like(adjusted)
+    restored[order] = adjusted
+    return restored.tolist()
+
 class perturbationAnalysis:
     '''
     The perturbationAnalysis class takes the adata object and the directory of the task as the input. 
@@ -815,6 +833,7 @@ class perturbationAnalysis:
             for updown in list(infodict[track].keys()):
             
                 infodict[track][updown]['perturbation score'] = {}
+                infodict[track][updown]['pval'] = {}
                 infodict[track][updown]['pval_adjusted'] = {}
                 infodict[track][updown]['drug_regulation'] = {}
                 infodict[track][updown]['idrem_suggestion'] = {}
@@ -843,7 +862,7 @@ class perturbationAnalysis:
                     # if p >1:
                     #     p = 1
                     infodict[track][updown]['perturbation score'][str(idx)] =score
-                    infodict[track][updown]['pval_adjusted'][str(idx)] = p
+                    infodict[track][updown]['pval'][str(idx)] = p
                     infodict[track][updown]['drug_regulation'][str(idx)] = gene_in_object[eachpathway]
                     written_gene = []
                     for eachgene in gene_in_object[eachpathway]:
@@ -855,13 +874,17 @@ class perturbationAnalysis:
                         else: #decreasing tendency increase gene expression
                             written_gene.append(eachgene+':+')
                     infodict[track][updown]['idrem_suggestion'][str(idx)] = written_gene
-                # adjust p values
-                # from statsmodels.stats.multitest import multipletests
-                # pvals = list(infodict[track][updown]['pval_adjusted'].values())
-                # if len(pvals) > 0:
-                #     adjusted_pvals = multipletests(pvals, method='fdr_bh')[1]
-                #     for i, each in enumerate(adjusted_pvals):
-                #         infodict[track][updown]['pval_adjusted'][str(i)] = each
+                ordered_pval_items = [
+                    (key, value)
+                    for key, value in infodict[track][updown]['pval'].items()
+                    if np.isfinite(float(value))
+                ]
+                adjusted_lookup = {key: float('nan') for key in infodict[track][updown]['pval'].keys()}
+                if ordered_pval_items:
+                    adjusted_pvals = _bh_adjust([float(value) for _key, value in ordered_pval_items])
+                    for (key, _value), adjusted in zip(ordered_pval_items, adjusted_pvals):
+                        adjusted_lookup[key] = adjusted
+                infodict[track][updown]['pval_adjusted'] = adjusted_lookup
         return infodict
     def getTendencyDict(self,track_percentage):
         '''
