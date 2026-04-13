@@ -9,6 +9,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+from xml.sax.saxutils import escape as xml_escape
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,7 +45,7 @@ from .visualization_pipeline import (
 )
 
 SHARE_BUNDLE_DIR_NAME = "share_bundle"
-SHARE_BUNDLE_VERSION = 4
+SHARE_BUNDLE_VERSION = 5
 OFFLINE_MARKER_TOP_N = 20
 OFFLINE_PERTURBATION_TOP_N = 20
 SHARE_BUNDLE_PUBLICATION_EXPORTS = {
@@ -123,6 +124,18 @@ def _humanize_entry_name(name: str) -> str:
 def _safe_name(name: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name).strip())
     return cleaned or "artifact"
+
+
+def _bundle_download_stem(prefix: str, *parts: Any) -> str:
+    tokens: list[str] = []
+    prefix_token = _safe_name(prefix)
+    if prefix_token and prefix_token != "artifact":
+        tokens.append(prefix_token)
+    for part in parts:
+        token = _safe_name(str(part or ""))
+        if token and token != "artifact":
+            tokens.append(token)
+    return "_".join(tokens) or "artifact"
 
 
 def _bundle_paths(analysis_dir: Path) -> tuple[Path, Path, Path]:
@@ -254,6 +267,143 @@ def _write_generated_csv(frame: pd.DataFrame, destination: Path) -> str:
     return destination.name
 
 
+def _sanitize_excel_sheet_name(name: str) -> str:
+    cleaned = re.sub(r"[:\/?*\[\]]+", "_", str(name or "Sheet1")).strip().strip("'")
+    if not cleaned:
+        cleaned = "Sheet1"
+    return cleaned[:31]
+
+
+def _excel_column_name(index: int) -> str:
+    value = index + 1
+    result = ""
+    while value > 0:
+        value, remainder = divmod(value - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
+def _excel_inline_text(value: Any) -> str:
+    return f'<is><t xml:space="preserve">{xml_escape("" if value is None else str(value))}</t></is>'
+
+
+def _xlsx_cell_xml(row_index: int, col_index: int, value: Any) -> str:
+    cell_ref = f"{_excel_column_name(col_index)}{row_index}"
+    if value is None:
+        return f'<c r="{cell_ref}" t="inlineStr">{_excel_inline_text("")}</c>'
+    if isinstance(value, pd.Timestamp):
+        return f'<c r="{cell_ref}" t="inlineStr">{_excel_inline_text(value.isoformat())}</c>'
+    if isinstance(value, (np.bool_, bool)):
+        return f'<c r="{cell_ref}" t="b"><v>{1 if bool(value) else 0}</v></c>'
+    if isinstance(value, (np.integer, int)) and not isinstance(value, bool):
+        return f'<c r="{cell_ref}"><v>{int(value)}</v></c>'
+    if isinstance(value, (np.floating, float)):
+        numeric = float(value)
+        if np.isfinite(numeric):
+            return f'<c r="{cell_ref}"><v>{numeric}</v></c>'
+        return f'<c r="{cell_ref}" t="inlineStr">{_excel_inline_text("")}</c>'
+    try:
+        if pd.isna(value):
+            return f'<c r="{cell_ref}" t="inlineStr">{_excel_inline_text("")}</c>'
+    except Exception:
+        pass
+    return f'<c r="{cell_ref}" t="inlineStr">{_excel_inline_text(value)}</c>'
+
+
+def _write_generated_xlsx(frame: pd.DataFrame, destination: Path, *, sheet_name: str = "Sheet1") -> str:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    safe_sheet_name = _sanitize_excel_sheet_name(sheet_name)
+    normalized = frame.copy().where(pd.notna(frame), None)
+
+    rows_xml: list[str] = []
+    header_cells = "".join(
+        _xlsx_cell_xml(1, column_index, column_name)
+        for column_index, column_name in enumerate(normalized.columns.tolist())
+    )
+    rows_xml.append(f'<row r="1">{header_cells}</row>')
+    for row_offset, row_values in enumerate(normalized.itertuples(index=False, name=None), start=2):
+        cells = "".join(
+            _xlsx_cell_xml(row_offset, column_index, value)
+            for column_index, value in enumerate(row_values)
+        )
+        rows_xml.append(f'<row r="{row_offset}">{cells}</row>')
+
+    last_row = max(1, len(normalized) + 1)
+    last_col = max(1, len(normalized.columns))
+    dimension = f"A1:{_excel_column_name(last_col - 1)}{last_row}"
+    worksheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<dimension ref="{dimension}"/>'
+        '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+        '<sheetFormatPr defaultRowHeight="15"/>'
+        f'<sheetData>{"".join(rows_xml)}</sheetData>'
+        '</worksheet>'
+    )
+    workbook_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets>'
+        f'<sheet name="{xml_escape(safe_sheet_name)}" sheetId="1" r:id="rId1"/>'
+        '</sheets>'
+        '</workbook>'
+    )
+    workbook_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet1.xml"/>'
+        '<Relationship Id="rId2" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
+        'Target="styles.xml"/>'
+        '</Relationships>'
+    )
+    styles_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        '</styleSheet>'
+    )
+    root_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="xl/workbook.xml"/>'
+        '</Relationships>'
+    )
+    content_types_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override PartName="/xl/styles.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        '</Types>'
+    )
+
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as workbook:
+        workbook.writestr("[Content_Types].xml", content_types_xml)
+        workbook.writestr("_rels/.rels", root_rels_xml)
+        workbook.writestr("xl/workbook.xml", workbook_xml)
+        workbook.writestr("xl/_rels/workbook.xml.rels", workbook_rels_xml)
+        workbook.writestr("xl/styles.xml", styles_xml)
+        workbook.writestr("xl/worksheets/sheet1.xml", worksheet_xml)
+    return destination.name
+
+
 def _frame_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
     if frame.empty:
         return []
@@ -285,6 +435,7 @@ def _build_dynamic_marker_bundle(
     adata,
     *,
     bundle_dir: Path,
+    download_prefix: str,
 ) -> dict[str, Any]:
     metadata = _extract_metadata(adata)
     section = metadata.get("dynamic_markers") or {}
@@ -312,16 +463,25 @@ def _build_dynamic_marker_bundle(
                 continue
             stage_columns = [str(column) for column in frame.columns if str(column).startswith("stage")]
             key = f"{track_value}::{direction}"
-            filename = _safe_name(f"dynamic_{track_value}_{direction}.csv")
+            filename = _bundle_download_stem(
+                download_prefix,
+                "dynamic_markers",
+                track_label or track_value,
+                f"direction_{direction}",
+            ) + ".csv"
             csv_path = tables_dir / filename
+            xlsx_path = csv_path.with_suffix(".xlsx")
             _write_generated_csv(frame, csv_path)
+            _write_generated_xlsx(frame, xlsx_path, sheet_name=f"dynamic_{track_value}_{direction}")
             table_payloads[key] = {
                 "track": track_value,
                 "track_label": track_label,
                 "direction": direction,
                 "stage_columns": stage_columns,
                 "table": _frame_table_payload(frame),
-                "download_path": _relpath(csv_path, bundle_dir),
+                "download_path": _relpath(xlsx_path, bundle_dir),
+                "download_label": "Download Excel",
+                "csv_download_path": _relpath(csv_path, bundle_dir),
             }
             available_directions.append(direction)
         if available_directions:
@@ -344,6 +504,7 @@ def _build_hierarchical_marker_bundle(
     adata,
     *,
     bundle_dir: Path,
+    download_prefix: str,
 ) -> dict[str, Any]:
     metadata = _extract_metadata(adata)
     section = metadata.get("hierarchical") or {}
@@ -375,9 +536,18 @@ def _build_hierarchical_marker_bundle(
                     )
                     if frame.empty:
                         continue
-                    filename = _safe_name(f"hier_{stage_value}_{cluster_value}_{level}_{direction}.csv")
+                    filename = _bundle_download_stem(
+                        download_prefix,
+                        "hierarchical_markers",
+                        f"stage_{stage_value}",
+                        f"cluster_{cluster_value}",
+                        f"level_{level}",
+                        f"direction_{direction}",
+                    ) + ".csv"
                     csv_path = tables_dir / filename
+                    xlsx_path = csv_path.with_suffix(".xlsx")
                     _write_generated_csv(frame, csv_path)
+                    _write_generated_xlsx(frame, xlsx_path, sheet_name=f"hier_{stage_value}_{cluster_value}_{level}_{direction}")
                     key = f"{stage_value}::{cluster_value}::{level}::{direction}"
                     table_payloads[key] = {
                         "stage": stage_value,
@@ -385,7 +555,9 @@ def _build_hierarchical_marker_bundle(
                         "level": level,
                         "direction": direction,
                         "table": _frame_table_payload(frame),
-                        "download_path": _relpath(csv_path, bundle_dir),
+                        "download_path": _relpath(xlsx_path, bundle_dir),
+                        "download_label": "Download Excel",
+                        "csv_download_path": _relpath(csv_path, bundle_dir),
                     }
                     level_directions.append(direction)
                 if level_directions:
@@ -454,17 +626,20 @@ def _write_perturbation_bundle_assets(
     mode: str,
     asset_name: str,
     bundle_dir: Path,
+    download_prefix: str,
 ) -> dict[str, Any]:
-    asset_stem = _safe_name(asset_name)
+    asset_stem = _bundle_download_stem(download_prefix, asset_name)
     table_dir = bundle_dir / "assets" / "perturbation_tables"
     figure_dir = bundle_dir / "assets" / "perturbation_figures"
     publication_dir = bundle_dir / "assets" / "publication"
 
     csv_path = table_dir / f"{asset_stem}.csv"
+    xlsx_path = table_dir / f"{asset_stem}.xlsx"
     png_path = figure_dir / f"{asset_stem}.png"
     pdf_path = publication_dir / f"{asset_stem}.pdf"
 
     _write_generated_csv(frame, csv_path)
+    _write_generated_xlsx(frame, xlsx_path, sheet_name=asset_stem)
 
     plot_table = frame.head(OFFLINE_PERTURBATION_TOP_N).copy()
     use_pval = str(mode) != "pathway"
@@ -481,7 +656,9 @@ def _write_perturbation_bundle_assets(
     plt.close(fig)
 
     return {
-        "table_download_path": _relpath(csv_path, bundle_dir),
+        "table_download_path": _relpath(xlsx_path, bundle_dir),
+        "table_download_label": "Download detailed table (Excel)",
+        "table_csv_path": _relpath(csv_path, bundle_dir),
         "plot_path": _relpath(png_path, bundle_dir),
         "plot_download_path": _relpath(pdf_path, bundle_dir),
     }
@@ -516,6 +693,7 @@ def _build_perturbation_bundle(
     adata,
     *,
     bundle_dir: Path,
+    download_prefix: str,
 ) -> dict[str, Any]:
     metadata = _extract_metadata(adata, analysis_dir=analysis_dir)
     perturbation_section = metadata.get("perturbation") or {}
@@ -619,8 +797,9 @@ def _build_perturbation_bundle(
                     assets = _write_perturbation_bundle_assets(
                         frame,
                         mode=mode,
-                        asset_name=f"{mode}_perturbation_overall_{perturb_change}_{track_value}",
+                        asset_name=f"perturbation_{mode}_scope_overall_change_{perturb_change}_{option.get('label') or track_value}",
                         bundle_dir=bundle_dir,
+                        download_prefix=download_prefix,
                     )
                     key = f"{mode}::overall::{perturb_change}::{track_value}"
                     tables[key] = {
@@ -688,8 +867,9 @@ def _build_perturbation_bundle(
                     assets = _write_perturbation_bundle_assets(
                         frame,
                         mode=mode,
-                        asset_name=f"{mode}_perturbation_stage_{stage_value}_{track_value}",
+                        asset_name=f"perturbation_{mode}_scope_stage_{stage_value}_{option.get('label') or track_value}",
                         bundle_dir=bundle_dir,
+                        download_prefix=download_prefix,
                     )
                     key = f"{mode}::stage::{stage_value}::{track_value}"
                     tables[key] = {
@@ -763,6 +943,15 @@ def _collect_entries(
             }
             if artifact["type"] == "csv":
                 artifact["preview"] = _csv_preview(src)
+                try:
+                    frame = pd.read_csv(src)
+                    xlsx_path = _reserve_unique_artifact_path(copied.with_suffix(".xlsx"), used_names)
+                    _write_generated_xlsx(frame, xlsx_path, sheet_name=name)
+                    artifact["download_path"] = _relpath(xlsx_path, bundle_dir)
+                    artifact["download_label"] = "Download Excel"
+                    artifact["csv_download_path"] = _relpath(copied, bundle_dir)
+                except Exception:
+                    artifact["download_label"] = "Download CSV"
             entry["artifacts"].append(artifact)
         if name in SHARE_BUNDLE_PUBLICATION_EXPORTS:
             try:
@@ -804,6 +993,25 @@ def _override_stage_umap_entry(
     target_entry = next((entry for entry in entries if str(entry.get("name") or "") == "stage_umap_grid"), None)
     if target_entry is None:
         return
+    artifacts = list(target_entry.get("artifacts") or [])
+    existing_image_artifact = next(
+        (
+            artifact
+            for artifact in artifacts
+            if str(artifact.get("type") or "") == "image" and str(artifact.get("path") or "").strip()
+        ),
+        None,
+    )
+    if existing_image_artifact is not None:
+        src = bundle_dir / str(existing_image_artifact.get("path"))
+        if src.exists():
+            output_path = bundle_dir / "assets" / "figures" / "stage_umap_grid_300dpi.png"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, output_path)
+            existing_image_artifact["path"] = _relpath(output_path, bundle_dir)
+            target_entry["artifacts"] = artifacts
+            return
+
     try:
         fig, _axes = plot_stage_umap_grid(adata, show=False)
         output_path = bundle_dir / "assets" / "figures" / "stage_umap_grid_300dpi.png"
@@ -813,7 +1021,6 @@ def _override_stage_umap_entry(
     except Exception:
         return
 
-    artifacts = list(target_entry.get("artifacts") or [])
     replaced = False
     for artifact in artifacts:
         if str(artifact.get("type") or "") == "image":
@@ -918,8 +1125,10 @@ def _write_track_enrichment_exports(
     summary: Mapping[str, Any],
     *,
     bundle_dir: Path,
+    download_prefix: str,
 ) -> dict[str, str]:
     track_key = _safe_name(str(summary.get("track_key") or "track"))
+    track_label = str(summary.get("track_label") or summary.get("track_key") or "track")
     out: dict[str, str] = {}
     for path in summary.get("paths", []) or []:
         path_key = str(path.get("path_key") or "").strip()
@@ -932,9 +1141,19 @@ def _write_track_enrichment_exports(
             frame = pd.DataFrame(rows, columns=columns)
         except Exception:
             continue
-        output = bundle_dir / "assets" / "track_tables" / f"{track_key}_{_safe_name(path_key)}_enrichment_details.csv"
-        _write_generated_csv(frame, output)
-        out[path_key] = _relpath(output, bundle_dir)
+        path_label = str(path.get("label") or path_key)
+        filename = _bundle_download_stem(
+            download_prefix,
+            "track_enrichment",
+            track_label,
+            f"path_{path_label}",
+            "details",
+        ) + ".csv"
+        csv_output = bundle_dir / "assets" / "track_tables" / filename
+        xlsx_output = csv_output.with_suffix(".xlsx")
+        _write_generated_csv(frame, csv_output)
+        _write_generated_xlsx(frame, xlsx_output, sheet_name=f"{track_key}_{path_key}")
+        out[path_key] = _relpath(xlsx_output, bundle_dir)
     return out
 
 
@@ -962,6 +1181,7 @@ def _build_track_summaries(
     temporal_graph: Mapping[str, Any] | None,
     *,
     bundle_dir: Path,
+    download_prefix: str,
 ) -> dict[str, Any]:
     track_keys: list[str] = []
     if temporal_graph is not None:
@@ -984,7 +1204,11 @@ def _build_track_summaries(
         except Exception as exc:
             errors[track_key] = f"{type(exc).__name__}: {exc}"
             continue
-        enrichment_downloads = _write_track_enrichment_exports(summary, bundle_dir=bundle_dir)
+        enrichment_downloads = _write_track_enrichment_exports(
+            summary,
+            bundle_dir=bundle_dir,
+            download_prefix=download_prefix,
+        )
         summaries[track_key] = _sanitize_track_summary(summary, enrichment_downloads=enrichment_downloads)
     return {"tracks": summaries, "errors": errors}
 
@@ -1115,7 +1339,7 @@ def _render_offline_perturbation_cards(perturbation_bundle: Mapping[str, Any]) -
             f"<div id=\"perturb-summary-{safe_mode}\" class=\"graph-help\"></div>"
             "<div class=\"download-links\">"
             f"<a id=\"perturb-plot-download-{safe_mode}\" href=\"#\" download>Download plot (PDF)</a>"
-            f"<a id=\"perturb-table-download-{safe_mode}\" href=\"#\" download>Download detailed table</a>"
+            f"<a id=\"perturb-table-download-{safe_mode}\" href=\"#\" download>Download detailed table (Excel)</a>"
             "</div>"
             "</section>"
         )
@@ -1143,8 +1367,9 @@ def _render_perturbation_section(
             body = f'<img class="artifact-image" src="{plot_path}" alt="{plot_path}">'
             actions.append(f'<a href="{plot_download_path}" download>{plot_download_label}</a>')
         if table_artifact is not None:
-            table_path = html.escape(str(table_artifact.get("path") or ""))
-            actions.append(f'<a href="{table_path}" download>Download detailed table</a>')
+            table_download_path = html.escape(str(table_artifact.get("download_path") or table_artifact.get("path") or ""))
+            table_download_label = html.escape(str(table_artifact.get("download_label") or "Download detailed table (Excel)"))
+            actions.append(f'<a href="{table_download_path}" download>{table_download_label}</a>')
         cards.append(
             "<section class=\"report-card\">"
             f"<h3>{html.escape(str(group.get('title') or 'Perturbation'))}</h3>"
@@ -1423,7 +1648,7 @@ def _render_report_html(
             <div id="dynamic-chart" class="chart-shell"></div>
             <div id="dynamic-table"></div>
             <div class="download-links">
-              <a id="dynamic-download" href="#" download>Download dynamic marker table</a>
+              <a id="dynamic-download" href="#" download>Download dynamic marker table (Excel)</a>
             </div>
           </div>
           <div class="report-card marker-panel">
@@ -1450,7 +1675,7 @@ def _render_report_html(
             <p id="hier-note" class="chart-note">Bars show signed log fold changes for the selected branch against its sibling comparison clusters.</p>
             <div id="hier-table"></div>
             <div class="download-links">
-              <a id="hier-download" href="#" download>Download hierarchical marker table</a>
+              <a id="hier-download" href="#" download>Download hierarchical marker table (Excel)</a>
             </div>
           </div>
         </div>
@@ -1677,7 +1902,8 @@ def _render_report_html(
               text.setAttribute("font-size", "11");
               text.setAttribute("font-weight", "600");
               text.setAttribute("fill", "#172124");
-              text.textContent = String(node.root_stage0_cluster);
+              const ident = String(node.root_stage0_cell_type || node.cell_type || "NA");
+              text.textContent = `${{ident}}-${{String(node.root_stage0_cluster)}}`;
               svg.appendChild(text);
             }}
           }});
@@ -2307,7 +2533,7 @@ def _render_report_html(
           const enrichmentGroups = splitEnrichmentTables(path.enrichment);
           const enrichmentLinks = [];
           if (path.enrichment_download_path) {{
-            enrichmentLinks.push(`<div class="download-links"><a href="${{String(path.enrichment_download_path)}}" download>Download enrichment details</a></div>`);
+            enrichmentLinks.push(`<div class="download-links"><a href="${{String(path.enrichment_download_path)}}" download>Download enrichment details (Excel)</a></div>`);
           }}
           const enrichmentSection = enrichmentGroups.length > 1
             ? [
@@ -2471,9 +2697,7 @@ def export_analysis_share_bundle(
             return existing
 
     visual_manifest_path = analysis_path / "visualizations" / "manifest.json"
-    if force:
-        visual_manifest = generate_analysis_visualizations(analysis_path)
-    elif visual_manifest_path.exists():
+    if visual_manifest_path.exists():
         visual_manifest = json.loads(visual_manifest_path.read_text(encoding="utf-8"))
     else:
         visual_manifest = generate_analysis_visualizations(analysis_path)
@@ -2488,16 +2712,35 @@ def export_analysis_share_bundle(
         analysis_path,
         uns_keys=INTERACTIVE_UNS_KEYS,
     )
-    _override_stage_umap_entry(entries, bundle_dir=bundle_dir, adata=adata)
-    temporal_graph = _build_temporal_graph_payload(analysis_path, adata)
-    track_summaries = _build_track_summaries(analysis_path, temporal_graph, bundle_dir=bundle_dir)
-    perturbation_bundle = _build_perturbation_bundle(analysis_path, adata, bundle_dir=bundle_dir)
-    dynamic_markers = _build_dynamic_marker_bundle(adata, bundle_dir=bundle_dir)
-    hierarchical_markers = _build_hierarchical_marker_bundle(adata, bundle_dir=bundle_dir)
-
     generated_dt = datetime.now(timezone.utc)
     generated_at = generated_dt.isoformat()
     bundle_title = analysis_label or analysis_path.name
+    download_prefix = _safe_name(bundle_title)
+    _override_stage_umap_entry(entries, bundle_dir=bundle_dir, adata=adata)
+    temporal_graph = _build_temporal_graph_payload(analysis_path, adata)
+    track_summaries = _build_track_summaries(
+        analysis_path,
+        temporal_graph,
+        bundle_dir=bundle_dir,
+        download_prefix=download_prefix,
+    )
+    perturbation_bundle = _build_perturbation_bundle(
+        analysis_path,
+        adata,
+        bundle_dir=bundle_dir,
+        download_prefix=download_prefix,
+    )
+    dynamic_markers = _build_dynamic_marker_bundle(
+        adata,
+        bundle_dir=bundle_dir,
+        download_prefix=download_prefix,
+    )
+    hierarchical_markers = _build_hierarchical_marker_bundle(
+        adata,
+        bundle_dir=bundle_dir,
+        download_prefix=download_prefix,
+    )
+
     archive_base_name = _share_bundle_base_name(analysis_path, bundle_title, generated_dt)
     archive_root_name = archive_base_name
     zip_path = analysis_path / f"{archive_base_name}.zip"

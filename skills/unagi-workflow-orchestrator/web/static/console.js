@@ -1265,6 +1265,30 @@
     return lines.join("<br>");
   }
 
+  function buildTemporalGraphStage0Label(node) {
+    const ident = String(node.root_stage0_cell_type || node.cell_type || "NA");
+    const cluster = String(node.root_stage0_cluster || node.cluster || "");
+    return cluster ? `${ident}-${cluster}` : ident;
+  }
+
+  function buildTemporalGraphYRange(payload, stage0LabelOffset) {
+    const nodes = Array.isArray(payload && payload.nodes) ? payload.nodes : [];
+    if (!nodes.length) {
+      return null;
+    }
+    const ys = nodes
+      .map(function (node) { return Number(node.y); })
+      .filter(function (value) { return Number.isFinite(value); });
+    if (!ys.length) {
+      return null;
+    }
+    const minY = Math.min.apply(null, ys);
+    const maxY = Math.max.apply(null, ys);
+    const lowerPad = 0.45;
+    const upperPad = Math.max(0.72, Number(stage0LabelOffset || 0) + 0.42);
+    return [minY - lowerPad, maxY + upperPad];
+  }
+
   function buildTemporalGraphTraces(payload) {
     const traces = [];
     if (Array.isArray(payload.edges) && payload.edges.length) {
@@ -1342,7 +1366,7 @@
       }
       stage0Labels.x.push(Number(node.x));
       stage0Labels.y.push(Number(node.y) + stage0LabelOffset);
-      stage0Labels.text.push(String(node.root_stage0_cluster));
+      stage0Labels.text.push(buildTemporalGraphStage0Label(node));
     });
     if (stage0Labels.text.length) {
       traces.push({
@@ -1352,6 +1376,7 @@
         y: stage0Labels.y,
         text: stage0Labels.text,
         textposition: "top center",
+        cliponaxis: false,
         textfont: {
           size: 11,
           color: "#172124",
@@ -1784,14 +1809,15 @@
       const shell = widget.closest(".overview-graph-shell");
       const statusTarget = shell ? shell.querySelector("[data-temporal-graph-status]") : null;
       const popupBase = widget.dataset.trackPopupBase || "";
+      const stage0LabelOffset = 0.18;
       await window.Plotly.react(
         plotDiv,
         buildTemporalGraphTraces(payload),
         {
-          height: 340,
+          height: 368,
           hovermode: "closest",
           dragmode: "pan",
-          margin: { l: 68, r: 24, t: 42, b: 88 },
+          margin: { l: 68, r: 24, t: 58, b: 88 },
           legend: {
             orientation: "h",
             x: 0,
@@ -1809,9 +1835,11 @@
           },
           yaxis: {
             title: "Stage",
+            automargin: true,
             zeroline: false,
             tickvals: payload.stage_tick_values || [],
             ticktext: payload.stage_tick_labels || [],
+            range: buildTemporalGraphYRange(payload, stage0LabelOffset) || undefined,
             gridcolor: "rgba(31, 42, 46, 0.12)",
           },
         },
