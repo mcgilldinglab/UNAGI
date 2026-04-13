@@ -322,11 +322,12 @@ class analyst:
 
     @staticmethod
     def _is_gpu_runtime_error(exc):
+        oom_error_type = getattr(torch, 'OutOfMemoryError', None)
         seen = set()
         current = exc
         while current is not None and id(current) not in seen:
             seen.add(id(current))
-            if isinstance(current, torch.OutOfMemoryError):
+            if oom_error_type is not None and isinstance(current, oom_error_type):
                 return True
             message = str(current).lower()
             if any(

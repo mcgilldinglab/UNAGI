@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import base64
 import io
+import re
 import threading
 import textwrap
 from contextlib import redirect_stdout
@@ -89,6 +90,15 @@ def _cache_key(path: Path | None) -> tuple[str, int | None, int | None]:
     except FileNotFoundError:
         return (str(path), None, None)
     return (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+def _filename_token(value: Any, *, fallback: str = "item") -> str:
+    text = str(value).strip()
+    if not text:
+        return fallback
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("._-")
+    return text or fallback
 
 
 def _analysis_iteration_from_dir(analysis_dir: Path) -> str | None:
@@ -863,6 +873,26 @@ def _track_display_label(
         )
     cell_type = _dominant_text(adata.obs.loc[mask, celltype_key], field_name=celltype_key)
     return f"track {cluster_id} {cell_type}"
+
+
+def _cluster_display_label(
+    adata,
+    *,
+    stage: str,
+    cluster: str,
+    stage_key: str = "stage",
+    cluster_key: str = "leiden",
+    celltype_key: str = "ident",
+) -> str:
+    if stage_key not in adata.obs or cluster_key not in adata.obs or celltype_key not in adata.obs:
+        return f"cluster_{cluster}"
+    stage_values = adata.obs[stage_key].astype(str)
+    cluster_values = adata.obs[cluster_key].astype(str)
+    mask = (stage_values == str(stage)) & (cluster_values == str(cluster))
+    if not bool(mask.any()):
+        return f"cluster_{cluster}"
+    cell_type = _dominant_text(adata.obs.loc[mask, celltype_key], field_name=celltype_key)
+    return f"cluster_{cluster}_{cell_type}"
 
 
 def _umap_embedding_key(adata) -> str | None:
@@ -1901,9 +1931,17 @@ class AnalysisExplorerService:
                 raise KeyError(hierarchical["reason"])
             table = _hierarchical_marker_export_frame(self._extract_hierarchical_marker_table(record.adata, hierarchical))
             csv_bytes = table.to_csv(index=False).encode("utf-8")
+            cluster_label = _filename_token(
+                _cluster_display_label(
+                    record.adata,
+                    stage=hierarchical["stage"],
+                    cluster=hierarchical["cluster"],
+                ),
+                fallback=f"cluster_{hierarchical['cluster']}",
+            )
             filename = (
                 f"hierarchical_markers_stage_{hierarchical['stage']}"
-                f"_cluster_{hierarchical['cluster']}_level_{hierarchical['level']}_{hierarchical['direction']}.csv"
+                f"_{cluster_label}_level_{hierarchical['level']}_{hierarchical['direction']}.csv"
             )
             return csv_bytes, filename
 
@@ -1924,7 +1962,11 @@ class AnalysisExplorerService:
                     track=custom["track"] if custom["scope"] == "progression_track" else None,
                     normalize_to_stage0=custom["normalize_to_stage0"],
                 )
-                filename = f"custom_genes_{custom['scope']}.csv"
+                if custom["scope"] == "progression_track":
+                    track_token = _filename_token(custom.get("track_label") or custom.get("track"), fallback="track")
+                    filename = f"custom_genes_{custom['scope']}_{track_token}.csv"
+                else:
+                    filename = f"custom_genes_{custom['scope']}.csv"
                 return table.to_csv(index=False).encode("utf-8"), filename
 
             ranked = dynamic_markers["ranked"]
@@ -1932,7 +1974,8 @@ class AnalysisExplorerService:
                 raise KeyError(ranked["reason"])
             fig, table, _subtitle = self._build_dynamic_content(record.adata, ranked)
             plt.close(fig)
-            filename = f"dynamic_markers_{ranked['plot_kind']}_{ranked['track']}.csv"
+            track_token = _filename_token(ranked.get("track_label") or ranked["track"], fallback=ranked["track"])
+            filename = f"dynamic_markers_{ranked['plot_kind']}_{track_token}.csv"
             return table.to_csv(index=False).encode("utf-8"), filename
 
         if active_mode == "perturbation":
@@ -1940,11 +1983,19 @@ class AnalysisExplorerService:
             if not perturbation["available"]:
                 raise KeyError(perturbation["reason"])
             _fig, table, _work = self._build_perturbation_content(record.adata, perturbation)
-            scope_suffix = (
-                f"stage_{perturbation['stage']}"
-                if perturbation["scope"] == "stage"
-                else f"{perturbation['track']}_change_{perturbation['perturb_change']}"
-            )
+            if perturbation["scope"] == "stage":
+                stage_token = _filename_token(perturbation["stage"], fallback="stage")
+                if perturbation["track"] == "overall":
+                    scope_suffix = f"stage_{stage_token}"
+                else:
+                    track_token = _filename_token(perturbation.get("track_label") or perturbation["track"], fallback=str(perturbation["track"]))
+                    scope_suffix = f"stage_{stage_token}_{track_token}"
+            else:
+                if perturbation["track"] == "overall":
+                    scope_suffix = f"overall_change_{perturbation['perturb_change']}"
+                else:
+                    track_token = _filename_token(perturbation.get("track_label") or perturbation["track"], fallback=str(perturbation["track"]))
+                    scope_suffix = f"{track_token}_change_{perturbation['perturb_change']}"
             filename = f"{perturbation['mode']}_perturbation_{scope_suffix}.csv"
             return table.to_csv(index=False).encode("utf-8"), filename
 

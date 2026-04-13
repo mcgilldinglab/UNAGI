@@ -498,6 +498,7 @@ def test_publication_pdf_export_supports_explorer_modes(tmp_path):
         },
     )
     assert filename.endswith(".csv")
+    assert "AT1" in filename
     header = csv_bytes.decode("utf-8").splitlines()[0]
     assert header.split(",")[0] == "Gene"
 
@@ -513,7 +514,7 @@ def test_publication_pdf_export_supports_explorer_modes(tmp_path):
             "dyn_normalize_to_stage0": "true",
         },
     )
-    assert filename == "dynamic_markers_heatmap_0-2-4.csv"
+    assert filename == "dynamic_markers_heatmap_track_0_AT1.csv"
     assert "stage0" in csv_bytes.decode("utf-8").splitlines()[0]
 
     csv_bytes, filename = explorer.export_table_csv(
@@ -526,7 +527,7 @@ def test_publication_pdf_export_supports_explorer_modes(tmp_path):
             "gene_list": "GENE0,GENE1",
         },
     )
-    assert filename == "custom_genes_progression_track.csv"
+    assert filename == "custom_genes_progression_track_track_0_AT1.csv"
     assert "gene" in csv_bytes.decode("utf-8").splitlines()[0].lower()
 
     csv_bytes, filename = explorer.export_table_csv(
@@ -540,6 +541,19 @@ def test_publication_pdf_export_supports_explorer_modes(tmp_path):
         },
     )
     assert filename == "pathway_perturbation_overall_change_0.5.csv"
+    assert "perturbation score" in csv_bytes.decode("utf-8").splitlines()[0]
+
+    csv_bytes, filename = explorer.export_table_csv(
+        analysis_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_mode": "pathway",
+            "perturb_change": "0.5",
+            "pert_track": "0",
+            "pert_top_n": "2",
+        },
+    )
+    assert filename == "pathway_perturbation_track_0_AT1_change_0.5.csv"
     assert "perturbation score" in csv_bytes.decode("utf-8").splitlines()[0]
 
     stage_dir = write_analysis_dataset(
@@ -558,6 +572,33 @@ def test_publication_pdf_export_supports_explorer_modes(tmp_path):
     )
     assert filename == "drug_perturbation_stage_2.csv"
     assert "DrugStage2A" in csv_bytes.decode("utf-8")
+
+    grouped_stage_dir = stage_dir / "stage_specific_perturbation" / "stage_1"
+    grouped_stage_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "rank": [0, 1],
+            "pathways": ["PathTrackA", "PathTrackB"],
+            "perturbation score": [1.8, 1.1],
+            "pval_adjusted": [0.003, 0.02],
+            "regulated genes": ["['GENE0']", "['GENE1']"],
+            "idrem_suggestion": ["['GENE0:+']", "['GENE1:-']"],
+        }
+    ).to_csv(grouped_stage_dir / "pathway_perturbation_track_group_0_stage_1.csv", index=False)
+
+    csv_bytes, filename = explorer.export_table_csv(
+        stage_dir,
+        form_data={
+            "mode": "perturbation",
+            "pert_scope": "stage",
+            "pert_mode": "pathway",
+            "pert_stage": "1",
+            "pert_track": "0",
+            "pert_top_n": "2",
+        },
+    )
+    assert filename == "pathway_perturbation_stage_1_track_0_AT1.csv"
+    assert "PathTrackA" in csv_bytes.decode("utf-8")
 
 
 def test_custom_gene_validation_handles_missing_and_over_limit_requests(tmp_path):

@@ -4,6 +4,73 @@ import gc
 import os
 from pathlib import Path
 from .distDistance import *
+
+
+def _candidate_edge_stats(distances):
+    """
+    Summarize the nearest-cluster candidate for each target-stage cluster.
+    """
+    distance_array = np.asarray(distances, dtype=float)
+    if distance_array.ndim == 1:
+        distance_array = distance_array.reshape(1, -1)
+
+    flat = distance_array.ravel()
+    loc = float(np.mean(flat))
+    scale = float(np.std(flat))
+    candidates = []
+    for target_cluster, row in enumerate(distance_array):
+        source_cluster = int(np.argmin(row))
+        best_distance = float(row[source_cluster])
+        if scale > 0:
+            pval = float(norm.cdf(best_distance, loc=loc, scale=scale))
+        else:
+            pval = 0.5 if best_distance == loc else float("nan")
+        candidates.append(
+            {
+                "source_cluster": source_cluster,
+                "target_cluster": target_cluster,
+                "distance": best_distance,
+                "pval": pval,
+            }
+        )
+    return candidates, loc, scale
+
+
+def _format_no_edges_error(stage1, stage2, distances, cutoff):
+    """
+    Build a precise error message when every candidate edge is filtered out.
+    """
+    candidates, loc, scale = _candidate_edge_stats(distances)
+    if not candidates:
+        return (
+            f"No dynamic graph edge candidates could be evaluated between stage {stage1} "
+            f"and stage {stage2} with connect_edges_cutoff={cutoff}."
+        )
+
+    finite_candidates = [candidate for candidate in candidates if np.isfinite(candidate["pval"])]
+    if finite_candidates:
+        best_candidate = min(finite_candidates, key=lambda candidate: candidate["pval"])
+        min_pval = min(candidate["pval"] for candidate in finite_candidates)
+        max_pval = max(candidate["pval"] for candidate in finite_candidates)
+        return (
+            f"No dynamic graph edges passed connect_edges_cutoff={cutoff} between stage {stage1} "
+            f"and stage {stage2}. All nearest-cluster candidate p-values were above the cutoff "
+            f"(min_pval={min_pval:.6f}, max_pval={max_pval:.6f}). Best candidate was stage {stage1} "
+            f"cluster {best_candidate['source_cluster']} -> stage {stage2} cluster "
+            f"{best_candidate['target_cluster']} with distance={best_candidate['distance']:.6f} "
+            f"and pval={best_candidate['pval']:.6f}. Distance distribution summary: "
+            f"mean={loc:.6f}, std={scale:.6f}. Increase run.connect_edges_cutoff or adjust the "
+            f"neighbor / clustering settings if you want more permissive graph connections."
+        )
+
+    return (
+        f"No dynamic graph edges passed connect_edges_cutoff={cutoff} between stage {stage1} "
+        f"and stage {stage2}. Candidate p-values were non-finite because the distance distribution "
+        f"collapsed (mean={loc:.6f}, std={scale:.6f}). Adjust run.connect_edges_cutoff or the "
+        f"neighbor / clustering settings before retrying."
+    )
+
+
 def nodesDistance(rep1,rep2,topgene1,topgene2):
     '''
     calculate the distance between two stages
@@ -52,15 +119,10 @@ def connectNodes(distances,cutoff = 0.05):
         The edges between two stages
     '''
     edges = []
-    for i in range(len(distances)):
-        leftend = np.argmin(distances[i])
-        # temp = distances[i].copy()
-        pval = norm.cdf(distances[i][leftend],loc = np.mean(distances),scale = np.std(distances))
-        #p*count/(count-idx)
-        # q_val = pval * len(temp)/
-        
-        if pval < cutoff: #if pval < 0.01 can connect the two clusters across two stages
-            edges.append([leftend,i])
+    candidates, _, _ = _candidate_edge_stats(distances)
+    for candidate in candidates:
+        if np.isfinite(candidate["pval"]) and candidate["pval"] < cutoff:
+            edges.append([candidate["source_cluster"], candidate["target_cluster"]])
     return edges
 
 def buildEdges(stage1,stage2,cutoff = 0.05):
@@ -93,7 +155,7 @@ def buildEdges(stage1,stage2,cutoff = 0.05):
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
     edges = connectNodes(distance,cutoff)
     if len(edges) == 0:
-        raise RuntimeError('No edges found between stage %d and stage %d. Please adjust the number of neighbors or using a smaller clustering resolution.'%(stage1,stage2))
+        raise RuntimeError(_format_no_edges_error(stage1, stage2, distance, cutoff))
     return edges
 def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     '''
@@ -132,7 +194,7 @@ def buildEdges(stage1,stage2,midpath,iteration,cutoff = 0.05):
     distance = nodesDistance(rep1,rep2,topgene1,topgene2)
     edges = connectNodes(distance,cutoff)
     if len(edges) == 0:
-        raise RuntimeError('No edges found between stage %d and stage %d. Please adjust the number of neighbors or using a smaller clustering resolution.'%(stage1,stage2))
+        raise RuntimeError(_format_no_edges_error(stage1, stage2, distance, cutoff))
     return edges
 def getandUpadateEdges(total_stage,midpath,iteration,cutoff = 0.05):
     '''
