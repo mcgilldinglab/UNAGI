@@ -1647,6 +1647,10 @@ class AnalysisExplorerService:
                 "node_size": float(row.get("node_size", 0.0)),
                 "color": str(row.get("node_color", "#6E7C80")),
             }
+            if "root_stage0_cluster" in row and str(row["root_stage0_cluster"]).strip():
+                payload_node["root_stage0_cluster"] = str(row["root_stage0_cluster"])
+            if "root_stage0_cell_type" in row and str(row["root_stage0_cell_type"]).strip():
+                payload_node["root_stage0_cell_type"] = str(row["root_stage0_cell_type"])
             if "track_label" in row and str(row["track_label"]).strip():
                 payload_node["track_label"] = str(row["track_label"])
             if "track_key" in row and str(row["track_key"]).strip():

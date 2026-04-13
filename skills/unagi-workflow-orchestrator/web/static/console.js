@@ -1252,6 +1252,13 @@
       `ident: ${escapeHtml(node.cell_type || "NA")}`,
       `Cells: ${escapeHtml(node.n_cells)}`,
     ];
+    if (node.root_stage0_cluster) {
+      if (node.root_stage0_cell_type) {
+        lines.push(`Stage 0 root: ${escapeHtml(node.root_stage0_cell_type)} | cluster ${escapeHtml(node.root_stage0_cluster)}`);
+      } else {
+        lines.push(`Stage 0 root cluster: ${escapeHtml(node.root_stage0_cluster)}`);
+      }
+    }
     if (node.track_label) {
       lines.push(`Track: ${escapeHtml(node.track_label)}`);
     }
@@ -1319,6 +1326,40 @@
         unselected: { marker: { opacity: 0.2 } },
       });
     });
+
+    const rootStage = Array.isArray(payload.stage_order) && payload.stage_order.length
+      ? String(payload.stage_order[0])
+      : "0";
+    const stage0LabelOffset = 0.18;
+    const stage0Labels = {
+      x: [],
+      y: [],
+      text: [],
+    };
+    (payload.nodes || []).forEach(function (node) {
+      if (String(node.stage) !== rootStage || !node.root_stage0_cluster) {
+        return;
+      }
+      stage0Labels.x.push(Number(node.x));
+      stage0Labels.y.push(Number(node.y) + stage0LabelOffset);
+      stage0Labels.text.push(String(node.root_stage0_cluster));
+    });
+    if (stage0Labels.text.length) {
+      traces.push({
+        type: "scatter",
+        mode: "text",
+        x: stage0Labels.x,
+        y: stage0Labels.y,
+        text: stage0Labels.text,
+        textposition: "top center",
+        textfont: {
+          size: 11,
+          color: "#172124",
+        },
+        hoverinfo: "skip",
+        showlegend: false,
+      });
+    }
 
     return traces;
   }
@@ -1750,7 +1791,7 @@
           height: 340,
           hovermode: "closest",
           dragmode: "pan",
-          margin: { l: 68, r: 24, t: 18, b: 88 },
+          margin: { l: 68, r: 24, t: 42, b: 88 },
           legend: {
             orientation: "h",
             x: 0,

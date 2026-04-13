@@ -873,6 +873,10 @@ def _build_temporal_graph_payload(analysis_dir: Path, adata) -> dict[str, Any] |
             "node_size": float(row.get("node_size", 0.0)),
             "color": str(row.get("node_color", "#6E7C80")),
         }
+        if "root_stage0_cluster" in row and str(row["root_stage0_cluster"]).strip():
+            payload["root_stage0_cluster"] = str(row["root_stage0_cluster"])
+        if "root_stage0_cell_type" in row and str(row["root_stage0_cell_type"]).strip():
+            payload["root_stage0_cell_type"] = str(row["root_stage0_cell_type"])
         if "track_label" in row and str(row["track_label"]).strip():
             payload["track_label"] = str(row["track_label"])
         if "track_key" in row and str(row["track_key"]).strip():
@@ -1633,6 +1637,10 @@ def _render_report_html(
             svg.appendChild(line);
           }});
 
+          const rootStage = Array.isArray(payload.stage_order) && payload.stage_order.length
+            ? String(payload.stage_order[0])
+            : "0";
+
           nodes.forEach(function (node) {{
             const circle = createSvg("circle");
             circle.setAttribute("cx", String(xScale(Number(node.x))));
@@ -1653,10 +1661,25 @@ def _render_report_html(
               `Cluster: ${{node.cluster}}`,
               `ident: ${{node.cell_type || "NA"}}`,
               `Cells: ${{node.n_cells}}`,
+              node.root_stage0_cluster
+                ? `Stage 0 root: ${{node.root_stage0_cell_type || "NA"}} | cluster ${{node.root_stage0_cluster}}`
+                : "",
               node.track_label ? `Track: ${{node.track_label}}` : "",
             ].filter(Boolean).join("\\n");
             circle.appendChild(titleNode);
             svg.appendChild(circle);
+
+            if (String(node.stage) === rootStage && node.root_stage0_cluster) {{
+              const text = createSvg("text");
+              text.setAttribute("x", String(xScale(Number(node.x))));
+              text.setAttribute("y", String(yScale(Number(node.y)) - 20));
+              text.setAttribute("text-anchor", "middle");
+              text.setAttribute("font-size", "11");
+              text.setAttribute("font-weight", "600");
+              text.setAttribute("fill", "#172124");
+              text.textContent = String(node.root_stage0_cluster);
+              svg.appendChild(text);
+            }}
           }});
 
           container.innerHTML = "";

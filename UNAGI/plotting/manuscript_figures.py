@@ -1853,6 +1853,15 @@ def plot_temporal_dynamics_graph(
             stage_options = spec.get("stage_options", [])
             edge_pairs = spec.get("edge_pairs", [])
             lane_pos = (float(t_idx) - lane_half) * float(lane_step)
+            root_token = str(raw_track_key).split("-")[0] if raw_track_key else ""
+            root_stage0_cluster = str(root_token).split("n")[0] if root_token else ""
+            root_options = stage_options[0] if stage_options else []
+            if not root_stage0_cluster and root_options:
+                root_stage0_cluster = sorted({str(c) for c in root_options}, key=_safe_numeric_sort_key)[0]
+            root_stage = idx_to_stage.get(0, str(stage_order[0]))
+            root_stage0_cell_type = str(
+                node_meta_lookup.get((str(root_stage), str(root_stage0_cluster)), {}).get("cell_type", "Track")
+            )
             if track_label_map and raw_track_key in track_label_map:
                 track_label = str(track_label_map[raw_track_key])
             elif label_style == "path":
@@ -1861,15 +1870,8 @@ def plot_temporal_dynamics_graph(
                 track_label = f"{track_label_prefix}{t_idx + 1}"
             else:
                 # Paper-like naming: <cell-type>-<first stage-0 cluster id>.
-                root_token = str(raw_track_key).split("-")[0] if raw_track_key else ""
-                root_cluster = str(root_token).split("n")[0] if root_token else ""
-                root_options = stage_options[0] if stage_options else []
-                if not root_cluster and root_options:
-                    root_cluster = sorted({str(c) for c in root_options}, key=_safe_numeric_sort_key)[0]
-                root_stage = idx_to_stage.get(0, str(stage_order[0]))
-                root_ident = str(node_meta_lookup.get((str(root_stage), str(root_cluster)), {}).get("cell_type", "Track"))
-                base = _abbreviate_track_label(root_ident)
-                track_label = f"{base}-{root_cluster}" if root_cluster else f"{base}-{t_idx + 1}"
+                base = _abbreviate_track_label(root_stage0_cell_type)
+                track_label = f"{base}-{root_stage0_cluster}" if root_stage0_cluster else f"{base}-{t_idx + 1}"
             track_labels.append(track_label)
             node_key_lookup: dict[tuple[int, str], tuple[int, int, str]] = {}
 
@@ -1898,6 +1900,8 @@ def plot_temporal_dynamics_graph(
                             "track_idx": int(t_idx),
                             "track_key": raw_track_key,
                             "track_label": track_label,
+                            "root_stage0_cluster": root_stage0_cluster,
+                            "root_stage0_cell_type": root_stage0_cell_type,
                             "stage_idx": int(s_idx),
                             "stage": str(stage_name),
                             "cluster": str(clu),
@@ -1916,6 +1920,8 @@ def plot_temporal_dynamics_graph(
                         "track_idx": int(t_idx),
                         "track_key": raw_track_key,
                         "track_label": track_label,
+                        "root_stage0_cluster": root_stage0_cluster,
+                        "root_stage0_cell_type": root_stage0_cell_type,
                         "src_node": src_key,
                         "dst_node": dst_key,
                         "src_stage_idx": int(s_idx),
