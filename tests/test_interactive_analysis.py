@@ -35,6 +35,7 @@ def test_explorer_metadata_discovers_hierarchical_dynamic_and_perturbation_optio
     assert view["dynamic_markers"]["genes"]["track_options"][0]["label"] == "track 0 AT1"
     assert view["perturbation"]["available"] is True
     assert "pathway" in view["perturbation"]["mode_options"]
+    assert "two_drugs" in view["perturbation"]["mode_options"]
     assert view["perturbation"]["scope"] == "overall"
     assert view["perturbation"]["scope_options"] == ["overall"]
     assert view["perturbation"]["perturb_change_options"] == ["0.5"]
@@ -63,6 +64,7 @@ def test_explorer_discovers_and_renders_stage_specific_perturbation_results(tmp_
     assert view["perturbation"]["scope"] == "stage"
     assert view["perturbation"]["scope_options"] == ["overall", "stage"]
     assert view["perturbation"]["stage"] == "1"
+    assert "two_drugs" in view["perturbation"]["mode_options"]
     assert [item["value"] for item in view["perturbation"]["stage_options"]] == ["1", "2"]
     assert view["perturbation"]["stage_options"][0]["label"] == "Stage 1"
     assert view["result"]["status"] == "ok"

@@ -106,6 +106,9 @@ def build_mock_analysis_adata(
             "DrugA": ["GENE0:+", "GENE1:-"],
             "DrugB": ["GENE2:+", "GENE3:-"],
         }
+        adata.uns["data_two_drug_overlap_genes"] = {
+            "DrugA__DrugB": ["GENE0:+", "GENE1:-", "GENE2:+", "GENE3:-"],
+        }
         for key, values in {
             "pathway_perturbation_score": {
                 "0.5": {
@@ -154,6 +157,17 @@ def build_mock_analysis_adata(
                             "compound": ["GENE0_GENE1", "GENE2_GENE3"],
                             "perturbation score": [6.0, 4.8],
                             "pval_adjusted": [0.0001, 0.02],
+                        }
+                    }
+                }
+            },
+            "two_drugs_perturbation_score": {
+                "0.5": {
+                    "overall": {
+                        "top_compounds": {
+                            "compound": ["DrugA__DrugB"],
+                            "perturbation score": [4.9],
+                            "pval_adjusted": [0.004],
                         }
                     }
                 }
@@ -214,6 +228,33 @@ def write_analysis_dataset(
                     "idrem_suggestion": ["['GENE2:+']", "['GENE3:-']"],
                 }
             )
+            single_gene_frame = pd.DataFrame(
+                {
+                    "rank": [0, 1],
+                    "compound": [f"GENE_STAGE_{stage}_A", f"GENE_STAGE_{stage}_B"],
+                    "perturbation score": [4.4 - 0.1 * int(stage), 3.0 - 0.1 * int(stage)],
+                    "pval_adjusted": [0.002, 0.03],
+                }
+            )
+            gene_combo_frame = pd.DataFrame(
+                {
+                    "rank": [0, 1],
+                    "compound": [f"GENE_A_GENE_B_STAGE_{stage}", f"GENE_C_GENE_D_STAGE_{stage}"],
+                    "perturbation score": [5.4 - 0.1 * int(stage), 4.1 - 0.1 * int(stage)],
+                    "pval_adjusted": [0.001, 0.02],
+                }
+            )
+            two_drug_frame = pd.DataFrame(
+                {
+                    "rank": [0, 1],
+                    "compound": [f"DrugStage{stage}A__DrugStage{stage}B", f"DrugStage{stage}C__DrugStage{stage}D"],
+                    "perturbation score": [4.7 - 0.1 * int(stage), 3.4 - 0.1 * int(stage)],
+                    "pval_adjusted": [0.003, 0.04],
+                }
+            )
             pathway_frame.to_csv(stage_dir / f"pathway_perturbation_overall_stage_{stage}.csv", index=False)
             drug_frame.to_csv(stage_dir / f"drug_perturbation_overall_stage_{stage}.csv", index=False)
+            single_gene_frame.to_csv(stage_dir / f"single_gene_perturbation_overall_stage_{stage}.csv", index=False)
+            gene_combo_frame.to_csv(stage_dir / f"gene_combo_perturbation_overall_stage_{stage}.csv", index=False)
+            two_drug_frame.to_csv(stage_dir / f"two_drugs_perturbation_overall_stage_{stage}.csv", index=False)
     return result_dir

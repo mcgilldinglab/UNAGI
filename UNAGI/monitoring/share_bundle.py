@@ -55,6 +55,7 @@ SHARE_BUNDLE_PUBLICATION_EXPORTS = {
     "drug_ranked_bar",
     "single_gene_ranked_bar",
     "gene_combo_ranked_bar",
+    "two_drugs_ranked_bar",
 }
 
 ARTIFACT_TITLE_MAP = {
@@ -69,6 +70,8 @@ ARTIFACT_TITLE_MAP = {
     "single_gene_ranked_bar": "Single Gene Ranked Bar",
     "gene_combo_perturbation_table": "Gene Combination Perturbation Table",
     "gene_combo_ranked_bar": "Gene Combination Ranked Bar",
+    "two_drugs_perturbation_table": "Two Drug Perturbation Table",
+    "two_drugs_ranked_bar": "Two Drug Ranked Bar",
     "dynamic_marker_table": "Dynamic Marker Table",
     "dynamic_marker_trajectories": "Dynamic Marker Trajectories",
     "dynamic_marker_heatmap": "Dynamic Marker Heatmap",
@@ -87,6 +90,8 @@ PERTURBATION_ENTRY_NAMES = {
     "single_gene_ranked_bar",
     "gene_combo_perturbation_table",
     "gene_combo_ranked_bar",
+    "two_drugs_perturbation_table",
+    "two_drugs_ranked_bar",
 }
 DYNAMIC_ENTRY_NAMES = {
     "dynamic_marker_table",
@@ -136,6 +141,33 @@ def _bundle_download_stem(prefix: str, *parts: Any) -> str:
         if token and token != "artifact":
             tokens.append(token)
     return "_".join(tokens) or "artifact"
+
+
+def _artifact_download_label(
+    entry_name: str,
+    artifact_key: str,
+    *,
+    artifact_type: str,
+    success: Mapping[str, Any],
+) -> str:
+    track = str(success.get("track") or "").strip()
+    if artifact_type == "csv":
+        if entry_name == "temporal_dynamics_graph":
+            if artifact_key == "nodes":
+                return "Download temporal graph nodes for all tracks (Excel)"
+            if artifact_key == "edges":
+                return "Download temporal graph edges for all tracks (Excel)"
+        if track:
+            if entry_name == "dynamic_marker_table":
+                return f"Download dynamic marker table for track {track} (Excel)"
+            if entry_name == "dynamic_marker_trajectories":
+                return f"Download dynamic trajectory table for track {track} (Excel)"
+            if entry_name == "dynamic_marker_heatmap":
+                return f"Download dynamic heatmap panel table for track {track} (Excel)"
+        return "Download Excel"
+    if artifact_type == "pdf":
+        return "Download PDF"
+    return "Download"
 
 
 def _bundle_paths(analysis_dir: Path) -> tuple[Path, Path, Path]:
@@ -480,7 +512,7 @@ def _build_dynamic_marker_bundle(
                 "stage_columns": stage_columns,
                 "table": _frame_table_payload(frame),
                 "download_path": _relpath(xlsx_path, bundle_dir),
-                "download_label": "Download Excel",
+                "download_label": f"Download dynamic marker table for {track_label} ({direction})",
                 "csv_download_path": _relpath(csv_path, bundle_dir),
             }
             available_directions.append(direction)
@@ -587,6 +619,7 @@ def _perturbation_mode_title(mode: str) -> str:
         "drug": "Drug Perturbation",
         "single_gene": "Single Gene Perturbation",
         "gene_combo": "Gene Combination Perturbation",
+        "two_drugs": "Two Drug Perturbation",
     }
     return titles.get(str(mode), _humanize_entry_name(mode))
 
@@ -627,6 +660,7 @@ def _write_perturbation_bundle_assets(
     asset_name: str,
     bundle_dir: Path,
     download_prefix: str,
+    download_context: str,
 ) -> dict[str, Any]:
     asset_stem = _bundle_download_stem(download_prefix, asset_name)
     table_dir = bundle_dir / "assets" / "perturbation_tables"
@@ -657,10 +691,11 @@ def _write_perturbation_bundle_assets(
 
     return {
         "table_download_path": _relpath(xlsx_path, bundle_dir),
-        "table_download_label": "Download detailed table (Excel)",
+        "table_download_label": f"Download {mode} perturbation table for {download_context} (Excel)",
         "table_csv_path": _relpath(csv_path, bundle_dir),
         "plot_path": _relpath(png_path, bundle_dir),
         "plot_download_path": _relpath(pdf_path, bundle_dir),
+        "plot_download_label": f"Download {mode} perturbation plot for {download_context} (PDF)",
     }
 
 
@@ -704,7 +739,7 @@ def _build_perturbation_bundle(
     tables: dict[str, Any] = {}
     modes_out: list[dict[str, Any]] = []
 
-    for mode in ("pathway", "drug"):
+    for mode in ("pathway", "drug", "single_gene", "gene_combo", "two_drugs"):
         uns_key = PERTURBATION_MODE_KEYS.get(mode)
         payload = adata.uns.get(uns_key) if uns_key else None
         stage_mode_entry = stage_specific_modes.get(mode) or {}
@@ -800,6 +835,7 @@ def _build_perturbation_bundle(
                         asset_name=f"perturbation_{mode}_scope_overall_change_{perturb_change}_{option.get('label') or track_value}",
                         bundle_dir=bundle_dir,
                         download_prefix=download_prefix,
+                        download_context=f"{option.get('label') or track_value} (perturb change {perturb_change})",
                     )
                     key = f"{mode}::overall::{perturb_change}::{track_value}"
                     tables[key] = {
@@ -870,6 +906,7 @@ def _build_perturbation_bundle(
                         asset_name=f"perturbation_{mode}_scope_stage_{stage_value}_{option.get('label') or track_value}",
                         bundle_dir=bundle_dir,
                         download_prefix=download_prefix,
+                        download_context=f"{option.get('label') or track_value} (stage {stage_value})",
                     )
                     key = f"{mode}::stage::{stage_value}::{track_value}"
                     tables[key] = {
@@ -948,7 +985,12 @@ def _collect_entries(
                     xlsx_path = _reserve_unique_artifact_path(copied.with_suffix(".xlsx"), used_names)
                     _write_generated_xlsx(frame, xlsx_path, sheet_name=name)
                     artifact["download_path"] = _relpath(xlsx_path, bundle_dir)
-                    artifact["download_label"] = "Download Excel"
+                    artifact["download_label"] = _artifact_download_label(
+                        name,
+                        key,
+                        artifact_type=artifact["type"],
+                        success=success,
+                    )
                     artifact["csv_download_path"] = _relpath(copied, bundle_dir)
                 except Exception:
                     artifact["download_label"] = "Download CSV"
@@ -1287,6 +1329,7 @@ def _perturbation_mode_groups(entries: Iterable[Mapping[str, Any]], *, skip_mode
         "drug": "Drug Perturbation",
         "single_gene": "Single Gene Perturbation",
         "gene_combo": "Gene Combination Perturbation",
+        "two_drugs": "Two Drug Perturbation",
     }
     for entry in entries:
         name = str(entry.get("name") or "")
@@ -1314,7 +1357,7 @@ def _perturbation_mode_groups(entries: Iterable[Mapping[str, Any]], *, skip_mode
                 group["plot_artifact"] = dict(artifact)
             if name.endswith("_perturbation_table") and artifact_type == "csv" and group["table_artifact"] is None:
                 group["table_artifact"] = dict(artifact)
-    ordered_modes = ["pathway", "drug", "single_gene", "gene_combo"]
+    ordered_modes = ["pathway", "drug", "single_gene", "gene_combo", "two_drugs"]
     return [groups[mode] for mode in ordered_modes if mode in groups]
 
 
@@ -2129,6 +2172,8 @@ def _render_report_html(
             summary.textContent = 'No perturbation result is available for this selection.';
             plotDownload.removeAttribute('href');
             tableDownload.removeAttribute('href');
+            plotDownload.textContent = 'Download plot (PDF)';
+            tableDownload.textContent = 'Download detailed table (Excel)';
             return;
           }}
 
@@ -2136,6 +2181,8 @@ def _render_report_html(
           plot.alt = `${{mode.title || modeValue}} | ${{state.track_label || state.track || ''}}`;
           plotDownload.href = String(state.plot_download_path || '#');
           tableDownload.href = String(state.table_download_path || '#');
+          plotDownload.textContent = String(state.plot_download_label || 'Download plot (PDF)');
+          tableDownload.textContent = String(state.table_download_label || 'Download detailed table (Excel)');
           summary.textContent = summaryText;
         }}
 
@@ -2405,6 +2452,7 @@ def _render_report_html(
             dynamicChart.innerHTML = '<p class="empty">No dynamic marker table is available for this selection.</p>';
             dynamicTable.innerHTML = '';
             dynamicDownload.removeAttribute('href');
+            dynamicDownload.textContent = 'Download dynamic marker table (Excel)';
             return;
           }}
           renderLineChart(dynamicChart, state.stage_columns || [], (state.table || {{}}).records || []);
@@ -2414,6 +2462,7 @@ def _render_report_html(
           }} else {{
             dynamicDownload.removeAttribute('href');
           }}
+          dynamicDownload.textContent = String(state.download_label || 'Download dynamic marker table (Excel)');
         }}
 
         function refreshHierClusters() {{

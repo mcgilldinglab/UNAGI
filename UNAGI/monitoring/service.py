@@ -62,6 +62,9 @@ ANALYSIS_STAGE_LABELS = {
 PERTURB_TASK_MODES = {
     "pathway_perturbation": ["random_pathway_background", "pathway"],
     "drug_perturbation": ["drug", "random_drug_background"],
+    "single_gene_perturbation": ["single_gene", "random_background"],
+    "two_gene_perturbation": ["two_genes", "random_background"],
+    "two_drug_perturbation": ["two_drugs", "random_drug_background"],
 }
 
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
@@ -740,7 +743,22 @@ class JobMonitorService:
         include_hc = not bool(config.get("ignore_hcmarkers", False))
         include_dynamic = not bool(config.get("ignore_dynamic_markers", False))
         include_pathway = run_perturbation and not bool(config.get("ignore_pathway_perturabtion", False))
-        include_drug = run_perturbation and not bool(config.get("ignore_drug_perturabtion", False))
+        include_single_gene = run_perturbation and (
+            bool(config.get("run_single_gene_perturbation", False))
+            or (
+                bool(config.get("run_two_gene_perturbation", False))
+                and bool(config.get("shortlist_two_gene_candidates", False))
+            )
+        )
+        include_two_gene = run_perturbation and bool(config.get("run_two_gene_perturbation", False))
+        include_drug = run_perturbation and (
+            not bool(config.get("ignore_drug_perturabtion", False))
+            or (
+                bool(config.get("run_two_drug_perturbation", False))
+                and bool(config.get("shortlist_two_drug_candidates", False))
+            )
+        )
+        include_two_drug = run_perturbation and bool(config.get("run_two_drug_perturbation", False))
 
         enabled = dict(ANALYSIS_STAGE_WEIGHTS)
         include_visualizations = bool(config.get("generate_visualizations", True))
@@ -748,7 +766,7 @@ class JobMonitorService:
             enabled.pop("hierarchical_markers", None)
         if not include_dynamic:
             enabled.pop("progression_markers", None)
-        if not run_perturbation or (not include_pathway and not include_drug):
+        if not run_perturbation or (not include_pathway and not include_drug and not include_single_gene and not include_two_gene and not include_two_drug):
             enabled.pop("perturbation", None)
         if not include_visualizations:
             enabled.pop("generate_visualizations", None)
@@ -758,6 +776,12 @@ class JobMonitorService:
             enabled_tasks.append("pathway_perturbation")
         if include_drug:
             enabled_tasks.append("drug_perturbation")
+        if include_single_gene:
+            enabled_tasks.append("single_gene_perturbation")
+        if include_two_gene:
+            enabled_tasks.append("two_gene_perturbation")
+        if include_two_drug:
+            enabled_tasks.append("two_drug_perturbation")
 
         total = sum(enabled.values()) or 1.0
         normalized = {stage: weight / total for stage, weight in enabled.items()}

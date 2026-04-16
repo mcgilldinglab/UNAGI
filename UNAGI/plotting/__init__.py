@@ -20,6 +20,7 @@ from .manuscript_figures import (
     plot_stage_cell_type_composition,
     plot_stage_umap_grid,
     plot_temporal_dynamics_graph,
+    sort_perturbation_table,
 )
 from .plot_cell_embeddings import plot_stages_latent_representation, plot_with_colormap
 from .plot_cell_type_composition import cell_type_composition
@@ -41,6 +42,7 @@ __all__ = [
     "plot_temporal_dynamics_graph",
     "extract_perturbation_table",
     "plot_perturbation_ranked_bar",
+    "sort_perturbation_table",
     "plot_gene_expression_shift",
     "plot_insilico_vs_observed_scatter",
     "plot_distribution_overlap",

@@ -1059,6 +1059,7 @@ async def test_analysis_publication_pdf_routes_and_links(tmp_path, monkeypatch):
             "drug_ranked_bar",
             "single_gene_ranked_bar",
             "gene_combo_ranked_bar",
+            "two_drugs_ranked_bar",
             "dynamic_marker_trajectories",
             "dynamic_marker_heatmap",
             "hierarchical_marker_heatmap",

@@ -104,6 +104,63 @@ def _wrap_ranked_bar_label(value: Any, *, max_line_length: int = 34, max_lines: 
     return "\n".join(wrapped[:max_lines])
 
 
+def sort_perturbation_table(table: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sort perturbation results for display/export.
+
+    When a valid p-value column is available, use it as the primary ranking key
+    and break ties with descending perturbation score.
+    """
+    if table is None:
+        return pd.DataFrame()
+    work = table.copy()
+    if work.empty:
+        return work
+
+    effective_pval_col: str | None = None
+    for candidate in ("pval_adjusted", "pval"):
+        if candidate not in work.columns:
+            continue
+        values = pd.to_numeric(work[candidate], errors="coerce")
+        if values.notna().any():
+            work[f"__sort_{candidate}"] = values
+            effective_pval_col = candidate
+            break
+
+    has_score = False
+    if "perturbation score" in work.columns:
+        score_values = pd.to_numeric(work["perturbation score"], errors="coerce")
+        if score_values.notna().any():
+            work["__sort_score"] = score_values
+            has_score = True
+
+    item_col = next(
+        (
+            candidate
+            for candidate in ("compound", "pathways", "gene", "gene_combination", "drug_combination", "item", "gene set")
+            if candidate in work.columns
+        ),
+        None,
+    )
+    sort_cols: list[str] = []
+    ascending: list[bool] = []
+    if effective_pval_col is not None:
+        sort_cols.append(f"__sort_{effective_pval_col}")
+        ascending.append(True)
+    if has_score:
+        sort_cols.append("__sort_score")
+        ascending.append(False)
+    if item_col is not None:
+        sort_cols.append(item_col)
+        ascending.append(True)
+    if sort_cols:
+        work = work.sort_values(sort_cols, ascending=ascending, na_position="last")
+
+    return work.drop(
+        columns=[column for column in ("__sort_pval_adjusted", "__sort_pval", "__sort_score") if column in work.columns]
+    ).reset_index(drop=True)
+
+
 def _dominant_label(series: pd.Series, fallback: str = "NA") -> str:
     if series.empty:
         return fallback
@@ -2153,6 +2210,7 @@ def extract_perturbation_table(
         "pathway": "pathway_perturbation_score",
         "single_gene": "single_gene_perturbation_score",
         "gene_combo": "two_genes_perturbation_score",
+        "two_drugs": "two_drugs_perturbation_score",
     }
     if mode not in mode_to_key:
         raise ValueError(f"Unsupported mode: {mode}. Use one of {sorted(mode_to_key)}.")
@@ -2185,15 +2243,9 @@ def extract_perturbation_table(
         df = df.rename(columns={"compound": "gene"})
     if "compound" in df.columns and mode == "gene_combo":
         df = df.rename(columns={"compound": "gene_combination"})
-
-    if mode == "pathway" and "perturbation score" in df.columns:
-        df = df.sort_values("perturbation score", ascending=False)
-    elif "pval_adjusted" in df.columns:
-        df = df.sort_values("pval_adjusted", ascending=True)
-    elif "perturbation score" in df.columns:
-        df = df.sort_values("perturbation score", ascending=False)
-    df = df.reset_index(drop=True)
-    return df
+    if "compound" in df.columns and mode == "two_drugs":
+        df = df.rename(columns={"compound": "drug_combination"})
+    return sort_perturbation_table(df)
 
 
 def plot_perturbation_ranked_bar(
@@ -2217,13 +2269,13 @@ def plot_perturbation_ranked_bar(
     if table is None or table.empty:
         raise ValueError("Input table is empty.")
 
-    candidates = ("compound", "pathways", "gene", "gene_combination", "item")
+    candidates = ("compound", "pathways", "gene", "gene_combination", "drug_combination", "item")
     if item_col is None:
         item_col = next((c for c in candidates if c in table.columns), None)
     if item_col is None:
         raise KeyError(f"Unable to infer item column. Expected one of {candidates}.")
 
-    work = table.copy()
+    work = sort_perturbation_table(table)
     if top_n > 0:
         work = work.iloc[:top_n].copy()
 

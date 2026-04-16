@@ -35,6 +35,38 @@
             <option value="false" {% if initial['run_perturbation'] != 'true' %}selected{% endif %}>false</option>
           </select>
         </label>
+        <label><span>Run Single Gene</span>
+          <select name="run_single_gene_perturbation">
+            <option value="false" {% if initial['run_single_gene_perturbation'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['run_single_gene_perturbation'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Run Two Gene</span>
+          <select name="run_two_gene_perturbation">
+            <option value="false" {% if initial['run_two_gene_perturbation'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['run_two_gene_perturbation'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Run Two Drug</span>
+          <select name="run_two_drug_perturbation">
+            <option value="false" {% if initial['run_two_drug_perturbation'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['run_two_drug_perturbation'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Shortlist Two Gene</span>
+          <select name="shortlist_two_gene_candidates">
+            <option value="false" {% if initial['shortlist_two_gene_candidates'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['shortlist_two_gene_candidates'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Shortlist Two Drug</span>
+          <select name="shortlist_two_drug_candidates">
+            <option value="false" {% if initial['shortlist_two_drug_candidates'] != 'true' %}selected{% endif %}>false</option>
+            <option value="true" {% if initial['shortlist_two_drug_candidates'] == 'true' %}selected{% endif %}>true</option>
+          </select>
+        </label>
+        <label><span>Top N Single-Gene Seeds</span><input type="number" name="top_n_single_gene_candidates" value="{{ initial['top_n_single_gene_candidates'] or '25' }}"></label>
+        <label><span>Top N Drug Seeds</span><input type="number" name="top_n_two_drug_candidates" value="{{ initial['top_n_two_drug_candidates'] or '25' }}"></label>
         <label><span>Perturb Change</span><input type="text" name="perturb_change" value="{{ initial['perturb_change'] }}"></label>
         <label><span>Direction Mode</span>
           <select name="direction_mode">
@@ -50,14 +82,11 @@
           </select>
         </label>
         <label><span>Perturbed Tracks</span><input type="text" name="perturbed_tracks" value="{{ initial['perturbed_tracks'] }}"></label>
-<<<<<<< HEAD
         <label>
           <span>Perturb Stage</span>
           <input type="text" name="perturb_stage" value="{{ initial['perturb_stage'] }}" placeholder="blank = all stages">
           <span class="muted">Use a stage label from the dataset, or a zero-based stage index.</span>
         </label>
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
         <label><span>Customized Pathway</span><input id="customized_pathway" type="text" name="customized_pathway" value="{{ initial['customized_pathway'] }}"></label>
         <label><span>Customized Drug</span><input id="customized_drug" type="text" name="customized_drug" value="{{ initial['customized_drug'] }}"></label>
         <label><span>CMAP Dir</span><input id="cmap_dir" type="text" name="cmap_dir" value="{{ initial['cmap_dir'] }}"></label>

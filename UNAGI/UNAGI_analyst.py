@@ -1,6 +1,7 @@
 import copy
 import gc
 import hashlib
+from itertools import combinations
 import json
 import os
 import pickle
@@ -9,6 +10,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import scanpy as sc
 import torch
 
@@ -23,7 +25,7 @@ from .marker_discovery.dynamic_markers_helper import get_progressionmarker_backg
 from .marker_discovery.dynamic_markers import runGetProgressionMarker_one_dist
 
 
-PERTURBATION_STAGE_CACHE_VERSION = 2
+PERTURBATION_STAGE_CACHE_VERSION = 3
 SUPPORTED_PERTURBATION_SCHEDULES = {'single_gpu_optimized', 'resource_aware'}
 SUPPORTED_DYNAMIC_MARKER_STRATEGIES = {'legacy', 'optimized'}
 
@@ -1046,6 +1048,606 @@ class analyst:
         logger.log('task=drug_perturbation status=DONE')
         return payload, background_payload, stage_metrics
 
+    def _list_signature(self, values):
+        normalized = [str(value) for value in values]
+        return hashlib.sha1(json.dumps(normalized, sort_keys=False).encode('utf-8')).hexdigest()[:16]
+
+    def _top_ranked_compounds(self, score_payload, *, perturb_change, top_n):
+        if top_n in (None, '', 0):
+            return []
+        bucket = score_payload.get(str(perturb_change), {}) if isinstance(score_payload, dict) else {}
+        overall = bucket.get('overall', {}) if isinstance(bucket, dict) else {}
+        table_payload = overall.get('top_compounds') or overall.get('down_compounds')
+        if not isinstance(table_payload, dict):
+            return []
+        frame = pd.DataFrame.from_dict(table_payload)
+        if frame.empty:
+            return []
+        if 'pval_adjusted' in frame.columns:
+            frame['__sort_p'] = pd.to_numeric(frame['pval_adjusted'], errors='coerce').fillna(np.inf)
+            frame = frame.sort_values(['__sort_p'])
+        elif 'perturbation score' in frame.columns:
+            frame['__sort_score'] = pd.to_numeric(frame['perturbation score'], errors='coerce').fillna(-np.inf)
+            frame = frame.sort_values(['__sort_score'], ascending=False)
+        column = 'compound'
+        if column not in frame.columns:
+            for candidate in ('gene', 'pathways', 'gene_combination', 'drug_combination', 'item'):
+                if candidate in frame.columns:
+                    column = candidate
+                    break
+        values = [
+            str(value).strip()
+            for value in frame[column].tolist()
+            if str(value).strip()
+        ]
+        return values[: int(top_n)]
+
+    def _resolve_two_gene_seed_genes(self, adata, *, perturb_change, shortlist, top_n):
+        if not bool(shortlist):
+            return [str(gene) for gene in adata.var_names.tolist()]
+        score_payload = adata.uns.get('single_gene_perturbation_score', {})
+        seeds = self._top_ranked_compounds(
+            score_payload,
+            perturb_change=perturb_change,
+            top_n=top_n,
+        )
+        if not seeds:
+            raise ValueError(
+                'Shortlisted two-gene perturbation requires non-empty single-gene overall results.'
+            )
+        return seeds
+
+    @staticmethod
+    def _normalize_signed_target_list(items):
+        normalized = []
+        for item in items or []:
+            name, _, sign = str(item).partition(':')
+            name = name.strip()
+            if not name:
+                continue
+            sign = sign.strip()
+            if sign not in {'+', '-'}:
+                sign = '+'
+            normalized.append(f'{name}:{sign}')
+        return normalized
+
+    def _merge_signed_target_lists(self, *collections):
+        merged = {}
+        for collection in collections:
+            for item in self._normalize_signed_target_list(collection):
+                name, _, sign = item.partition(':')
+                if name in merged:
+                    existing_sign = merged[name].partition(':')[2]
+                    if existing_sign == sign:
+                        continue
+                    # Keep the first seen sign on conflicts so pair generation is deterministic.
+                    continue
+                merged[name] = f'{name}:{sign}'
+        return list(merged.values())
+
+    def _resolve_two_drug_pair_items(self, adata, *, perturb_change, shortlist, top_n):
+        drug_items = adata.uns.get('data_drug_overlap_genes', {})
+        if not isinstance(drug_items, dict) or not drug_items:
+            raise ValueError('Two-drug perturbation requires non-empty data_drug_overlap_genes.')
+        if bool(shortlist):
+            selected = self._top_ranked_compounds(
+                adata.uns.get('drug_perturbation_score', {}),
+                perturb_change=perturb_change,
+                top_n=top_n,
+            )
+            if not selected:
+                raise ValueError(
+                    'Shortlisted two-drug perturbation requires non-empty single-drug overall results.'
+                )
+        else:
+            selected = [str(name) for name in drug_items.keys()]
+        pair_items = {}
+        for left, right in combinations(selected, 2):
+            if left not in drug_items or right not in drug_items:
+                continue
+            pair_items[f'{left}__{right}'] = self._merge_signed_target_lists(
+                drug_items[left],
+                drug_items[right],
+            )
+        if not pair_items:
+            raise ValueError('Unable to build any two-drug perturbation candidates.')
+        return pair_items
+
+    def _build_unique_random_gene_sets(self, *, sample_count, set_size):
+        genes = [str(gene) for gene in self.adata.var_names.tolist()]
+        if not genes:
+            return []
+        sets = []
+        for seed in range(int(sample_count)):
+            rng = np.random.default_rng(int(seed))
+            replace = int(set_size) > len(genes)
+            chosen = rng.choice(genes, size=int(set_size), replace=replace)
+            sets.append([str(item) for item in np.asarray(chosen).tolist()])
+        return sets
+
+    def _build_unique_random_two_drug_backgrounds(self, *, sample_count):
+        drug_items = self.adata.uns.get('data_drug_overlap_genes', {})
+        drug_names = [str(name) for name in drug_items.keys()]
+        if len(drug_names) < 2:
+            return []
+        samples = []
+        for seed in range(int(sample_count)):
+            rng = np.random.default_rng(int(seed))
+            chosen = rng.choice(drug_names, size=2, replace=False)
+            left, right = str(chosen[0]), str(chosen[1])
+            samples.append(self._merge_signed_target_lists(drug_items[left], drug_items[right]))
+        return samples
+
+    def _set_mode_background_payload(self, adata, *, mode, background_payload):
+        payload = copy.deepcopy((background_payload or {}).get('random_background_perturbation_deltaD', {}))
+        if payload:
+            adata.uns[f'{mode}_random_background_perturbation_deltaD'] = payload
+            adata.uns['random_background_perturbation_deltaD'] = copy.deepcopy(payload)
+        return payload
+
+    def _run_or_load_single_gene_task(
+        self,
+        *,
+        logger,
+        execution_backend,
+        perturb_change,
+        direction_mode,
+        perturbed_tracks,
+        overall_perturbation_analysis,
+        perturb_stage,
+        random_times,
+        cache_state,
+    ):
+        include_grouped_tracks = self._should_include_grouped_track_scores(
+            perturbed_tracks=perturbed_tracks,
+            overall_perturbation_analysis=overall_perturbation_analysis,
+            perturb_stage=perturb_stage,
+        )
+        background_signature = self._stage_signature(
+            'single_gene_background',
+            execution=str(execution_backend),
+            perturb_change=float(perturb_change),
+            direction_mode=str(direction_mode),
+            random_times=int(random_times),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
+        )
+        result_signature = self._stage_signature(
+            'single_gene_result',
+            execution=str(execution_backend),
+            perturb_change=float(perturb_change),
+            direction_mode=str(direction_mode),
+            perturbed_tracks=self._normalize_track_request(perturbed_tracks),
+            overall=bool(overall_perturbation_analysis),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
+            include_grouped_tracks=bool(include_grouped_tracks),
+            background_signature=background_signature['signature_hash'],
+        )
+        logger.log('task=single_gene_perturbation status=START')
+        stage_metrics = {
+            'background': {'cache': 'miss', 'elapsed_seconds': 0.0},
+            'forward': {'cache': 'miss', 'elapsed_seconds': 0.0, 'backend': str(execution_backend)},
+            'score': {'cache': 'miss', 'elapsed_seconds': 0.0},
+        }
+        result_cached = self._load_stage_cache('single_gene_result', result_signature)
+        if result_cached is not None:
+            payload = result_cached['payload']
+            self._apply_uns_payload(payload)
+            bg_cached = self._load_stage_cache('single_gene_background', background_signature)
+            background_payload = bg_cached['payload'] if bg_cached is not None else {}
+            if background_payload:
+                self._set_mode_background_payload(self.adata, mode='single_gene', background_payload=background_payload)
+            self._log_perturb_stage(logger, 'single_gene_background', status='DONE', cache='hit')
+            self._log_perturb_stage(logger, 'single_gene_forward', status='DONE', cache='hit')
+            self._log_perturb_stage(logger, 'single_gene_score', status='DONE', cache='hit')
+            logger.log('task=single_gene_perturbation status=DONE')
+            stage_metrics['background']['cache'] = 'hit'
+            stage_metrics['forward']['cache'] = 'hit'
+            stage_metrics['score']['cache'] = 'hit'
+            return payload, background_payload, stage_metrics
+
+        runner = self._ensure_perturbation_runner(execution_backend=execution_backend, logger=logger, cache_state=cache_state)
+        self._clear_stage_keys(
+            runner.adata,
+            [
+                'random_background_perturbation_deltaD',
+                'single_gene_random_background_perturbation_deltaD',
+                'single_gene_perturbation_deltaD',
+                'single_gene_perturbation_score',
+            ],
+        )
+        use_cuda = str(execution_backend).startswith('gpu_')
+        device = 'cuda:0' if use_cuda else 'cpu'
+
+        background_cached = self._load_stage_cache('single_gene_background', background_signature)
+        if background_cached is not None:
+            started_at = time.time()
+            background_payload = background_cached['payload']
+            self._set_mode_background_payload(runner.adata, mode='single_gene', background_payload=background_payload)
+            self._log_perturb_stage(logger, 'single_gene_background', status='DONE', cache='hit')
+            stage_metrics['background'] = {'cache': 'hit', 'elapsed_seconds': time.time() - started_at}
+        else:
+            started_at = time.time()
+            self._log_perturb_stage(logger, 'single_gene_background', status='START', cache='miss')
+            random_sets = self._build_unique_random_gene_sets(sample_count=int(random_times), set_size=1)
+            runner.run(
+                'random_background',
+                perturb_change,
+                inplace=True,
+                random_times=len(random_sets),
+                random_genes=random_sets,
+                CUDA=use_cuda,
+                device=device,
+                direction_mode=direction_mode,
+            )
+            background_payload = {
+                'random_background_perturbation_deltaD': copy.deepcopy(
+                    runner.adata.uns.get('random_background_perturbation_deltaD', {})
+                ),
+            }
+            self._set_mode_background_payload(runner.adata, mode='single_gene', background_payload=background_payload)
+            self._save_stage_cache('single_gene_background', background_signature, background_payload, elapsed_seconds=time.time() - started_at)
+            self._log_perturb_stage(logger, 'single_gene_background', status='DONE', started_at=started_at, cache='miss')
+            stage_metrics['background'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at}
+
+        started_at = time.time()
+        self._log_perturb_stage(logger, 'single_gene_forward', status='START')
+        runner.run('single_gene', perturb_change, inplace=True, CUDA=use_cuda, device=device, direction_mode=direction_mode)
+        self._log_perturb_stage(logger, 'single_gene_forward', status='DONE', started_at=started_at, backend=execution_backend)
+        stage_metrics['forward'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at, 'backend': str(execution_backend)}
+
+        started_at = time.time()
+        self._log_perturb_stage(logger, 'single_gene_score', status='START')
+        runner.analysis(
+            'single_gene',
+            perturb_change,
+            perturbed_tracks,
+            overall_perturbation_analysis if perturbed_tracks == 'all' else False,
+            stage=perturb_stage['index'] if perturb_stage is not None else None,
+            direction_mode=direction_mode,
+        )
+        if perturbed_tracks == 'all' and include_grouped_tracks:
+            self._augment_score_bucket_with_grouped_tracks(
+                runner,
+                mode='single_gene',
+                perturb_change=perturb_change,
+                direction_mode=direction_mode,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+            )
+        self._log_perturb_stage(logger, 'single_gene_score', status='DONE', started_at=started_at)
+        stage_metrics['score'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at}
+
+        payload = self._extract_uns_payload(
+            ['single_gene_perturbation_deltaD', 'single_gene_perturbation_score'],
+            adata=runner.adata,
+        )
+        self._save_stage_cache(
+            'single_gene_result',
+            result_signature,
+            payload,
+            metadata={'background_signature': background_signature['signature_hash']},
+        )
+        self._set_mode_background_payload(runner.adata, mode='single_gene', background_payload=background_payload)
+        logger.log('task=single_gene_perturbation status=DONE')
+        return payload, background_payload, stage_metrics
+
+    def _run_or_load_two_gene_task(
+        self,
+        *,
+        logger,
+        execution_backend,
+        perturb_change,
+        direction_mode,
+        perturbed_tracks,
+        overall_perturbation_analysis,
+        perturb_stage,
+        random_times,
+        shortlist_candidates,
+        top_n_candidates,
+        cache_state,
+    ):
+        include_grouped_tracks = self._should_include_grouped_track_scores(
+            perturbed_tracks=perturbed_tracks,
+            overall_perturbation_analysis=overall_perturbation_analysis,
+            perturb_stage=perturb_stage,
+        )
+        source_adata = cache_state.get('runner').adata if cache_state.get('runner') is not None else self.adata
+        seed_genes = self._resolve_two_gene_seed_genes(
+            source_adata,
+            perturb_change=perturb_change,
+            shortlist=shortlist_candidates,
+            top_n=top_n_candidates,
+        )
+        seed_signature = self._list_signature(seed_genes)
+        background_signature = self._stage_signature(
+            'two_gene_background',
+            execution=str(execution_backend),
+            perturb_change=float(perturb_change),
+            direction_mode=str(direction_mode),
+            random_times=int(random_times),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
+        )
+        result_signature = self._stage_signature(
+            'two_gene_result',
+            execution=str(execution_backend),
+            perturb_change=float(perturb_change),
+            direction_mode=str(direction_mode),
+            perturbed_tracks=self._normalize_track_request(perturbed_tracks),
+            overall=bool(overall_perturbation_analysis),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
+            include_grouped_tracks=bool(include_grouped_tracks),
+            shortlist=bool(shortlist_candidates),
+            top_n_candidates=int(top_n_candidates),
+            seed_signature=seed_signature,
+            background_signature=background_signature['signature_hash'],
+        )
+        logger.log('task=two_gene_perturbation status=START')
+        stage_metrics = {
+            'background': {'cache': 'miss', 'elapsed_seconds': 0.0},
+            'forward': {'cache': 'miss', 'elapsed_seconds': 0.0, 'backend': str(execution_backend)},
+            'score': {'cache': 'miss', 'elapsed_seconds': 0.0},
+        }
+        result_cached = self._load_stage_cache('two_gene_result', result_signature)
+        if result_cached is not None:
+            payload = result_cached['payload']
+            self._apply_uns_payload(payload)
+            bg_cached = self._load_stage_cache('two_gene_background', background_signature)
+            background_payload = bg_cached['payload'] if bg_cached is not None else {}
+            if background_payload:
+                self._set_mode_background_payload(self.adata, mode='two_genes', background_payload=background_payload)
+            self._log_perturb_stage(logger, 'two_gene_background', status='DONE', cache='hit')
+            self._log_perturb_stage(logger, 'two_gene_forward', status='DONE', cache='hit')
+            self._log_perturb_stage(logger, 'two_gene_score', status='DONE', cache='hit')
+            logger.log('task=two_gene_perturbation status=DONE')
+            stage_metrics['background']['cache'] = 'hit'
+            stage_metrics['forward']['cache'] = 'hit'
+            stage_metrics['score']['cache'] = 'hit'
+            return payload, background_payload, stage_metrics
+
+        runner = self._ensure_perturbation_runner(execution_backend=execution_backend, logger=logger, cache_state=cache_state)
+        runner.adata.uns['combinatorial_perturbation_genes_set1'] = list(seed_genes)
+        self._clear_stage_keys(
+            runner.adata,
+            [
+                'random_background_perturbation_deltaD',
+                'two_genes_random_background_perturbation_deltaD',
+                'two_genes_perturbation_deltaD',
+                'two_genes_perturbation_score',
+            ],
+        )
+        use_cuda = str(execution_backend).startswith('gpu_')
+        device = 'cuda:0' if use_cuda else 'cpu'
+
+        background_cached = self._load_stage_cache('two_gene_background', background_signature)
+        if background_cached is not None:
+            started_at = time.time()
+            background_payload = background_cached['payload']
+            self._set_mode_background_payload(runner.adata, mode='two_genes', background_payload=background_payload)
+            self._log_perturb_stage(logger, 'two_gene_background', status='DONE', cache='hit')
+            stage_metrics['background'] = {'cache': 'hit', 'elapsed_seconds': time.time() - started_at}
+        else:
+            started_at = time.time()
+            self._log_perturb_stage(logger, 'two_gene_background', status='START', cache='miss')
+            random_sets = self._build_unique_random_gene_sets(sample_count=int(random_times), set_size=2)
+            runner.run(
+                'random_background',
+                perturb_change,
+                inplace=True,
+                random_times=len(random_sets),
+                random_genes=random_sets,
+                CUDA=use_cuda,
+                device=device,
+                direction_mode=direction_mode,
+            )
+            background_payload = {
+                'random_background_perturbation_deltaD': copy.deepcopy(
+                    runner.adata.uns.get('random_background_perturbation_deltaD', {})
+                ),
+            }
+            self._set_mode_background_payload(runner.adata, mode='two_genes', background_payload=background_payload)
+            self._save_stage_cache('two_gene_background', background_signature, background_payload, elapsed_seconds=time.time() - started_at)
+            self._log_perturb_stage(logger, 'two_gene_background', status='DONE', started_at=started_at, cache='miss')
+            stage_metrics['background'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at}
+
+        started_at = time.time()
+        self._log_perturb_stage(logger, 'two_gene_forward', status='START')
+        runner.run('two_genes', perturb_change, inplace=True, CUDA=use_cuda, device=device, direction_mode=direction_mode)
+        self._log_perturb_stage(logger, 'two_gene_forward', status='DONE', started_at=started_at, backend=execution_backend)
+        stage_metrics['forward'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at, 'backend': str(execution_backend)}
+
+        started_at = time.time()
+        self._log_perturb_stage(logger, 'two_gene_score', status='START')
+        runner.analysis(
+            'two_genes',
+            perturb_change,
+            perturbed_tracks,
+            overall_perturbation_analysis if perturbed_tracks == 'all' else False,
+            stage=perturb_stage['index'] if perturb_stage is not None else None,
+            direction_mode=direction_mode,
+        )
+        if perturbed_tracks == 'all' and include_grouped_tracks:
+            self._augment_score_bucket_with_grouped_tracks(
+                runner,
+                mode='two_genes',
+                perturb_change=perturb_change,
+                direction_mode=direction_mode,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+            )
+        self._log_perturb_stage(logger, 'two_gene_score', status='DONE', started_at=started_at)
+        stage_metrics['score'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at}
+
+        payload = self._extract_uns_payload(
+            ['combinatorial_perturbation_genes_set1', 'two_genes_perturbation_deltaD', 'two_genes_perturbation_score'],
+            adata=runner.adata,
+        )
+        self._save_stage_cache(
+            'two_gene_result',
+            result_signature,
+            payload,
+            metadata={'background_signature': background_signature['signature_hash']},
+        )
+        self._set_mode_background_payload(runner.adata, mode='two_genes', background_payload=background_payload)
+        logger.log('task=two_gene_perturbation status=DONE')
+        return payload, background_payload, stage_metrics
+
+    def _run_or_load_two_drug_task(
+        self,
+        *,
+        logger,
+        execution_backend,
+        perturb_change,
+        direction_mode,
+        perturbed_tracks,
+        overall_perturbation_analysis,
+        perturb_stage,
+        random_times,
+        shortlist_candidates,
+        top_n_candidates,
+        cache_state,
+    ):
+        include_grouped_tracks = self._should_include_grouped_track_scores(
+            perturbed_tracks=perturbed_tracks,
+            overall_perturbation_analysis=overall_perturbation_analysis,
+            perturb_stage=perturb_stage,
+        )
+        source_adata = cache_state.get('runner').adata if cache_state.get('runner') is not None else self.adata
+        pair_items = self._resolve_two_drug_pair_items(
+            source_adata,
+            perturb_change=perturb_change,
+            shortlist=shortlist_candidates,
+            top_n=top_n_candidates,
+        )
+        pair_signature = self._list_signature(pair_items.keys())
+        background_signature = self._stage_signature(
+            'two_drug_background',
+            execution=str(execution_backend),
+            perturb_change=float(perturb_change),
+            direction_mode=str(direction_mode),
+            random_times=int(random_times),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
+        )
+        result_signature = self._stage_signature(
+            'two_drug_result',
+            execution=str(execution_backend),
+            perturb_change=float(perturb_change),
+            direction_mode=str(direction_mode),
+            perturbed_tracks=self._normalize_track_request(perturbed_tracks),
+            overall=bool(overall_perturbation_analysis),
+            perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
+            include_grouped_tracks=bool(include_grouped_tracks),
+            shortlist=bool(shortlist_candidates),
+            top_n_candidates=int(top_n_candidates),
+            pair_signature=pair_signature,
+            background_signature=background_signature['signature_hash'],
+        )
+        logger.log('task=two_drug_perturbation status=START')
+        stage_metrics = {
+            'background': {'cache': 'miss', 'elapsed_seconds': 0.0},
+            'forward': {'cache': 'miss', 'elapsed_seconds': 0.0, 'backend': str(execution_backend)},
+            'score': {'cache': 'miss', 'elapsed_seconds': 0.0},
+        }
+        result_cached = self._load_stage_cache('two_drug_result', result_signature)
+        if result_cached is not None:
+            payload = result_cached['payload']
+            self._apply_uns_payload(payload)
+            bg_cached = self._load_stage_cache('two_drug_background', background_signature)
+            background_payload = bg_cached['payload'] if bg_cached is not None else {}
+            if background_payload:
+                self._set_mode_background_payload(self.adata, mode='two_drugs', background_payload=background_payload)
+            self._log_perturb_stage(logger, 'two_drug_background', status='DONE', cache='hit')
+            self._log_perturb_stage(logger, 'two_drug_forward', status='DONE', cache='hit')
+            self._log_perturb_stage(logger, 'two_drug_score', status='DONE', cache='hit')
+            logger.log('task=two_drug_perturbation status=DONE')
+            stage_metrics['background']['cache'] = 'hit'
+            stage_metrics['forward']['cache'] = 'hit'
+            stage_metrics['score']['cache'] = 'hit'
+            return payload, background_payload, stage_metrics
+
+        runner = self._ensure_perturbation_runner(execution_backend=execution_backend, logger=logger, cache_state=cache_state)
+        runner.adata.uns['data_two_drug_overlap_genes'] = copy.deepcopy(pair_items)
+        self._clear_stage_keys(
+            runner.adata,
+            [
+                'random_background_perturbation_deltaD',
+                'two_drugs_random_background_perturbation_deltaD',
+                'two_drugs_perturbation_deltaD',
+                'two_drugs_perturbation_score',
+            ],
+        )
+        use_cuda = str(execution_backend).startswith('gpu_')
+        device = 'cuda:0' if use_cuda else 'cpu'
+
+        background_cached = self._load_stage_cache('two_drug_background', background_signature)
+        if background_cached is not None:
+            started_at = time.time()
+            background_payload = background_cached['payload']
+            self._set_mode_background_payload(runner.adata, mode='two_drugs', background_payload=background_payload)
+            self._log_perturb_stage(logger, 'two_drug_background', status='DONE', cache='hit')
+            stage_metrics['background'] = {'cache': 'hit', 'elapsed_seconds': time.time() - started_at}
+        else:
+            started_at = time.time()
+            self._log_perturb_stage(logger, 'two_drug_background', status='START', cache='miss')
+            random_sets = self._build_unique_random_two_drug_backgrounds(sample_count=int(random_times))
+            runner.run(
+                'random_drug_background',
+                perturb_change,
+                inplace=True,
+                random_times=len(random_sets),
+                random_genes=random_sets,
+                CUDA=use_cuda,
+                device=device,
+                direction_mode=direction_mode,
+            )
+            background_payload = {
+                'random_background_perturbation_deltaD': copy.deepcopy(
+                    runner.adata.uns.get('random_background_perturbation_deltaD', {})
+                ),
+            }
+            self._set_mode_background_payload(runner.adata, mode='two_drugs', background_payload=background_payload)
+            self._save_stage_cache('two_drug_background', background_signature, background_payload, elapsed_seconds=time.time() - started_at)
+            self._log_perturb_stage(logger, 'two_drug_background', status='DONE', started_at=started_at, cache='miss')
+            stage_metrics['background'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at}
+
+        started_at = time.time()
+        self._log_perturb_stage(logger, 'two_drug_forward', status='START')
+        runner.run('two_drugs', perturb_change, inplace=True, CUDA=use_cuda, device=device, direction_mode=direction_mode)
+        self._log_perturb_stage(logger, 'two_drug_forward', status='DONE', started_at=started_at, backend=execution_backend)
+        stage_metrics['forward'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at, 'backend': str(execution_backend)}
+
+        started_at = time.time()
+        self._log_perturb_stage(logger, 'two_drug_score', status='START')
+        runner.analysis(
+            'two_drugs',
+            perturb_change,
+            perturbed_tracks,
+            overall_perturbation_analysis if perturbed_tracks == 'all' else False,
+            stage=perturb_stage['index'] if perturb_stage is not None else None,
+            direction_mode=direction_mode,
+        )
+        if perturbed_tracks == 'all' and include_grouped_tracks:
+            self._augment_score_bucket_with_grouped_tracks(
+                runner,
+                mode='two_drugs',
+                perturb_change=perturb_change,
+                direction_mode=direction_mode,
+                stage=perturb_stage['index'] if perturb_stage is not None else None,
+            )
+        self._log_perturb_stage(logger, 'two_drug_score', status='DONE', started_at=started_at)
+        stage_metrics['score'] = {'cache': 'miss', 'elapsed_seconds': time.time() - started_at}
+
+        payload = self._extract_uns_payload(
+            ['data_two_drug_overlap_genes', 'two_drugs_perturbation_deltaD', 'two_drugs_perturbation_score'],
+            adata=runner.adata,
+        )
+        self._save_stage_cache(
+            'two_drug_result',
+            result_signature,
+            payload,
+            metadata={'background_signature': background_signature['signature_hash']},
+        )
+        self._set_mode_background_payload(runner.adata, mode='two_drugs', background_payload=background_payload)
+        logger.log('task=two_drug_perturbation status=DONE')
+        return payload, background_payload, stage_metrics
+
     def _copy_single_gene_background(self, adata, bound, direction_mode):
         resolved_mode = infer_direction_mode(
             adata.uns['single_gene_perturbation_deltaD'],
@@ -1176,7 +1778,37 @@ class analyst:
             direction_mode=direction_mode,
         )
         
-    def start_analyse(self,progressionmarker_background_sampling,run_perturbation,random_times, ignore_dynamic_markers=False, ignore_hcmarkers=False,customized_pathway=None,perturb_change=0.5,overall_perturbation_analysis=True,perturbed_tracks='all',perturb_stage=None,ignore_pathway_perturabtion=False,ignore_drug_perturabtion=False,centroid=False,direction_mode='two_sided',perturbation_schedule='single_gpu_optimized',cpu_workers=None,dynamic_marker_strategy='optimized',dynamic_marker_cpu_workers=None,dynamic_marker_force_serial=False,dynamic_marker_verify_legacy=False,hierarchical_marker_cpu_workers=None):
+    def start_analyse(
+        self,
+        progressionmarker_background_sampling,
+        run_perturbation,
+        random_times,
+        ignore_dynamic_markers=False,
+        ignore_hcmarkers=False,
+        customized_pathway=None,
+        perturb_change=0.5,
+        overall_perturbation_analysis=True,
+        perturbed_tracks='all',
+        perturb_stage=None,
+        ignore_pathway_perturabtion=False,
+        ignore_drug_perturabtion=False,
+        run_single_gene_perturbation=False,
+        run_two_gene_perturbation=False,
+        run_two_drug_perturbation=False,
+        shortlist_two_gene_candidates=False,
+        shortlist_two_drug_candidates=False,
+        top_n_single_gene_candidates=25,
+        top_n_two_drug_candidates=25,
+        centroid=False,
+        direction_mode='two_sided',
+        perturbation_schedule='single_gpu_optimized',
+        cpu_workers=None,
+        dynamic_marker_strategy='optimized',
+        dynamic_marker_cpu_workers=None,
+        dynamic_marker_force_serial=False,
+        dynamic_marker_verify_legacy=False,
+        hierarchical_marker_cpu_workers=None,
+    ):
         '''
         Perform downstream tasks including dynamic markers discoveries, hierarchical markers discoveries, pathway perturbations and compound perturbations.
         
@@ -1213,7 +1845,10 @@ class analyst:
         logger.log(
             f"start analyse iteration={self.iteration}, run_perturbation={run_perturbation}, "
             f"centroid={centroid}, perturb_change={perturb_change}, direction_mode={direction_mode}, "
-            f"perturbation_schedule={perturbation_schedule}, dynamic_marker_strategy={dynamic_marker_strategy}"
+            f"perturbation_schedule={perturbation_schedule}, dynamic_marker_strategy={dynamic_marker_strategy}, "
+            f"run_single_gene_perturbation={bool(run_single_gene_perturbation)}, "
+            f"run_two_gene_perturbation={bool(run_two_gene_perturbation)}, "
+            f"run_two_drug_perturbation={bool(run_two_drug_perturbation)}"
         )
         perturb_stage_info = self._resolve_perturb_stage(perturb_stage)
         execution_context = self._resolve_perturb_execution_backend(centroid=centroid, cpu_workers=cpu_workers)
@@ -1382,7 +2017,11 @@ class analyst:
             logger.log('stage=perturbation status=START')
             pathway_background_payload = None
             drug_background_payload = None
-            if not ignore_drug_perturabtion:
+            single_gene_background_payload = None
+            two_gene_background_payload = None
+            two_drug_background_payload = None
+            needs_drug_targets = (not ignore_drug_perturabtion) or bool(run_two_drug_perturbation)
+            if needs_drug_targets:
                 stage_started_at = time.time()
                 _drug_targets_payload, drug_prep_meta = self._prepare_drug_targets(logger=logger)
                 self._record_analysis_stage(
@@ -1424,7 +2063,7 @@ class analyst:
                 stage_timings['pathway_scoring'] = pathway_stage_metrics['score']
             else:
                 logger.log('task=pathway_perturbation status=SKIP')
-            if not ignore_drug_perturabtion:
+            if (not ignore_drug_perturabtion) or (run_two_drug_perturbation and shortlist_two_drug_candidates):
                 try:
                     _drug_payload, drug_background_payload, drug_stage_metrics = self._run_or_load_drug_task(
                         logger=logger,
@@ -1459,6 +2098,107 @@ class analyst:
                 stage_timings['drug_scoring'] = drug_stage_metrics['score']
             else:
                 logger.log('task=drug_perturbation status=SKIP')
+            if run_single_gene_perturbation or (run_two_gene_perturbation and shortlist_two_gene_candidates):
+                try:
+                    _single_gene_payload, single_gene_background_payload, single_gene_stage_metrics = self._run_or_load_single_gene_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        cache_state=perturbation_state,
+                    )
+                except Exception as exc:
+                    _fallback_to_cpu_if_needed(exc, task_name='single_gene_perturbation')
+                    _single_gene_payload, single_gene_background_payload, single_gene_stage_metrics = self._run_or_load_single_gene_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        cache_state=perturbation_state,
+                    )
+                stage_timings['single_gene_background'] = single_gene_stage_metrics['background']
+                stage_timings['single_gene_forward'] = single_gene_stage_metrics['forward']
+                stage_timings['single_gene_scoring'] = single_gene_stage_metrics['score']
+            else:
+                logger.log('task=single_gene_perturbation status=SKIP')
+            if run_two_gene_perturbation:
+                try:
+                    _two_gene_payload, two_gene_background_payload, two_gene_stage_metrics = self._run_or_load_two_gene_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        shortlist_candidates=shortlist_two_gene_candidates,
+                        top_n_candidates=top_n_single_gene_candidates,
+                        cache_state=perturbation_state,
+                    )
+                except Exception as exc:
+                    _fallback_to_cpu_if_needed(exc, task_name='two_gene_perturbation')
+                    _two_gene_payload, two_gene_background_payload, two_gene_stage_metrics = self._run_or_load_two_gene_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        shortlist_candidates=shortlist_two_gene_candidates,
+                        top_n_candidates=top_n_single_gene_candidates,
+                        cache_state=perturbation_state,
+                    )
+                stage_timings['two_gene_background'] = two_gene_stage_metrics['background']
+                stage_timings['two_gene_forward'] = two_gene_stage_metrics['forward']
+                stage_timings['two_gene_scoring'] = two_gene_stage_metrics['score']
+            else:
+                logger.log('task=two_gene_perturbation status=SKIP')
+            if run_two_drug_perturbation:
+                try:
+                    _two_drug_payload, two_drug_background_payload, two_drug_stage_metrics = self._run_or_load_two_drug_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        shortlist_candidates=shortlist_two_drug_candidates,
+                        top_n_candidates=top_n_two_drug_candidates,
+                        cache_state=perturbation_state,
+                    )
+                except Exception as exc:
+                    _fallback_to_cpu_if_needed(exc, task_name='two_drug_perturbation')
+                    _two_drug_payload, two_drug_background_payload, two_drug_stage_metrics = self._run_or_load_two_drug_task(
+                        logger=logger,
+                        execution_backend=execution_context['backend'],
+                        perturb_change=perturb_change,
+                        direction_mode=direction_mode,
+                        perturbed_tracks=perturbed_tracks,
+                        overall_perturbation_analysis=overall_perturbation_analysis,
+                        perturb_stage=perturb_stage_info,
+                        random_times=random_times,
+                        shortlist_candidates=shortlist_two_drug_candidates,
+                        top_n_candidates=top_n_two_drug_candidates,
+                        cache_state=perturbation_state,
+                    )
+                stage_timings['two_drug_background'] = two_drug_stage_metrics['background']
+                stage_timings['two_drug_forward'] = two_drug_stage_metrics['forward']
+                stage_timings['two_drug_scoring'] = two_drug_stage_metrics['score']
+            else:
+                logger.log('task=two_drug_perturbation status=SKIP')
             logger.log('stage=perturbation status=DONE')
             output_adata = perturbation_state['runner'].adata if perturbation_state['runner'] is not None else self.adata
             if pathway_background_payload is not None:
@@ -1469,7 +2209,25 @@ class analyst:
                 output_adata.uns['drug_random_background_perturbation_deltaD'] = copy.deepcopy(
                     drug_background_payload.get('random_background_perturbation_deltaD', {})
                 )
+            if single_gene_background_payload is not None:
+                output_adata.uns['single_gene_random_background_perturbation_deltaD'] = copy.deepcopy(
+                    single_gene_background_payload.get('random_background_perturbation_deltaD', {})
+                )
+            if two_gene_background_payload is not None:
+                output_adata.uns['two_genes_random_background_perturbation_deltaD'] = copy.deepcopy(
+                    two_gene_background_payload.get('random_background_perturbation_deltaD', {})
+                )
+            if two_drug_background_payload is not None:
+                output_adata.uns['two_drugs_random_background_perturbation_deltaD'] = copy.deepcopy(
+                    two_drug_background_payload.get('random_background_perturbation_deltaD', {})
+                )
             compatibility_background = drug_background_payload or pathway_background_payload
+            if compatibility_background is None:
+                compatibility_background = (
+                    two_drug_background_payload
+                    or two_gene_background_payload
+                    or single_gene_background_payload
+                )
             if compatibility_background is not None:
                 output_adata.uns['random_background_perturbation_deltaD'] = copy.deepcopy(
                     compatibility_background.get('random_background_perturbation_deltaD', {})
@@ -1485,6 +2243,13 @@ class analyst:
             metadata['resolved_execution_backend'] = str(execution_context['backend'])
             metadata['cpu_workers'] = int(execution_context['cpu_workers'])
             metadata['perturb_stage'] = perturb_stage_info['label'] if perturb_stage_info is not None else None
+            metadata['run_single_gene_perturbation'] = bool(run_single_gene_perturbation)
+            metadata['run_two_gene_perturbation'] = bool(run_two_gene_perturbation)
+            metadata['run_two_drug_perturbation'] = bool(run_two_drug_perturbation)
+            metadata['shortlist_two_gene_candidates'] = bool(shortlist_two_gene_candidates)
+            metadata['shortlist_two_drug_candidates'] = bool(shortlist_two_drug_candidates)
+            metadata['top_n_single_gene_candidates'] = int(top_n_single_gene_candidates)
+            metadata['top_n_two_drug_candidates'] = int(top_n_two_drug_candidates)
             output_adata.uns['analysis_metadata'] = metadata
             output_adata.uns['analysis_direction_mode'] = str(direction_mode)
         if perturbation_state['runner'] is not None:
@@ -1504,6 +2269,13 @@ class analyst:
         metadata['dynamic_marker_verify_legacy'] = bool(dynamic_marker_verify_legacy)
         metadata['hierarchical_marker_cpu_workers'] = int(hierarchical_workers)
         metadata['perturb_stage'] = perturb_stage_info['label'] if perturb_stage_info is not None else None
+        metadata['run_single_gene_perturbation'] = bool(run_single_gene_perturbation)
+        metadata['run_two_gene_perturbation'] = bool(run_two_gene_perturbation)
+        metadata['run_two_drug_perturbation'] = bool(run_two_drug_perturbation)
+        metadata['shortlist_two_gene_candidates'] = bool(shortlist_two_gene_candidates)
+        metadata['shortlist_two_drug_candidates'] = bool(shortlist_two_drug_candidates)
+        metadata['top_n_single_gene_candidates'] = int(top_n_single_gene_candidates)
+        metadata['top_n_two_drug_candidates'] = int(top_n_two_drug_candidates)
         output_adata.uns['analysis_metadata'] = metadata
         if not ignore_hcmarkers:
             output_adata.uns['hcmarkers'] = hcmarkers 
@@ -1534,6 +2306,11 @@ class analyst:
                 'hierarchical_marker_cpu_workers': int(hierarchical_workers),
                 'run_perturbation': bool(run_perturbation),
                 'perturb_stage': perturb_stage_info['label'] if perturb_stage_info is not None else None,
+                'run_single_gene_perturbation': bool(run_single_gene_perturbation),
+                'run_two_gene_perturbation': bool(run_two_gene_perturbation),
+                'run_two_drug_perturbation': bool(run_two_drug_perturbation),
+                'shortlist_two_gene_candidates': bool(shortlist_two_gene_candidates),
+                'shortlist_two_drug_candidates': bool(shortlist_two_drug_candidates),
             },
         )
         logger.log(f"stage=save_outputs status=DONE elapsed={ProgressLogger._format_duration(time.time()-analysis_t0)}")

@@ -28,6 +28,7 @@ from UNAGI.plotting import (
     plot_hierarchical_marker_branch_heatmap,
     plot_perturbation_ranked_bar,
     plot_temporal_dynamics_graph,
+    sort_perturbation_table,
 )
 
 from .visualization_pipeline import INTERACTIVE_UNS_KEYS, _read_analysis_adata
@@ -45,11 +46,18 @@ PERTURBATION_MODE_KEYS = {
     "drug": "drug_perturbation_score",
     "single_gene": "single_gene_perturbation_score",
     "gene_combo": "two_genes_perturbation_score",
+    "two_drugs": "two_drugs_perturbation_score",
 }
 PERTURBATION_SCORING_UNS_KEYS = INTERACTIVE_UNS_KEYS + (
     "pathway_perturbation_deltaD",
     "drug_perturbation_deltaD",
+    "single_gene_perturbation_deltaD",
+    "two_genes_perturbation_deltaD",
+    "two_drugs_perturbation_deltaD",
     "random_background_perturbation_deltaD",
+    "single_gene_random_background_perturbation_deltaD",
+    "two_genes_random_background_perturbation_deltaD",
+    "two_drugs_random_background_perturbation_deltaD",
 )
 
 GENE_LIMIT = 12
@@ -173,7 +181,7 @@ def _preview_frame(frame: pd.DataFrame, *, rows: int = 18) -> dict[str, Any]:
 
 
 def _perturbation_label_column(frame: pd.DataFrame) -> str:
-    for column in ("pathways", "compound", "gene"):
+    for column in ("pathways", "compound", "gene", "gene_combination", "drug_combination"):
         if column in frame.columns:
             return column
     for column in frame.columns:
@@ -484,13 +492,9 @@ def _normalize_stage_track_frame(frame: pd.DataFrame, *, mode: str) -> pd.DataFr
         table = table.rename(columns={"compound": "gene"})
     if "compound" in table.columns and mode == "gene_combo":
         table = table.rename(columns={"compound": "gene_combination"})
-    if mode == "pathway" and "perturbation score" in table.columns:
-        table = table.sort_values("perturbation score", ascending=False)
-    elif "pval_adjusted" in table.columns:
-        table = table.sort_values("pval_adjusted", ascending=True)
-    elif "perturbation score" in table.columns:
-        table = table.sort_values("perturbation score", ascending=False)
-    table = table.reset_index(drop=True)
+    if "compound" in table.columns and mode == "two_drugs":
+        table = table.rename(columns={"compound": "drug_combination"})
+    table = sort_perturbation_table(table)
     if "rank" not in table.columns:
         table.insert(0, "rank", np.arange(len(table)))
     return table
@@ -775,6 +779,9 @@ def _discover_stage_specific_perturbations(analysis_dir: Path) -> dict[str, Any]
     mode_prefixes = {
         "pathway": "pathway_perturbation_overall_stage_",
         "drug": "drug_perturbation_overall_stage_",
+        "single_gene": "single_gene_perturbation_overall_stage_",
+        "gene_combo": "gene_combo_perturbation_overall_stage_",
+        "two_drugs": "two_drugs_perturbation_overall_stage_",
     }
     discovered_modes: dict[str, Any] = {}
     for mode, prefix in mode_prefixes.items():

@@ -179,8 +179,6 @@ def test_validate_custom_perturbation_payload_resolves_cpu_centroid_when_request
     assert result["normalized"]["execution_mode"] == "centroid"
     assert result["normalized"]["resolved_execution_backend"] == "cpu_centroid"
 
-
-<<<<<<< HEAD
 def test_validate_custom_perturbation_payload_accepts_stage_scope(tmp_path):
     analysis_dir = _prepare_analysis_dir(tmp_path)
 
@@ -205,10 +203,6 @@ def test_validate_custom_perturbation_payload_accepts_stage_scope(tmp_path):
     assert result["normalized"]["stage_key"] == "1"
     assert result["normalized"]["stage_label"] == "stage 1"
     assert result["normalized"]["stage_index"] == 1
-
-
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 def test_perturbation_context_cache_reuses_hot_context(tmp_path):
     skill_root = tmp_path / "skill_root"
     analysis_dir = _prepare_analysis_dir(tmp_path)
@@ -667,11 +661,8 @@ def test_build_form_context_reports_saved_background_direction_mode(tmp_path):
     assert form["default_direction_mode"] == "two_sided"
     assert form["background_direction_mode"] == "two_sided"
     assert "different random backgrounds" in form["background_note"]
-<<<<<<< HEAD
     assert {"value": "stage", "label": "stage"} in form["scope_options"]
     assert form["stage_options"][1]["value"] == "1"
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0
 
 
 def test_run_request_requires_valid_pvalues(tmp_path):
@@ -722,7 +713,6 @@ def test_run_request_requires_valid_pvalues(tmp_path):
             result_dir=tmp_path / "result_bundle",
             log=lambda _message: None,
         )
-<<<<<<< HEAD
 
 
 def test_run_request_passes_stage_scope_to_runner_analysis(tmp_path):
@@ -791,5 +781,3 @@ def test_run_request_passes_stage_scope_to_runner_analysis(tmp_path):
     assert captured["mode"] == "pathway"
     assert captured["kwargs"]["stage"] == 1
     assert summary["metadata"]["stage_label"] == "stage 1"
-=======
->>>>>>> 12a1cc490713a3a5cdb0cc508f0140b98087e2e0

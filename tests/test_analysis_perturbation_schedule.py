@@ -26,63 +26,101 @@ class _FakePerturbationRunner:
         cls.run_modes = []
         cls.analysis_modes = []
 
+    @staticmethod
+    def _label_column_for_mode(mode):
+        return {
+            'pathway': 'compound',
+            'drug': 'compound',
+            'single_gene': 'gene',
+            'two_genes': 'gene_combination',
+            'two_drugs': 'drug_combination',
+        }[mode]
+
+    def _labels_for_mode(self, mode):
+        if mode == 'pathway':
+            return list(self.adata.uns.get('data_pathway_overlap_genes', {}).keys()) or ['PW1']
+        if mode == 'drug':
+            return list(self.adata.uns.get('data_drug_overlap_genes', {}).keys()) or ['DR1']
+        if mode == 'single_gene':
+            return [str(gene) for gene in self.adata.var_names.tolist()]
+        if mode == 'two_genes':
+            seeds = [str(gene) for gene in self.adata.uns.get('combinatorial_perturbation_genes_set1', [])]
+            partners = [str(gene) for gene in self.adata.var_names.tolist()]
+            return [f'{seed}_{partner}' for seed in seeds for partner in partners if seed != partner]
+        if mode == 'two_drugs':
+            return list(self.adata.uns.get('data_two_drug_overlap_genes', {}).keys()) or ['DR1__DR2']
+        raise ValueError(f'Unsupported mode: {mode}')
+
+    @staticmethod
+    def _normalize_background_labels(random_genes):
+        labels = []
+        for index, item in enumerate(random_genes or []):
+            if isinstance(item, (list, tuple, np.ndarray)):
+                label = '__'.join(str(value) for value in item)
+            else:
+                label = str(item)
+            labels.append(label if label else f'BG{index}')
+        return labels or ['BG0']
+
+    def _store_delta_payload(self, uns_key, bound, labels):
+        self.adata.uns[uns_key] = {
+            str(bound): {
+                '0-1': {
+                    str(label): np.array([float(index + 1)], dtype=np.float32)
+                    for index, label in enumerate(labels)
+                }
+            }
+        }
+
+    def _store_score_payload(self, mode, bound, labels, bucket_name, suffix=''):
+        label_column = self._label_column_for_mode(mode)
+        rows = {
+            label_column: {str(index): f'{label}{suffix}' for index, label in enumerate(labels)},
+            'perturbation score': {str(index): float(len(labels) - index) for index in range(len(labels))},
+            'pval_adjusted': {str(index): round(0.01 * (index + 1), 4) for index in range(len(labels))},
+        }
+        self.adata.uns[f'{mode}_perturbation_score'] = {
+            str(bound): {
+                bucket_name: {
+                    'top_compounds': rows,
+                }
+            }
+        }
+
     def run(self, mode, bound, inplace=True, **kwargs):
         type(self).run_modes.append((mode, float(bound)))
-        key = str(bound)
         if mode == 'random_pathway_background':
-            self.adata.uns['random_background_perturbation_deltaD'] = {
-                key: {'0-1': {'PW1': np.array([1.0])}}
-            }
+            self._store_delta_payload('random_background_perturbation_deltaD', bound, ['PW1'])
         elif mode == 'pathway':
-            self.adata.uns['pathway_perturbation_deltaD'] = {
-                key: {'0-1': {'PW1': np.array([2.0])}}
-            }
+            self._store_delta_payload('pathway_perturbation_deltaD', bound, self._labels_for_mode('pathway'))
         elif mode == 'random_drug_background':
-            self.adata.uns['random_background_perturbation_deltaD'] = {
-                key: {'0-1': {'DR1': np.array([3.0])}}
-            }
+            self._store_delta_payload(
+                'random_background_perturbation_deltaD',
+                bound,
+                self._normalize_background_labels(kwargs.get('random_genes')),
+            )
         elif mode == 'drug':
-            self.adata.uns['drug_perturbation_deltaD'] = {
-                key: {'0-1': {'DR1': np.array([4.0])}}
-            }
+            self._store_delta_payload('drug_perturbation_deltaD', bound, self._labels_for_mode('drug'))
+        elif mode == 'random_background':
+            self._store_delta_payload(
+                'random_background_perturbation_deltaD',
+                bound,
+                self._normalize_background_labels(kwargs.get('random_genes')),
+            )
+        elif mode == 'single_gene':
+            self._store_delta_payload('single_gene_perturbation_deltaD', bound, self._labels_for_mode('single_gene'))
+        elif mode == 'two_genes':
+            self._store_delta_payload('two_genes_perturbation_deltaD', bound, self._labels_for_mode('two_genes'))
+        elif mode == 'two_drugs':
+            self._store_delta_payload('two_drugs_perturbation_deltaD', bound, self._labels_for_mode('two_drugs'))
 
     def analysis(self, mode, bound, perturbed_tracks, overall_perturbation_analysis=True, stage=None, direction_mode='two_sided'):
         type(self).analysis_modes.append((mode, float(bound), str(perturbed_tracks), stage))
-        key = str(bound)
         is_overall_all = overall_perturbation_analysis and perturbed_tracks == 'all'
         is_grouped_track = overall_perturbation_analysis and perturbed_tracks != 'all'
-        if mode == 'pathway':
-            self.adata.uns['pathway_perturbation_score'] = {
-                key: {
-                    (
-                        'overall'
-                        if is_overall_all or is_grouped_track
-                        else '0-1'
-                    ): {
-                        'top_compounds': {
-                            'compound': {'0': 'PW1' if is_overall_all else ('PW1_group' if is_grouped_track else 'PW1_track')},
-                            'perturbation score': {'0': 1.0 if is_overall_all else (0.9 if is_grouped_track else 0.8)},
-                            'pval_adjusted': {'0': 0.05 if is_overall_all else (0.06 if is_grouped_track else 0.07)},
-                        }
-                    }
-                }
-            }
-        elif mode == 'drug':
-            self.adata.uns['drug_perturbation_score'] = {
-                key: {
-                    (
-                        'overall'
-                        if is_overall_all or is_grouped_track
-                        else '0-1'
-                    ): {
-                        'top_compounds': {
-                            'compound': {'0': 'DR1' if is_overall_all else ('DR1_group' if is_grouped_track else 'DR1_track')},
-                            'perturbation score': {'0': 2.0 if is_overall_all else (1.8 if is_grouped_track else 1.6)},
-                            'pval_adjusted': {'0': 0.01 if is_overall_all else (0.02 if is_grouped_track else 0.03)},
-                        }
-                    }
-                }
-            }
+        bucket_name = 'overall' if is_overall_all or is_grouped_track else '0-1'
+        suffix = '' if is_overall_all else ('_group' if is_grouped_track else '_track')
+        self._store_score_payload(mode, bound, self._labels_for_mode(mode), bucket_name, suffix=suffix)
 
 
 def _create_analysis_workspace(tmp_path):
@@ -90,7 +128,7 @@ def _create_analysis_workspace(tmp_path):
     stagedata_dir = root / '1' / 'stagedata'
     stagedata_dir.mkdir(parents=True, exist_ok=True)
 
-    adata = AnnData(np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32))
+    adata = AnnData(np.array([[1.0, 0.0, 0.5], [0.0, 1.0, 0.25]], dtype=np.float32))
     adata.obs = pd.DataFrame(
         {
             'stage': ['0', '1'],
@@ -99,7 +137,7 @@ def _create_analysis_workspace(tmp_path):
         },
         index=['cell0', 'cell1'],
     )
-    adata.var = pd.DataFrame(index=['GENE1', 'GENE2'])
+    adata.var = pd.DataFrame(index=['GENE1', 'GENE2', 'GENE3'])
     data_path = stagedata_dir / 'dataset.h5ad'
     adata.write(data_path)
 
@@ -156,8 +194,12 @@ def _set_pathway_ranking(adata):
 
 
 def _set_drug_targets(adata):
-    adata.uns['data_drug_overlap_genes'] = {'DR1': ['GENE1:+']}
-    adata.uns['drug-gene_len_dict'] = {'DR1': 1}
+    adata.uns['data_drug_overlap_genes'] = {
+        'DR1': ['GENE1:+'],
+        'DR2': ['GENE2:+'],
+        'DR3': ['GENE3:-'],
+    }
+    adata.uns['drug-gene_len_dict'] = {'DR1': 1, 'DR2': 1, 'DR3': 1}
     return adata
 
 
@@ -449,3 +491,86 @@ def test_cpu_centroid_stage_stays_serial_when_centroid_is_selected(monkeypatch, 
     assert called["parallel"] == 0
     saved_uns = _load_saved_uns(target_dir)
     assert saved_uns["analysis_metadata"]["resolved_execution_backend"] == "cpu_centroid"
+
+
+def test_single_and_combination_perturbations_persist_mode_specific_backgrounds_and_grouped_scores(monkeypatch, tmp_path):
+    data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
+    _patch_analysis_dependencies(monkeypatch)
+    _FakePerturbationRunner.reset()
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        ignore_pathway_perturabtion=True,
+        ignore_drug_perturabtion=True,
+        run_single_gene_perturbation=True,
+        run_two_gene_perturbation=True,
+        run_two_drug_perturbation=True,
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    assert [mode for mode, _bound in _FakePerturbationRunner.run_modes] == [
+        'random_background',
+        'single_gene',
+        'random_background',
+        'two_genes',
+        'random_drug_background',
+        'two_drugs',
+    ]
+
+    saved_uns = _load_saved_uns(target_dir)
+    assert 'single_gene_random_background_perturbation_deltaD' in saved_uns
+    assert 'two_genes_random_background_perturbation_deltaD' in saved_uns
+    assert 'two_drugs_random_background_perturbation_deltaD' in saved_uns
+    assert {'overall', '0'} <= set(saved_uns['single_gene_perturbation_score']['0.5'].keys())
+    assert {'overall', '0'} <= set(saved_uns['two_genes_perturbation_score']['0.5'].keys())
+    assert {'overall', '0'} <= set(saved_uns['two_drugs_perturbation_score']['0.5'].keys())
+    assert len(saved_uns['combinatorial_perturbation_genes_set1']) == 3
+    assert len(saved_uns['two_genes_perturbation_deltaD']['0.5']['0-1']) == 6
+    assert len(saved_uns['data_two_drug_overlap_genes']) == 3
+
+
+def test_shortlisted_combination_modes_reuse_single_mode_prerequisites(monkeypatch, tmp_path):
+    data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
+    _patch_analysis_dependencies(monkeypatch)
+    _FakePerturbationRunner.reset()
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        ignore_pathway_perturabtion=True,
+        ignore_drug_perturabtion=True,
+        run_two_gene_perturbation=True,
+        run_two_drug_perturbation=True,
+        shortlist_two_gene_candidates=True,
+        shortlist_two_drug_candidates=True,
+        top_n_single_gene_candidates=2,
+        top_n_two_drug_candidates=2,
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    assert [mode for mode, _bound in _FakePerturbationRunner.run_modes] == [
+        'random_drug_background',
+        'drug',
+        'random_background',
+        'single_gene',
+        'random_background',
+        'two_genes',
+        'random_drug_background',
+        'two_drugs',
+    ]
+
+    saved_uns = _load_saved_uns(target_dir)
+    assert saved_uns['combinatorial_perturbation_genes_set1'] == ['GENE1', 'GENE2']
+    assert len(saved_uns['two_genes_perturbation_deltaD']['0.5']['0-1']) == 4
+    assert list(saved_uns['data_two_drug_overlap_genes'].keys()) == ['DR1__DR2']
+    assert saved_uns['analysis_metadata']['shortlist_two_gene_candidates'] is True
+    assert saved_uns['analysis_metadata']['shortlist_two_drug_candidates'] is True

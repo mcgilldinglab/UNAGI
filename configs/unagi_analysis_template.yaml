@@ -1,0 +1,23 @@
+random_background_sampling_times: 20
+run_perturbation: true
+run_single_gene_perturbation: false
+run_two_gene_perturbation: false
+run_two_drug_perturbation: false
+shortlist_two_gene_candidates: false
+shortlist_two_drug_candidates: false
+top_n_single_gene_candidates: 25
+top_n_two_drug_candidates: 25
+perturb_change: 0.5
+direction_mode: two_sided
+overall_perturbation_analysis: true
+perturbed_tracks: all
+perturb_stage:
+customized_pathway:
+customized_drug:
+cmap_dir:
+ignore_pathway_perturabtion: false
+ignore_drug_perturabtion: false
+centroid: false
+ignore_hcmarkers: false
+ignore_dynamic_markers: false
+generate_visualizations: true

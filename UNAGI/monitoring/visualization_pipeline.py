@@ -34,8 +34,10 @@ INTERACTIVE_UNS_KEYS = (
     'drug_perturbation_score',
     'single_gene_perturbation_score',
     'two_genes_perturbation_score',
+    'two_drugs_perturbation_score',
     'data_pathway_overlap_genes',
     'data_drug_overlap_genes',
+    'data_two_drug_overlap_genes',
 )
 
 
@@ -48,6 +50,17 @@ def _sorted_keys(values: Iterable[Any]) -> list[str]:
             return (1, text)
 
     return [str(v) for v in sorted(values, key=sort_key)]
+
+
+def _filename_token(value: Any, *, fallback: str = "item") -> str:
+    text = str(value).strip()
+    if not text:
+        return fallback
+    text = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in text)
+    while "__" in text:
+        text = text.replace("__", "_")
+    text = text.strip("._-")
+    return text or fallback
 
 
 def _write_csv(path: Path, frame: pd.DataFrame) -> str:
@@ -287,6 +300,7 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
         ("drug", "drug_perturbation_score"),
         ("single_gene", "single_gene_perturbation_score"),
         ("gene_combo", "two_genes_perturbation_score"),
+        ("two_drugs", "two_drugs_perturbation_score"),
     ):
         if uns_key not in adata.uns:
             record_skip(f"{mode}_perturbation", f"{uns_key} is not available in adata.uns")
@@ -319,8 +333,9 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
     else:
         try:
             track = _first_progression_track(adata)
+            track_token = _filename_token(track, fallback="track")
             dyn_table = extract_dynamic_marker_table(adata, track=track, direction="increasing")
-            table_path = tables_dir / f"{prefix}_dynamic_marker_table.csv"
+            table_path = tables_dir / f"{prefix}_dynamic_marker_table_track_{track_token}.csv"
             record_success(
                 "dynamic_marker_table",
                 table=_write_csv(table_path, dyn_table),
@@ -334,11 +349,16 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
                 directions=("increasing",),
                 show=False,
             )
-            out = figure_dir / f"{prefix}_dynamic_marker_trajectories.png"
-            long_path = tables_dir / f"{prefix}_dynamic_marker_trajectories_long.csv"
+            out = figure_dir / f"{prefix}_dynamic_marker_trajectories_track_{track_token}.png"
+            long_path = tables_dir / f"{prefix}_dynamic_marker_trajectories_long_track_{track_token}.csv"
             fig.savefig(out, dpi=100, bbox_inches="tight")
             _close_fig(fig)
-            record_success("dynamic_marker_trajectories", file=str(out), table=_write_csv(long_path, dyn_long))
+            record_success(
+                "dynamic_marker_trajectories",
+                file=str(out),
+                table=_write_csv(long_path, dyn_long),
+                track=track,
+            )
 
             fig, _axes, _matrix = plot_dynamic_marker_heatmap(
                 adata,
@@ -346,8 +366,8 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
                 directions=("increasing",),
                 show=False,
             )
-            out = figure_dir / f"{prefix}_dynamic_marker_heatmap.png"
-            panels_path = tables_dir / f"{prefix}_dynamic_marker_heatmap_panels.csv"
+            out = figure_dir / f"{prefix}_dynamic_marker_heatmap_track_{track_token}.png"
+            panels_path = tables_dir / f"{prefix}_dynamic_marker_heatmap_panels_track_{track_token}.csv"
             fig.savefig(out, dpi=100, bbox_inches="tight")
             _close_fig(fig)
             _fig2, _axes2, panels = plot_dynamic_marker_heatmap_track_panels(
@@ -357,7 +377,12 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
                 show=False,
             )
             _close_fig(_fig2)
-            record_success("dynamic_marker_heatmap", file=str(out), table=_write_csv(panels_path, panels))
+            record_success(
+                "dynamic_marker_heatmap",
+                file=str(out),
+                table=_write_csv(panels_path, panels),
+                track=track,
+            )
         except Exception as exc:
             record_failure("dynamic_markers", exc)
 
@@ -410,8 +435,8 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
     try:
         fig, _ax, nodes, edges = plot_temporal_dynamics_graph(adata, show=False)
         out = figure_dir / f"{prefix}_temporal_dynamics_graph.png"
-        nodes_path = tables_dir / f"{prefix}_temporal_dynamics_nodes.csv"
-        edges_path = tables_dir / f"{prefix}_temporal_dynamics_edges.csv"
+        nodes_path = tables_dir / f"{prefix}_temporal_dynamics_all_tracks_nodes.csv"
+        edges_path = tables_dir / f"{prefix}_temporal_dynamics_all_tracks_edges.csv"
         fig.savefig(out, dpi=100, bbox_inches="tight")
         _close_fig(fig)
         record_success(
@@ -419,6 +444,7 @@ def generate_analysis_visualizations(analysis_dir: str | Path) -> dict[str, Any]
             file=str(out),
             nodes=_write_csv(nodes_path, nodes),
             edges=_write_csv(edges_path, edges),
+            scope="all_tracks",
         )
     except Exception as exc:
         record_failure("temporal_dynamics_graph", exc)

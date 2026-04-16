@@ -29,6 +29,7 @@ STATIC_PDF_EXPORTS = {
     "drug_ranked_bar",
     "single_gene_ranked_bar",
     "gene_combo_ranked_bar",
+    "two_drugs_ranked_bar",
     "dynamic_marker_trajectories",
     "dynamic_marker_heatmap",
     "hierarchical_marker_heatmap",
@@ -61,6 +62,7 @@ def export_static_publication_pdf(analysis_dir: str | Path, figure_name: str) ->
         "drug_ranked_bar": ("drug", "drug_perturbation_score"),
         "single_gene_ranked_bar": ("single_gene", "single_gene_perturbation_score"),
         "gene_combo_ranked_bar": ("gene_combo", "two_genes_perturbation_score"),
+        "two_drugs_ranked_bar": ("two_drugs", "two_drugs_perturbation_score"),
     }
     if name in perturbation_modes:
         mode, uns_key = perturbation_modes[name]

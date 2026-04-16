@@ -70,6 +70,13 @@ TRAINING_GUIDED_FIELDS = [
 ANALYSIS_GUIDED_FIELDS = [
     "random_background_sampling_times",
     "run_perturbation",
+    "run_single_gene_perturbation",
+    "run_two_gene_perturbation",
+    "run_two_drug_perturbation",
+    "shortlist_two_gene_candidates",
+    "shortlist_two_drug_candidates",
+    "top_n_single_gene_candidates",
+    "top_n_two_drug_candidates",
     "perturb_change",
     "direction_mode",
     "overall_perturbation_analysis",
@@ -130,6 +137,7 @@ VISUALIZATION_ENTRY_LABELS = {
     "drug_ranked_bar": "Drug perturbation",
     "single_gene_ranked_bar": "Single-gene perturbation",
     "gene_combo_ranked_bar": "Gene-combo perturbation",
+    "two_drugs_ranked_bar": "Two-drug perturbation",
 }
 
 
@@ -776,6 +784,7 @@ def _visualization_context(job: dict) -> dict[str, Any]:
         "drug_perturbation_table",
         "single_gene_perturbation_table",
         "gene_combo_perturbation_table",
+        "two_drugs_perturbation_table",
     }
     static_pdf_route_base = f"/analysis/{job['job_id']}/visualizations"
 
@@ -865,6 +874,17 @@ def _visualization_context(job: dict) -> dict[str, Any]:
             elif name == "gene_combo_ranked_bar":
                 for paired in successes:
                     if paired.get("name") == "gene_combo_perturbation_table" and paired.get("table"):
+                        downloads.append(
+                            {
+                                "label": "table",
+                                "path": str(Path(paired["table"])),
+                                "url": _versioned_file_url(Path(paired["table"])),
+                                "type": _artifact_type(Path(paired["table"])),
+                            }
+                        )
+            elif name == "two_drugs_ranked_bar":
+                for paired in successes:
+                    if paired.get("name") == "two_drugs_perturbation_table" and paired.get("table"):
                         downloads.append(
                             {
                                 "label": "table",

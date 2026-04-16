@@ -70,6 +70,18 @@ def _build_mock_adata() -> AnnData:
         }
     }
     adata.uns["edges"] = {"0": [[0, 2], [1, 3]], "1": [[2, 4], [3, 5]]}
+    adata.uns["data_two_drug_overlap_genes"] = {"DrugA__DrugB": ["GENE0:+", "GENE1:-", "GENE2:+"]}
+    adata.uns["two_drugs_perturbation_score"] = {
+        "0.5": {
+            "overall": {
+                "top_compounds": {
+                    "compound": ["DrugA__DrugB"],
+                    "perturbation score": [2.8],
+                    "pval_adjusted": [0.01],
+                }
+            }
+        }
+    }
     return adata
 
 
@@ -92,6 +104,8 @@ def test_generate_analysis_visualizations_writes_manifest_and_handles_missing_op
     success_names = {entry["name"] for entry in manifest["successes"]}
     assert "stage_umap_grid" in success_names
     assert "dynamic_marker_trajectories" in success_names
+    assert "two_drugs_perturbation_table" in success_names
+    assert "two_drugs_ranked_bar" in success_names
     skipped_names = {entry["name"] for entry in manifest["skipped"]}
     assert "single_gene_perturbation" in skipped_names
     assert "gene_combo_perturbation" in skipped_names

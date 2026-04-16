@@ -605,6 +605,23 @@ def main() -> int:
         elif "run_pertubration" in supported:
             analysis_kwargs["run_pertubration"] = bool(params.get("run_perturbation", True))
 
+        for field_name, default_value in (
+            ("run_single_gene_perturbation", False),
+            ("run_two_gene_perturbation", False),
+            ("run_two_drug_perturbation", False),
+            ("shortlist_two_gene_candidates", False),
+            ("shortlist_two_drug_candidates", False),
+        ):
+            if field_name in supported:
+                analysis_kwargs[field_name] = bool(params.get(field_name, default_value))
+
+        for field_name, default_value in (
+            ("top_n_single_gene_candidates", 25),
+            ("top_n_two_drug_candidates", 25),
+        ):
+            if field_name in supported and params.get(field_name) is not None:
+                analysis_kwargs[field_name] = int(params.get(field_name, default_value))
+
         if "perturb_change" in supported:
             analysis_kwargs["perturb_change"] = float(params.get("perturb_change", 0.5))
         elif "defulat_perturb_change" in supported:
