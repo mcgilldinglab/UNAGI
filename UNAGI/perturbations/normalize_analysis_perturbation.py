@@ -387,13 +387,18 @@ class perturbationAnalysis:
         cells: int
             The number of cells in the selected cluster.
         '''
-        stagedata = self.adata[self.adata.obs['stage'] == str(stage)]#.index.tolist()
+        stagedata = self.adata[self._stage_obs_mask(stage)]#.index.tolist()
         # stagedata = self.adata[stageids]
        
         clusterids = stagedata.obs[stagedata.obs['leiden'] == str(cluster)].index.tolist()
         clusterdata = stagedata[clusterids]
         cells = len(clusterdata)
         return cells
+    def _stage_obs_mask(self, stage):
+        stage_mask = self.adata.obs['stage'].astype(str) == str(stage)
+        if hasattr(stage_mask, 'to_numpy'):
+            return stage_mask.to_numpy(dtype=bool, na_value=False)
+        return np.asarray(stage_mask, dtype=bool)
     def _normalize_selected_track_heads(self, perturbed_tracks):
         if perturbed_tracks == 'all':
             return None
@@ -415,7 +420,7 @@ class perturbationAnalysis:
     def _stage_cluster_sizes(self):
         stage_cluster_sizes = []
         for stage in pd.unique(self.adata.obs['stage']):
-            stagedata = self.adata[self.adata.obs['stage'] == stage]
+            stagedata = self.adata[self._stage_obs_mask(stage)]
             counts = stagedata.obs['leiden'].astype(str).value_counts().to_dict()
             stage_cluster_sizes.append({str(key): int(value) for key, value in counts.items()})
         return stage_cluster_sizes

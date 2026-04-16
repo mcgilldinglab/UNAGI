@@ -73,6 +73,22 @@ def _make_track_weight_adata():
     )
 
 
+def _make_nullable_stage_adata():
+    index = ["cell0", "cell1", "cell2", "cell3"]
+    obs = pd.DataFrame(
+        {
+            "stage": pd.Series(["0", "1", "1", "2"], index=index, dtype="string"),
+            "leiden": pd.Series(["0", "1", "1", "2"], index=index, dtype="string"),
+        },
+        index=index,
+    )
+    return AnnData(
+        np.zeros((len(obs), 1), dtype=np.float32),
+        obs=obs,
+        var=pd.DataFrame(index=["GENE1"]),
+    )
+
+
 @pytest.mark.parametrize("analysis_cls", [StandardAnalysis, NormalizedAnalysis])
 def test_one_sided_load_uses_single_direction_only(monkeypatch, analysis_cls):
     analysis = analysis_cls(
@@ -254,3 +270,24 @@ def test_get_track_percentage_alias_matches_get_track_weight(analysis_cls):
     tracks = ["0-0-1-0", "0-14-15-10", "0-14-15-18"]
 
     assert analysis.get_track_percentage(tracks, ["0"]) == analysis.get_track_weight(tracks, ["0"])
+
+
+@pytest.mark.parametrize("analysis_cls", [StandardAnalysis, NormalizedAnalysis])
+def test_stage_cluster_sizes_coerces_nullable_boolean_masks_for_anndata_indexing(analysis_cls):
+    analysis = analysis_cls(
+        _make_nullable_stage_adata(),
+        target_directory=".",
+        log2fc=0.5,
+        mode="pathway",
+    )
+
+    stage_mask = analysis._stage_obs_mask("1")
+
+    assert isinstance(stage_mask, np.ndarray)
+    assert stage_mask.dtype == bool
+    assert stage_mask.tolist() == [False, True, True, False]
+    assert analysis._stage_cluster_sizes() == [
+        {"0": 1},
+        {"1": 2},
+        {"2": 1},
+    ]
