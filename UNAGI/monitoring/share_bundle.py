@@ -1560,9 +1560,10 @@ def _render_report_html(
       .report-table.enrichment-table td:nth-child(3) {{ width: 132px; white-space: nowrap; }}
       .report-table.enrichment-table th:nth-child(2),
       .report-table.enrichment-table td:nth-child(2) {{ overflow-wrap: anywhere; word-break: break-word; }}
-      .legend {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }}
-      .legend-item {{ display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; color: var(--muted); }}
+      .legend {{ display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 14px; margin: 0 0 14px; }}
+      .legend-item {{ display: inline-flex; align-items: center; gap: 8px; max-width: min(100%, 280px); font-size: 0.88rem; line-height: 1.25; color: var(--muted); }}
       .legend-swatch {{ width: 12px; height: 12px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.08); }}
+      .legend-item span:last-child {{ overflow-wrap: anywhere; }}
       .graph-shell svg {{ width: 100%; height: auto; display: block; background: #fff; border-radius: 16px; border: 1px solid var(--line); }}
       .graph-help {{ margin-top: 12px; color: var(--muted); font-size: 0.95rem; }}
       .download-links {{ display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }}
@@ -1659,10 +1660,10 @@ def _render_report_html(
       <section id="temporal-graph" class="section">
         <h2>Temporal Dynamics Graph</h2>
         <div class="graph-shell">
+          <div id="temporal-legend" class="legend"></div>
           <div id="temporal-graph-container"></div>
           <div class="graph-help">Click a node with an associated track to open its offline iDREM summary.</div>
           <div class="download-links">{''.join(temporal_downloads)}</div>
-          <div id="temporal-legend" class="legend"></div>
         </div>
       </section>
 
@@ -1794,6 +1795,7 @@ def _render_report_html(
         }}
 
         function renderLegend(nodes) {{
+          legend.innerHTML = "";
           uniqueLegendItems(nodes).forEach(function (entry) {{
             const item = document.createElement("div");
             item.className = "legend-item";
@@ -1845,6 +1847,57 @@ def _render_report_html(
           }};
         }}
 
+        function buildStage0Label(node) {{
+          const ident = String(node.root_stage0_cell_type || node.cell_type || "NA");
+          const cluster = String(node.root_stage0_cluster || node.cluster || "");
+          return cluster ? `${{ident}}-${{cluster}}` : ident;
+        }}
+
+        function buildStage0LabelLayout(payload, plotWidth) {{
+          const nodes = payload.nodes || [];
+          const rootStage = Array.isArray(payload.stage_order) && payload.stage_order.length
+            ? String(payload.stage_order[0])
+            : "0";
+          const entries = nodes.filter(function (node) {{
+            return String(node.stage) === rootStage && node.root_stage0_cluster;
+          }}).map(function (node) {{
+            return {{
+              node: node,
+              x: Number(node.x),
+              label: buildStage0Label(node),
+            }};
+          }}).filter(function (entry) {{
+            return Number.isFinite(entry.x);
+          }}).sort(function (left, right) {{
+            return left.x - right.x;
+          }});
+          if (!entries.length) {{
+            return {{ entries: [], rowCount: 0 }};
+          }}
+          const xs = entries.map(function (entry) {{ return entry.x; }});
+          const minX = Math.min.apply(null, xs);
+          const maxX = Math.max.apply(null, xs);
+          const usableWidth = Math.max(240, Number(plotWidth) || 720);
+          const rowEnds = [];
+          entries.forEach(function (entry) {{
+            const centeredX = maxX === minX
+              ? usableWidth / 2
+              : ((entry.x - minX) / (maxX - minX)) * usableWidth;
+            const labelWidth = Math.max(72, Math.min(196, entry.label.length * 6.6 + 22));
+            const labelLeft = centeredX - (labelWidth / 2);
+            let rowIndex = 0;
+            while (rowIndex < rowEnds.length && labelLeft <= rowEnds[rowIndex] + 10) {{
+              rowIndex += 1;
+            }}
+            entry.rowIndex = rowIndex;
+            rowEnds[rowIndex] = centeredX + (labelWidth / 2);
+          }});
+          return {{
+            entries: entries,
+            rowCount: rowEnds.length,
+          }};
+        }}
+
         function renderTemporalGraph(payload) {{
           const nodes = payload.nodes || [];
           const edges = payload.edges || [];
@@ -1852,9 +1905,17 @@ def _render_report_html(
             container.innerHTML = '<p class="empty">Temporal graph data is not available in this export.</p>';
             return;
           }}
+          renderLegend(nodes);
           const width = 980;
-          const height = Math.max(420, (payload.stage_order || []).length * 140);
-          const margin = {{ top: 40, right: 40, bottom: 50, left: 120 }};
+          const labelLayout = buildStage0LabelLayout(payload, width - 160);
+          const stageCount = Math.max(1, (payload.stage_order || []).length);
+          const margin = {{
+            top: 34 + Math.max(0, labelLayout.rowCount - 1) * 18,
+            right: 40,
+            bottom: 40,
+            left: 120,
+          }};
+          const height = Math.max(420, stageCount * 132 + 40 + Math.max(0, labelLayout.rowCount - 1) * 18);
           const xValues = nodes.map(function (node) {{ return Number(node.x); }});
           const yValues = nodes.map(function (node) {{ return Number(node.y); }});
           const xScale = scaleFactory(Math.min.apply(null, xValues), Math.max.apply(null, xValues), margin.left, width - margin.right);
@@ -1905,10 +1966,6 @@ def _render_report_html(
             svg.appendChild(line);
           }});
 
-          const rootStage = Array.isArray(payload.stage_order) && payload.stage_order.length
-            ? String(payload.stage_order[0])
-            : "0";
-
           nodes.forEach(function (node) {{
             const circle = createSvg("circle");
             circle.setAttribute("cx", String(xScale(Number(node.x))));
@@ -1936,19 +1993,18 @@ def _render_report_html(
             ].filter(Boolean).join("\\n");
             circle.appendChild(titleNode);
             svg.appendChild(circle);
+          }});
 
-            if (String(node.stage) === rootStage && node.root_stage0_cluster) {{
-              const text = createSvg("text");
-              text.setAttribute("x", String(xScale(Number(node.x))));
-              text.setAttribute("y", String(yScale(Number(node.y)) - 20));
-              text.setAttribute("text-anchor", "middle");
-              text.setAttribute("font-size", "11");
-              text.setAttribute("font-weight", "600");
-              text.setAttribute("fill", "#172124");
-              const ident = String(node.root_stage0_cell_type || node.cell_type || "NA");
-              text.textContent = `${{ident}}-${{String(node.root_stage0_cluster)}}`;
-              svg.appendChild(text);
-            }}
+          labelLayout.entries.forEach(function (entry) {{
+            const text = createSvg("text");
+            text.setAttribute("x", String(xScale(Number(entry.node.x))));
+            text.setAttribute("y", String(yScale(Number(entry.node.y)) - 20 - Number(entry.rowIndex || 0) * 18));
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("font-size", "11");
+            text.setAttribute("font-weight", "600");
+            text.setAttribute("fill", "#172124");
+            text.textContent = entry.label;
+            svg.appendChild(text);
           }});
 
           container.innerHTML = "";

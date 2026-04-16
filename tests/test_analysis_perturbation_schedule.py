@@ -14,6 +14,7 @@ from UNAGI.perturbations.analysis_perturbation import _bh_adjust, perturbationAn
 class _FakePerturbationRunner:
     init_count = 0
     run_modes = []
+    run_call_details = []
     analysis_modes = []
 
     def __init__(self, adata, model_name, idrem_dir):
@@ -24,6 +25,7 @@ class _FakePerturbationRunner:
     def reset(cls):
         cls.init_count = 0
         cls.run_modes = []
+        cls.run_call_details = []
         cls.analysis_modes = []
 
     @staticmethod
@@ -89,6 +91,7 @@ class _FakePerturbationRunner:
 
     def run(self, mode, bound, inplace=True, **kwargs):
         type(self).run_modes.append((mode, float(bound)))
+        type(self).run_call_details.append((mode, float(bound), dict(kwargs)))
         if mode == 'random_pathway_background':
             self._store_delta_payload('random_background_perturbation_deltaD', bound, ['PW1'])
         elif mode == 'pathway':
@@ -532,6 +535,37 @@ def test_single_and_combination_perturbations_persist_mode_specific_backgrounds_
     assert len(saved_uns['combinatorial_perturbation_genes_set1']) == 3
     assert len(saved_uns['two_genes_perturbation_deltaD']['0.5']['0-1']) == 6
     assert len(saved_uns['data_two_drug_overlap_genes']) == 3
+
+
+def test_drug_background_uses_minimum_1000_samples_without_changing_combo_background_counts(monkeypatch, tmp_path):
+    data_path, target_dir, cmap_dir = _create_analysis_workspace(tmp_path)
+    _patch_analysis_dependencies(monkeypatch)
+    _FakePerturbationRunner.reset()
+
+    analyst = analyst_module.analyst(data_path, 1, target_dir=target_dir, cmap_dir=cmap_dir)
+    analyst.start_analyse(
+        progressionmarker_background_sampling=3,
+        run_perturbation=True,
+        random_times=3,
+        ignore_dynamic_markers=True,
+        ignore_hcmarkers=True,
+        run_single_gene_perturbation=True,
+        run_two_gene_perturbation=True,
+        run_two_drug_perturbation=True,
+        perturbation_schedule='single_gpu_optimized',
+    )
+
+    random_call_times = {}
+    for mode, _bound, kwargs in _FakePerturbationRunner.run_call_details:
+        if mode in {'random_drug_background', 'random_background'}:
+            random_call_times.setdefault(mode, []).append(int(kwargs.get('random_times', -1)))
+
+    assert random_call_times['random_drug_background'] == [1000, 3]
+    assert random_call_times['random_background'] == [3, 3]
+
+    saved_uns = _load_saved_uns(target_dir)
+    assert saved_uns['analysis_metadata']['random_background_sampling_times'] == 3
+    assert saved_uns['analysis_metadata']['effective_drug_background_sampling_times'] == 1000
 
 
 def test_shortlisted_combination_modes_reuse_single_mode_prerequisites(monkeypatch, tmp_path):

@@ -859,6 +859,7 @@ class analyst:
             background_size_signature = [int(self.get_median_random_gene(drug_items))]
         else:
             background_size_signature = [len(self.cmap_overlapped_genes(drug_items))]
+        effective_random_times = self._effective_drug_background_sample_count(random_times)
         background_signature = self._stage_signature(
             'drug_background',
             schedule='single_gpu_optimized',
@@ -866,7 +867,7 @@ class analyst:
             perturb_change=float(perturb_change),
             direction_mode=str(direction_mode),
             size_signature=background_size_signature,
-            random_times=int(random_times),
+            random_times=int(effective_random_times),
             customized_drug=bool(self.customized_drug is not None),
             perturb_stage=perturb_stage['label'] if perturb_stage is not None else None,
         )
@@ -933,7 +934,7 @@ class analyst:
                     'random_drug_background',
                     perturb_change,
                     inplace=True,
-                    random_times=random_times,
+                    random_times=effective_random_times,
                     random_genes=self.get_median_random_gene(runner.adata.uns['data_drug_overlap_genes']),
                     CUDA=use_cuda,
                     device=device,
@@ -941,10 +942,7 @@ class analyst:
                 )
             else:
                 random_genes = self._build_cmap_random_background_genes(
-                    sample_count=min(
-                        len(runner.adata.uns.get('data_drug_overlap_genes', {})),
-                        int(random_times),
-                    )
+                    sample_count=effective_random_times
                 )
                 runner.adata.uns['cmap_random_genes'] = random_genes
                 runner.run(
@@ -1164,6 +1162,9 @@ class analyst:
             chosen = rng.choice(genes, size=int(set_size), replace=replace)
             sets.append([str(item) for item in np.asarray(chosen).tolist()])
         return sets
+
+    def _effective_drug_background_sample_count(self, random_times):
+        return max(1000, int(random_times))
 
     def _build_unique_random_two_drug_backgrounds(self, *, sample_count):
         drug_items = self.adata.uns.get('data_drug_overlap_genes', {})
@@ -2276,6 +2277,10 @@ class analyst:
         metadata['shortlist_two_drug_candidates'] = bool(shortlist_two_drug_candidates)
         metadata['top_n_single_gene_candidates'] = int(top_n_single_gene_candidates)
         metadata['top_n_two_drug_candidates'] = int(top_n_two_drug_candidates)
+        metadata['random_background_sampling_times'] = int(random_times)
+        metadata['effective_drug_background_sampling_times'] = int(
+            self._effective_drug_background_sample_count(random_times)
+        )
         output_adata.uns['analysis_metadata'] = metadata
         if not ignore_hcmarkers:
             output_adata.uns['hcmarkers'] = hcmarkers 

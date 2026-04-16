@@ -1271,7 +1271,121 @@
     return cluster ? `${ident}-${cluster}` : ident;
   }
 
-  function buildTemporalGraphYRange(payload, stage0LabelOffset) {
+  function getTemporalGraphLegendItems(payload) {
+    const nodes = Array.isArray(payload && payload.nodes) ? payload.nodes : [];
+    const items = [];
+    const seen = new Set();
+    nodes.forEach(function (node) {
+      const key = String(node.cell_type || "NA");
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      items.push({
+        key: key,
+        color: String(node.color || "#6E7C80"),
+      });
+    });
+    return items;
+  }
+
+  function renderTemporalGraphLegend(container, payload) {
+    if (!container) {
+      return;
+    }
+    const items = getTemporalGraphLegendItems(payload);
+    container.innerHTML = "";
+    if (!items.length) {
+      container.hidden = true;
+      return;
+    }
+    items.forEach(function (item) {
+      const row = document.createElement("span");
+      row.className = "analysis-temporal-graph-legend-item";
+      const swatch = document.createElement("span");
+      swatch.className = "analysis-temporal-graph-legend-swatch";
+      swatch.style.background = item.color;
+      const label = document.createElement("span");
+      label.className = "analysis-temporal-graph-legend-label";
+      label.textContent = item.key;
+      row.appendChild(swatch);
+      row.appendChild(label);
+      container.appendChild(row);
+    });
+    container.hidden = false;
+  }
+
+  function buildTemporalGraphStage0LabelLayout(payload, plotWidth) {
+    const nodes = Array.isArray(payload && payload.nodes) ? payload.nodes : [];
+    const rootStage = Array.isArray(payload.stage_order) && payload.stage_order.length
+      ? String(payload.stage_order[0])
+      : "0";
+    const entries = nodes
+      .filter(function (node) {
+        return String(node.stage) === rootStage && Boolean(node.root_stage0_cluster);
+      })
+      .map(function (node) {
+        return {
+          node: node,
+          x: Number(node.x),
+          label: buildTemporalGraphStage0Label(node),
+        };
+      })
+      .filter(function (entry) {
+        return Number.isFinite(entry.x);
+      })
+      .sort(function (left, right) {
+        return left.x - right.x;
+      });
+
+    if (!entries.length) {
+      return { entries: [], rowCount: 0, offset: 0.2, rowGap: 0.18 };
+    }
+
+    const xs = entries.map(function (entry) { return entry.x; });
+    const minX = Math.min.apply(null, xs);
+    const maxX = Math.max.apply(null, xs);
+    const usableWidth = Math.max(240, Number(plotWidth) || 720);
+    const rowEnds = [];
+    entries.forEach(function (entry) {
+      const centeredX = maxX === minX
+        ? usableWidth / 2
+        : ((entry.x - minX) / (maxX - minX)) * usableWidth;
+      const labelWidth = Math.max(72, Math.min(196, entry.label.length * 6.6 + 22));
+      const labelLeft = centeredX - (labelWidth / 2);
+      let rowIndex = 0;
+      while (rowIndex < rowEnds.length && labelLeft <= rowEnds[rowIndex] + 10) {
+        rowIndex += 1;
+      }
+      entry.rowIndex = rowIndex;
+      rowEnds[rowIndex] = centeredX + (labelWidth / 2);
+    });
+
+    return {
+      entries: entries,
+      rowCount: rowEnds.length,
+      offset: 0.2,
+      rowGap: 0.18,
+    };
+  }
+
+  function buildTemporalGraphLayoutMetrics(widget, payload) {
+    const stageCount = Array.isArray(payload && payload.stage_order) && payload.stage_order.length
+      ? payload.stage_order.length
+      : new Set((payload && payload.nodes || []).map(function (node) { return String(node.stage || ""); })).size || 1;
+    const widgetWidth = widget && widget.clientWidth ? widget.clientWidth : 920;
+    const margin = { l: 68, r: 22, t: 30, b: 34 };
+    const labelLayout = buildTemporalGraphStage0LabelLayout(payload, widgetWidth - margin.l - margin.r);
+    margin.t += Math.max(0, labelLayout.rowCount - 1) * 20;
+    const height = Math.max(392, stageCount * 66 + 132 + Math.max(0, labelLayout.rowCount - 1) * 18);
+    return {
+      height: height,
+      margin: margin,
+      labelLayout: labelLayout,
+    };
+  }
+
+  function buildTemporalGraphYRange(payload, labelLayout) {
     const nodes = Array.isArray(payload && payload.nodes) ? payload.nodes : [];
     if (!nodes.length) {
       return null;
@@ -1285,11 +1399,13 @@
     const minY = Math.min.apply(null, ys);
     const maxY = Math.max.apply(null, ys);
     const lowerPad = 0.45;
-    const upperPad = Math.max(0.72, Number(stage0LabelOffset || 0) + 0.42);
+    const layout = labelLayout || { offset: 0.2, rowGap: 0.18, rowCount: 1 };
+    const rows = Math.max(1, Number(layout.rowCount) || 1);
+    const upperPad = Math.max(0.72, Number(layout.offset || 0.2) + Number(layout.rowGap || 0.18) * Math.max(0, rows - 1) + 0.42);
     return [minY - lowerPad, maxY + upperPad];
   }
 
-  function buildTemporalGraphTraces(payload) {
+  function buildTemporalGraphTraces(payload, layoutMetrics) {
     const traces = [];
     if (Array.isArray(payload.edges) && payload.edges.length) {
       const edgeX = [];
@@ -1351,22 +1467,18 @@
       });
     });
 
-    const rootStage = Array.isArray(payload.stage_order) && payload.stage_order.length
-      ? String(payload.stage_order[0])
-      : "0";
-    const stage0LabelOffset = 0.18;
     const stage0Labels = {
       x: [],
       y: [],
       text: [],
     };
-    (payload.nodes || []).forEach(function (node) {
-      if (String(node.stage) !== rootStage || !node.root_stage0_cluster) {
-        return;
-      }
-      stage0Labels.x.push(Number(node.x));
-      stage0Labels.y.push(Number(node.y) + stage0LabelOffset);
-      stage0Labels.text.push(buildTemporalGraphStage0Label(node));
+    const labelLayout = layoutMetrics && layoutMetrics.labelLayout
+      ? layoutMetrics.labelLayout
+      : buildTemporalGraphStage0LabelLayout(payload, 720);
+    labelLayout.entries.forEach(function (entry) {
+      stage0Labels.x.push(Number(entry.node.x));
+      stage0Labels.y.push(Number(entry.node.y) + Number(labelLayout.offset || 0.2) + Number(labelLayout.rowGap || 0.18) * Number(entry.rowIndex || 0));
+      stage0Labels.text.push(entry.label);
     });
     if (stage0Labels.text.length) {
       traces.push({
@@ -1802,54 +1914,87 @@
       }
       widget._payload = payload;
       let plotDiv = widget.querySelector(".analysis-temporal-graph-plot");
-      if (!plotDiv) {
-        widget.innerHTML = '<div class="analysis-temporal-graph-plot"></div>';
+      let legendDiv = widget.querySelector(".analysis-temporal-graph-legend");
+      if (!plotDiv || !legendDiv) {
+        widget.innerHTML = [
+          '<div class="analysis-temporal-graph-shell">',
+          '<div class="analysis-temporal-graph-legend" hidden></div>',
+          '<div class="analysis-temporal-graph-plot"></div>',
+          "</div>",
+        ].join("");
         plotDiv = widget.querySelector(".analysis-temporal-graph-plot");
+        legendDiv = widget.querySelector(".analysis-temporal-graph-legend");
       }
       const shell = widget.closest(".overview-graph-shell");
       const statusTarget = shell ? shell.querySelector("[data-temporal-graph-status]") : null;
       const popupBase = widget.dataset.trackPopupBase || "";
-      const stage0LabelOffset = 0.18;
-      await window.Plotly.react(
-        plotDiv,
-        buildTemporalGraphTraces(payload),
-        {
-          height: 368,
-          hovermode: "closest",
-          dragmode: "pan",
-          margin: { l: 68, r: 24, t: 58, b: 88 },
-          legend: {
-            orientation: "h",
-            x: 0,
-            xanchor: "left",
-            y: -0.18,
-            yanchor: "top",
-            font: { size: 11 },
+      const renderTemporalGraphPlot = async function () {
+        renderTemporalGraphLegend(legendDiv, payload);
+        const layoutMetrics = buildTemporalGraphLayoutMetrics(widget, payload);
+        widget._temporalGraphLastWidth = widget.clientWidth || 0;
+        plotDiv.style.height = `${layoutMetrics.height}px`;
+        await window.Plotly.react(
+          plotDiv,
+          buildTemporalGraphTraces(payload, layoutMetrics),
+          {
+            height: layoutMetrics.height,
+            hovermode: "closest",
+            dragmode: "pan",
+            margin: layoutMetrics.margin,
+            showlegend: false,
+            paper_bgcolor: "rgba(0,0,0,0)",
+            plot_bgcolor: "rgba(0,0,0,0)",
+            xaxis: {
+              visible: false,
+              zeroline: false,
+              showgrid: false,
+            },
+            yaxis: {
+              title: "Stage",
+              automargin: true,
+              zeroline: false,
+              tickvals: payload.stage_tick_values || [],
+              ticktext: payload.stage_tick_labels || [],
+              range: buildTemporalGraphYRange(payload, layoutMetrics.labelLayout) || undefined,
+              gridcolor: "rgba(31, 42, 46, 0.12)",
+            },
           },
-          paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(0,0,0,0)",
-          xaxis: {
-            visible: false,
-            zeroline: false,
-            showgrid: false,
+          {
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ["select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"],
           },
-          yaxis: {
-            title: "Stage",
-            automargin: true,
-            zeroline: false,
-            tickvals: payload.stage_tick_values || [],
-            ticktext: payload.stage_tick_labels || [],
-            range: buildTemporalGraphYRange(payload, stage0LabelOffset) || undefined,
-            gridcolor: "rgba(31, 42, 46, 0.12)",
-          },
-        },
-        {
-          responsive: true,
-          displaylogo: false,
-          modeBarButtonsToRemove: ["select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"],
-        },
-      );
-      resizePlotlyWithin(widget);
+        );
+        resizePlotlyWithin(widget);
+      };
+      await renderTemporalGraphPlot();
+      widget._rerenderTemporalGraph = renderTemporalGraphPlot;
+      if (!widget._temporalGraphResizeBound) {
+        const scheduleTemporalGraphRerender = function () {
+          if (!widget._payload || widget.dataset.initialized !== "true") {
+            return;
+          }
+          const nextWidth = widget.clientWidth || 0;
+          const previousWidth = Number(widget._temporalGraphLastWidth || 0);
+          if (previousWidth && Math.abs(nextWidth - previousWidth) < 24) {
+            resizePlotlyWithin(widget);
+            return;
+          }
+          window.clearTimeout(widget._temporalGraphResizeTimer);
+          widget._temporalGraphResizeTimer = window.setTimeout(function () {
+            renderTemporalGraphPlot().catch(function (_error) {
+            });
+          }, 60);
+        };
+        if (typeof window.ResizeObserver === "function") {
+          widget._temporalGraphResizeObserver = new window.ResizeObserver(scheduleTemporalGraphRerender);
+          widget._temporalGraphResizeObserver.observe(widget);
+        } else {
+          widget._temporalGraphResizeHandler = scheduleTemporalGraphRerender;
+          window.addEventListener("resize", widget._temporalGraphResizeHandler);
+        }
+        widget._temporalGraphResizeBound = "true";
+      }
       if (typeof plotDiv.removeAllListeners === "function") {
         plotDiv.removeAllListeners("plotly_click");
       }
