@@ -14,6 +14,7 @@ import fcntl
 import numpy as np
 import pandas as pd
 from anndata import read_h5ad
+from UNAGI.palettes import DEFAULT_CATEGORICAL_COLORS
 
 POINT_RENDER_THRESHOLD = 50_000
 POINT_RETURN_THRESHOLD = 25_000
@@ -24,25 +25,7 @@ DEFAULT_SCREEN_WIDTH = 1200
 DEFAULT_SCREEN_HEIGHT = 620
 DEFAULT_HOT_STAGE_SHARDS = 4
 DEFAULT_HOT_GENE_VECTORS = 8
-EXPLORER_CACHE_VERSION = 2
-DEFAULT_CATEGORICAL_COLORS = (
-    "#4DBBD5",
-    "#F39B7F",
-    "#00A087",
-    "#E64B35",
-    "#3C5488",
-    "#8C564B",
-    "#E377C2",
-    "#7F7F7F",
-    "#BCBD22",
-    "#17BECF",
-    "#FF9896",
-    "#C5B0D5",
-    "#C49C94",
-    "#F7B6D2",
-    "#C7C7C7",
-    "#DBDB8D",
-)
+EXPLORER_CACHE_VERSION = 3
 
 
 def _cache_key(path: Path | None) -> tuple[str, int | None, int | None]:

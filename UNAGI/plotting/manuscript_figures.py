@@ -13,25 +13,7 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import pearsonr
 
-
-DEFAULT_CATEGORICAL_COLORS: Tuple[str, ...] = (
-    "#4DBBD5",
-    "#F39B7F",
-    "#00A087",
-    "#E64B35",
-    "#3C5488",
-    "#8C564B",
-    "#E377C2",
-    "#7F7F7F",
-    "#BCBD22",
-    "#17BECF",
-    "#FF9896",
-    "#C5B0D5",
-    "#C49C94",
-    "#F7B6D2",
-    "#C7C7C7",
-    "#DBDB8D",
-)
+from UNAGI.palettes import DEFAULT_CATEGORICAL_COLORS
 
 
 def _prepare_scanpy():
