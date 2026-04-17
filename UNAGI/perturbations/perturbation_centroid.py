@@ -1127,8 +1127,14 @@ class perturbation:
             perturbed_genes = []
             drug_gene = self.adata.uns['data_drug_overlap_genes']
             temp_perturbed_genes = list(drug_gene.values())
-            for idx, each_perturbed_item in enumerate(temp_perturbed_genes):
-                perturbed_genes.append(get_random_genes(self.adata,len(each_perturbed_item),idx))
+            requested_n = max(0, int(random_times or 0))
+            for idx in range(requested_n):
+                template_genes = []
+                if temp_perturbed_genes:
+                    template_genes = temp_perturbed_genes[idx % len(temp_perturbed_genes)]
+                    if type(template_genes) != list:
+                        template_genes = template_genes.tolist()
+                perturbed_genes.append(get_random_genes(self.adata, len(template_genes), idx) if template_genes else [])
             self.adata.uns['random_background_perturbation_deltaD'] = {}
             total = len(self.tracks) * len(direction_sequence)
             finished = 0

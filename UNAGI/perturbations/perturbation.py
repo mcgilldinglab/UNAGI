@@ -1013,37 +1013,34 @@ class perturbation:
             if 'random_background_perturbation_deltaD' in self.adata.uns.keys():
                 self.adata.uns['random_background_perturbation_deltaD'] = {}
             drug_gene = self.adata.uns['data_drug_overlap_genes']
-            perturbed_items = list(drug_gene.keys())
             temp_perturbed_genes = list(drug_gene.values())
-            perturbed_genes = []
-            effective_n = min(len(temp_perturbed_genes), int(random_times))
-            total = effective_n * len(direction_sequence)
+            requested_n = max(0, int(random_times or 0))
+            total = requested_n * len(direction_sequence)
             finished = 0
             started_at = time.time()
             for each_direction in direction_sequence:
                 compiled_items = []
-                for perturbation_item_idx, genes in enumerate(temp_perturbed_genes):
-                    if perturbation_item_idx >= random_times:
-                        print('Random drug background perturbation stopped as reaching the set random times:', random_times)
-                        break
-                    if type(genes)!= list:
-                        genes = genes.tolist()
+                for perturbation_item_idx in range(requested_n):
                     prebuilt_gene_set = _extract_prebuilt_random_gene_set(random_genes, perturbation_item_idx)
                     if prebuilt_gene_set is not None:
                         chosen_genes = prebuilt_gene_set
-                        gene_input_dict = {}
-                        for item in chosen_genes:
-                            name, _, sign = str(item).partition(':')
-                            gene_input_dict[name] = each_direction if sign != '-' else 1 / each_direction
+                        gene_input_dict = _build_directional_gene_input_dict(chosen_genes, each_direction)
                     elif random_genes is not None:
                         chosen_genes = get_random_genes(self.adata, random_genes, perturbation_item_idx)
-                        gene_input_dict = dict.fromkeys(chosen_genes, each_direction)
                     else:
-                        chosen_genes = get_random_genes(self.adata, len(genes), perturbation_item_idx)
+                        template_genes = []
+                        if temp_perturbed_genes:
+                            template_genes = temp_perturbed_genes[perturbation_item_idx % len(temp_perturbed_genes)]
+                            if type(template_genes) != list:
+                                template_genes = template_genes.tolist()
+                        chosen_genes = get_random_genes(self.adata, len(template_genes), perturbation_item_idx) if template_genes else []
+                    if type(chosen_genes) != list:
+                        chosen_genes = chosen_genes.tolist()
+                    if prebuilt_gene_set is None:
                         gene_input_dict = dict.fromkeys(chosen_genes, each_direction)
                     compiled_items.append(
                         (
-                            perturbed_items[perturbation_item_idx],
+                            f'random_drug_background_{perturbation_item_idx}',
                             self.pb.compile_direct_targets(gene_input_dict),
                         )
                     )

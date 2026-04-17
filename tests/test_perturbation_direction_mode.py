@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 import UNAGI.perturbations.perturbation as perturbation_module
+import UNAGI.perturbations.perturbation_centroid as perturbation_centroid_module
 
 
 class _DummyPB:
@@ -168,6 +169,52 @@ def _make_two_drug_exact_runner(*, force_legacy: bool):
     return runner
 
 
+def _make_random_drug_background_runner(*, force_legacy: bool):
+    runner = object.__new__(perturbation_module.perturbation)
+    runner.adata = SimpleNamespace(
+        obs=pd.DataFrame(
+            {"stage": ["0", "1"], "leiden": ["0", "1"]},
+            index=["cell0", "cell1"],
+        ),
+        uns={
+            "data_drug_overlap_genes": {
+                "DRUG1": ["GENE1:+", "GENE2:-"],
+                "DRUG2": ["GENE2:+", "GENE3:+"],
+            }
+        },
+        var_names=pd.Index(["GENE1", "GENE2", "GENE3", "GENE4"]),
+        var=SimpleNamespace(index=pd.Index(["GENE1", "GENE2", "GENE3", "GENE4"])),
+    )
+    runner.tracks = {1: None}
+    runner.stageadata = [None, None]
+    runner.pb = _DummyCompiledPB()
+    runner.progress_logger = _DummyProgress()
+    runner.getTrack = lambda stage, cluster: [[0], [1]]
+    runner.gpu_exact_force_legacy = force_legacy
+    runner.gpu_exact_batch_size = None
+    runner.last_gpu_batch_meta = None
+    runner._legacy_track_cache = {}
+    return runner
+
+
+def _make_random_drug_background_centroid_runner():
+    runner = object.__new__(perturbation_centroid_module.perturbation)
+    runner.adata = SimpleNamespace(
+        uns={
+            "data_drug_overlap_genes": {
+                "DRUG1": ["GENE1:+", "GENE2:-"],
+                "DRUG2": ["GENE2:+", "GENE3:+"],
+            }
+        },
+        var=SimpleNamespace(index=pd.Index(["GENE1", "GENE2", "GENE3", "GENE4"])),
+    )
+    runner.tracks = {1: None}
+    runner.hiddenReps = []
+    runner.perturb_stage_data_mean = []
+    runner.progress_logger = _DummyProgress()
+    return runner
+
+
 def _assert_nested_delta_payload_equal(left_payload, right_payload):
     assert set(left_payload.keys()) == set(right_payload.keys())
     for direction_key in left_payload:
@@ -304,6 +351,81 @@ def test_two_drugs_gpu_exact_matches_legacy_path():
     assert not optimized.pb.serial_calls
     assert legacy.pb.serial_calls
     assert not legacy.pb.batched_calls
+
+
+def test_random_drug_background_honors_requested_sample_count_in_legacy_runner():
+    runner = _make_random_drug_background_runner(force_legacy=True)
+
+    runner.run(
+        "random_drug_background",
+        0.5,
+        inplace=True,
+        random_times=5,
+        random_genes=2,
+        direction_mode="one_sided",
+    )
+
+    payload = runner.adata.uns["random_background_perturbation_deltaD"]["0.5"]["0-1"]
+
+    assert len(payload) == 5
+    assert list(payload.keys()) == [f"random_drug_background_{idx}" for idx in range(5)]
+    assert len(runner.pb.serial_calls) == 5
+    assert not runner.pb.batched_calls
+
+
+def test_random_drug_background_honors_requested_sample_count_in_batched_runner():
+    runner = _make_random_drug_background_runner(force_legacy=False)
+
+    runner.run(
+        "random_drug_background",
+        0.5,
+        inplace=True,
+        random_times=5,
+        random_genes=2,
+        direction_mode="one_sided",
+        CUDA=True,
+        device="cuda:0",
+    )
+
+    payload = runner.adata.uns["random_background_perturbation_deltaD"]["0.5"]["0-1"]
+
+    assert len(payload) == 5
+    assert list(payload.keys()) == [f"random_drug_background_{idx}" for idx in range(5)]
+    assert not runner.pb.serial_calls
+    assert runner.pb.batched_calls
+    assert runner.last_gpu_batch_meta["batched"] is True
+    assert runner.last_gpu_batch_meta["fallback"] is False
+
+
+def test_random_drug_background_centroid_runner_honors_requested_sample_count():
+    runner = _make_random_drug_background_centroid_runner()
+    calls = []
+
+    def _capture_start_auto(last_cluster, bound, mode, **kwargs):
+        calls.append(
+            {
+                "track": last_cluster,
+                "bound": bound,
+                "mode": mode,
+                "random_times": kwargs["random_times"],
+                "random_genes": kwargs["random_genes"],
+            }
+        )
+
+    runner.startAutoPerturbation = _capture_start_auto
+
+    runner.run(
+        "random_drug_background",
+        0.5,
+        inplace=True,
+        random_times=5,
+        direction_mode="one_sided",
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["mode"] == "random_background"
+    assert calls[0]["random_times"] == 5
+    assert len(calls[0]["random_genes"]) == 5
 
 
 def test_get_unique_random_genes_avoids_duplicates_when_possible():
