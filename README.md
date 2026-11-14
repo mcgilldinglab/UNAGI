@@ -130,3 +130,12 @@ Please visit [UNAGI-docs](https://unagi-docs.readthedocs.io/en/latest/index.html
 
 ## Contact
 [Yumin Zheng](mailto:yumin.zheng@mail.mcgill.ca), [Naftali Kaminski](mailto:naftali.kaminski@yale.edu), [Jun Ding](mailto:jun.ding@mcgill.ca)
+
+## Licensing
+
+UNAGI is offered under two licensing options:
+
+- **Noncommercial:** [PolyForm Noncommercial License 1.0.0](LICENSE-NONCOMMERCIAL.txt), under its complete, unmodified terms.
+- **Commercial:** uses outside those permissions require a separate written agreement with the copyright holders or their authorized representatives. Contact [jun.ding@mcgill.ca](mailto:jun.ding@mcgill.ca).
+
+See [LICENSE.txt](LICENSE.txt) and [commercial licensing](COMMERCIAL-LICENSING.md) for scope and details. Earlier licenses and third-party notices remain applicable to the material they cover. This is a source-available licensing model with a noncommercial restriction; it is not an OSI open-source license.
